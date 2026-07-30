@@ -51,6 +51,16 @@ Considered as a trust differentiator for a developer audience. Rejected: adds me
 **Status:** Rejected · **Date:** 2026-07
 Ingestion is Gmail-PDF based (plus AA where available). SMS parsing adds Android permission friction and yields incomplete, alert-shaped data rather than reconcilable statements.
 
+## ADR-011: PITR readiness from day one
+**Status:** Accepted · **Date:** 2026-07-30
+Postgres runs with `wal_level=replica` from the first container start.
+**Why:** The event log is the only source of truth. User confirmations, corrections, and amendment events are irreplaceable. A restore must be tested before beta — an untested backup is not a backup. Manual restore test checklist:
+1. Take a base backup: `pg_basebackup -h localhost -U finance -D /tmp/pgbackup -Ft -z -P`
+2. Stop the container: `docker compose stop db`
+3. Restore to a new container targeting the backup directory.
+4. Run `alembic upgrade head` and `pytest tests/integration/` — must pass clean.
+KMS upgrade deferred to Phase 5 per H3.
+
 ---
 
 ## Template

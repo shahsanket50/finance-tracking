@@ -1,0 +1,97 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: finance
+      POSTGRES_USER: finance
+      POSTGRES_PASSWORD: finance
+    command: postgres -c wal_level=replica    # M9: PITR readiness
+    volumes:
+      - finance_pgdata:/var/lib/postgresql    # PG18: data goes in a version-specific subdir
+    # No host port in base — containers reach db via the internal network.
+    # docker-compose.override.yml exposes 5433 locally (5432 is OrbStack).
+    networks:
+      - finance
+
+  redis:
+    image: redis:7-alpine
+    # No host port published by default — containers reach redis via the internal
+    # network. docker-compose.override.yml exposes 6380 locally for dev tooling.
+    networks:
+      - finance
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql+psycopg://finance:finance@db:5432/finance
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - finance
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+psycopg://finance:finance@db:5432/finance
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - finance
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+psycopg://finance:finance@db:5432/finance
+      CELERY_BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+    networks:
+      - finance
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    command: npm run dev
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    networks:
+      - finance
+
+volumes:
+  finance_pgdata:
+
+networks:
+  finance:
+    driver: bridge

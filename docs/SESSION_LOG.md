@@ -6,6 +6,37 @@
 
 ---
 
+## 2026-07-30 — Session 002: Docker local dev environment (Task 0.2)
+
+**Phase:** 0 — Foundations
+**Participants:** Sanket + Claude
+
+### Done
+- `docker-compose.yml` — 6 services: db (Postgres 18), redis (7-alpine), backend (FastAPI), worker (Celery), beat (Celery beat), web (Next.js 14).
+- `backend/Dockerfile`, `backend/pyproject.toml`, `backend/__init__.py`, `backend/main.py` (FastAPI scaffold + /health), `backend/celery_app.py`.
+- `web/Dockerfile`, `web/package.json`, `web/package-lock.json`, `web/tsconfig.json`, `web/app/layout.tsx`, `web/app/page.tsx`.
+- `Makefile` with up/down/migrate/test/lint targets.
+- `.gitignore` covering Python, Node, Docker, secrets.
+- `docker-compose.override.yml` (git-ignored) for local port remaps.
+- ADR-011 added to `docs/DECISIONS.md`.
+- Verified: all 6 containers Up, `SHOW wal_level` = replica, `/health` 200 OK, Next.js 200 OK.
+
+### Decisions made
+- Postgres 18 changed its data dir convention — volume must mount at `/var/lib/postgresql` not `/var/lib/postgresql/data`. Updated compose accordingly.
+- `eslint-config-next@14` requires eslint ^8, not ^9. Pinned eslint to ^8 in web/package.json.
+- Local port conflicts (OrbStack holds 5432; local redis-server holds 6379): base compose does not publish db or redis ports; override maps db to 5433 and redis to 6380.
+- Celery + Redis wired from day one (TRD H5 — cannot be retrofitted).
+- ADR-011 recorded PITR readiness rationale and manual restore checklist.
+
+### Blocked / open
+- Nothing blocking next tasks.
+
+### Next session should
+- Task 0.3: Postgres schema — immutable event tables (TRD §3.1).
+- Task 0.4: Postgres schema — mutable settings tables (TRD §3.2).
+
+---
+
 ## 2026-07-22 — Session 001: Project scaffolding
 
 **Phase:** 0 — Foundations

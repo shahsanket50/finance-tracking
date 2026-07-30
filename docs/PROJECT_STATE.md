@@ -2,7 +2,7 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-07-22
+**Last updated:** 2026-07-30
 **Current phase:** Phase 0 — Foundations
 **Overall status:** Not started (scaffolding created)
 
@@ -20,7 +20,7 @@
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 0.1 | Repo scaffolding + `CLAUDE.md` + docs structure | Done | This scaffolding |
-| 0.2 | Docker local dev environment (Postgres + API + web) | Not started | |
+| 0.2 | Docker local dev environment (Postgres + API + web) | Done | All 6 services up; wal_level=replica; /health 200 |
 | 0.3 | Postgres schema: immutable event tables | Not started | See TRD §3.1 |
 | 0.4 | Postgres schema: mutable settings tables | Not started | See TRD §3.2 |
 | 0.5 | Event-log primitives (append, read stream) | Not started | Append-only enforcement at DB level |
