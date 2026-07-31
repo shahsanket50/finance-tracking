@@ -23,3 +23,8 @@ max-complexity = 10
 [format]
 quote-style = "double"
 indent-style = "space"
+
+# Float-ban for financial modules (C5).
+# No float literals or float() calls permitted in core/, processing/, domain/.
+# Enforced by: ci/guards/float_lint.py (task 0.11, G15 gate).
+# At this stage: enforced by code review and mypy strict (float not assignable to Paise).
