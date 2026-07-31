@@ -101,13 +101,13 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seq"),
+        sa.UniqueConstraint("idempotency_hash", name="uq_transaction_events_idempotency_hash"),
         sa.ForeignKeyConstraint(["ingestion_event_id"], ["ingestion_events.id"]),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.ForeignKeyConstraint(["encryption_key_id"], ["user_encryption_keys.id"]),
     )
     # M10: indexes for known access paths
     op.create_index("ix_transaction_events_user_date", "transaction_events", ["user_id", "value_date"])
-    op.create_index("ix_transaction_events_hash", "transaction_events", ["idempotency_hash"])
     op.create_index("ix_transaction_events_user_date_type", "transaction_events", ["user_id", "value_date", "transaction_type"])
     _create_append_only_trigger("transaction_events")
 
@@ -133,7 +133,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("document_events")
     op.drop_index("ix_transaction_events_user_date_type", "transaction_events")
-    op.drop_index("ix_transaction_events_hash", "transaction_events")
     op.drop_index("ix_transaction_events_user_date", "transaction_events")
     op.drop_table("transaction_events")
     op.drop_table("raw_artifacts")

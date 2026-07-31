@@ -4,6 +4,7 @@ Implements TRD §3.1 (immutable event log) and the identity subset of TRD §3.2.
 """
 from __future__ import annotations
 import uuid
+import sqlalchemy as sa
 from datetime import date, datetime
 from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Identity, Integer
 from sqlalchemy import JSON, LargeBinary, SmallInteger, String, Text, TIMESTAMP
@@ -80,6 +81,7 @@ class RawArtifact(Base):
 
 class TransactionEvent(Base):
     __tablename__ = "transaction_events"
+    __table_args__ = (sa.UniqueConstraint("idempotency_hash", name="uq_transaction_events_idempotency_hash"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
