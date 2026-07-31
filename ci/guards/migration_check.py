@@ -5,7 +5,9 @@ Rules:
 2. No NUMERIC, REAL, DOUBLE PRECISION, or FLOAT column types in migrations (C5).
 3. Migrations are forward-only: no ALTER TABLE that weakens constraints on immutable tables.
 """
+
 from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
@@ -27,16 +29,14 @@ FORBIDDEN_COLUMN_TYPES = [
 
 # Regex: UPDATE immutable_table or DELETE FROM immutable_table (case-insensitive)
 _UPDATE_PATTERNS = [
-    re.compile(rf'\bUPDATE\s+{re.escape(t)}\b', re.IGNORECASE)
-    for t in IMMUTABLE_TABLES
+    re.compile(rf"\bUPDATE\s+{re.escape(t)}\b", re.IGNORECASE) for t in IMMUTABLE_TABLES
 ]
 _DELETE_PATTERNS = [
-    re.compile(rf'\bDELETE\s+FROM\s+{re.escape(t)}\b', re.IGNORECASE)
+    re.compile(rf"\bDELETE\s+FROM\s+{re.escape(t)}\b", re.IGNORECASE)
     for t in IMMUTABLE_TABLES
 ]
 _FLOAT_PATTERNS = [
-    re.compile(rf'\b{re.escape(t)}\b', re.IGNORECASE)
-    for t in FORBIDDEN_COLUMN_TYPES
+    re.compile(rf"\b{re.escape(t)}\b", re.IGNORECASE) for t in FORBIDDEN_COLUMN_TYPES
 ]
 
 
@@ -56,18 +56,24 @@ def check_migration_file(path: Path) -> list[tuple[int, str]]:
 
         for pattern in _UPDATE_PATTERNS:
             if pattern.search(line):
-                issues.append((line_num, f"UPDATE on immutable table detected: {stripped[:100]}"))
+                issues.append(
+                    (line_num, f"UPDATE on immutable table detected: {stripped[:100]}")
+                )
 
         for pattern in _DELETE_PATTERNS:
             if pattern.search(line):
-                issues.append((line_num, f"DELETE on immutable table detected: {stripped[:100]}"))
+                issues.append(
+                    (line_num, f"DELETE on immutable table detected: {stripped[:100]}")
+                )
 
         for i, pattern in enumerate(_FLOAT_PATTERNS):
             if pattern.search(line):
-                issues.append((
-                    line_num,
-                    f"Forbidden column type '{FORBIDDEN_COLUMN_TYPES[i]}' detected: {stripped[:100]}",
-                ))
+                issues.append(
+                    (
+                        line_num,
+                        f"Forbidden column type '{FORBIDDEN_COLUMN_TYPES[i]}' detected: {stripped[:100]}",
+                    )
+                )
 
     return issues
 

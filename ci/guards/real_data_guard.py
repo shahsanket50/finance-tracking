@@ -5,17 +5,19 @@ numbers, and bank domains. Fails if any match is found.
 
 Real bank data must never enter the repository — use synthetic fixtures only.
 """
+
 from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
 
 REAL_DATA_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("PAN", re.compile(r'\b[A-Z]{5}[0-9]{4}[A-Z]\b')),
-    ("Aadhaar", re.compile(r'\b[2-9][0-9]{11}\b')),
-    ("IFSC", re.compile(r'\b[A-Z]{4}0[A-Z0-9]{6}\b')),
-    ("AccountNumber", re.compile(r'\b[0-9]{12,18}\b')),
-    ("BankDomain", re.compile(r'(hdfc|icici|sbi|axis|kotak)bank\.com', re.IGNORECASE)),
+    ("PAN", re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")),
+    ("Aadhaar", re.compile(r"\b[2-9][0-9]{11}\b")),
+    ("IFSC", re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b")),
+    ("AccountNumber", re.compile(r"\b[0-9]{12,18}\b")),
+    ("BankDomain", re.compile(r"(hdfc|icici|sbi|axis|kotak)bank\.com", re.IGNORECASE)),
 ]
 
 SCAN_EXTENSIONS = {".json", ".yaml", ".yml", ".csv", ".txt", ".md"}
@@ -24,8 +26,8 @@ SCAN_DIRS = ["tests", "docs"]
 # Patterns that are false positives in test code (e.g. regex patterns themselves)
 # These are exact strings that the scanner should skip
 ALLOWLIST_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r'\\b\[A-Z\]\{5\}'),  # regex pattern definitions
-    re.compile(r'REAL_DATA_PATTERNS'),  # this file itself
+    re.compile(r"\\b\[A-Z\]\{5\}"),  # regex pattern definitions
+    re.compile(r"REAL_DATA_PATTERNS"),  # this file itself
 ]
 
 

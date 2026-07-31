@@ -8,8 +8,10 @@ from pathlib import Path
 import pytest
 
 # Add repo root to sys.path so ci.guards.* is importable from unit tests.
-# The ci/ directory lives two levels above backend/tests/.
-sys.path.insert(0, str(Path(__file__).parents[2]))
+# The ci/ directory lives at the repo root. In Docker, the repo root is at /repo.
+# On local dev, it's one level above the backend directory.
+repo_root = Path("/repo") if Path("/repo").exists() else Path(__file__).parents[2]
+sys.path.insert(0, str(repo_root))
 
 
 def pytest_configure(config: pytest.Config) -> None:

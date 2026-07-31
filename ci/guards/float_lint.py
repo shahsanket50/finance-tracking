@@ -3,7 +3,9 @@
 Scans core/, processing/, domain/ for float literals and float() calls.
 These modules must use Paise/BasisPoints/Units4dp newtypes only.
 """
+
 from __future__ import annotations
+
 import ast
 import sys
 from pathlib import Path
@@ -35,7 +37,9 @@ def check_python_file(path: Path) -> list[tuple[int, str]]:
         # float literals: ast.Constant with float value
         # Exclude: 0.0 from imports like `__version__ = "0.1.0"` — those are strings.
         if isinstance(node, ast.Constant) and isinstance(node.value, float):
-            issues.append((node.lineno, f"float literal {node.value!r} at line {node.lineno}"))
+            issues.append(
+                (node.lineno, f"float literal {node.value!r} at line {node.lineno}")
+            )
 
     return issues
 

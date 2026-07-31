@@ -3,17 +3,17 @@
 Tests G14 (real-data guard) and G15 (migration check + float lint).
 Guards live at ci/guards/ in the repo root; importable via sys.path set in conftest.py.
 """
+
 from __future__ import annotations
+
 from pathlib import Path
-import tempfile
-import pytest
 
-from ci.guards.real_data_guard import scan_file, scan_repo
-from ci.guards.migration_check import check_migration_file, scan_migrations
 from ci.guards.float_lint import check_python_file
-
+from ci.guards.migration_check import check_migration_file
+from ci.guards.real_data_guard import scan_file, scan_repo
 
 # ── G14 real-data guard ────────────────────────────────────────────────────────
+
 
 def test_scan_file_detects_pan(tmp_path: Path) -> None:
     f = tmp_path / "test.json"
@@ -54,9 +54,10 @@ def test_scan_repo_empty_dir(tmp_path: Path) -> None:
 
 # ── G15 migration check ────────────────────────────────────────────────────────
 
+
 def test_migration_check_detects_update(tmp_path: Path) -> None:
     f = tmp_path / "001_bad.py"
-    f.write_text('op.execute("UPDATE transaction_events SET narration = \'x\'")')
+    f.write_text("op.execute(\"UPDATE transaction_events SET narration = 'x'\")")
     issues = check_migration_file(f)
     assert any("UPDATE" in issue for _, issue in issues)
 
@@ -85,12 +86,13 @@ def test_migration_check_clean(tmp_path: Path) -> None:
 def test_migration_check_ignores_comments(tmp_path: Path) -> None:
     f = tmp_path / "001_ok.py"
     # Comments mentioning immutable tables should not trigger
-    f.write_text('# This migration does NOT UPDATE transaction_events\n')
+    f.write_text("# This migration does NOT UPDATE transaction_events\n")
     issues = check_migration_file(f)
     assert issues == []
 
 
 # ── G15 float lint ─────────────────────────────────────────────────────────────
+
 
 def test_float_lint_detects_float_call(tmp_path: Path) -> None:
     f = tmp_path / "bad.py"
@@ -101,13 +103,13 @@ def test_float_lint_detects_float_call(tmp_path: Path) -> None:
 
 def test_float_lint_detects_float_literal(tmp_path: Path) -> None:
     f = tmp_path / "bad.py"
-    f.write_text('rate = 0.18\n')
+    f.write_text("rate = 0.18\n")
     issues = check_python_file(f)
     assert any("float literal" in issue for _, issue in issues)
 
 
 def test_float_lint_clean_int(tmp_path: Path) -> None:
     f = tmp_path / "ok.py"
-    f.write_text('amount_paise = 18_000\n')
+    f.write_text("amount_paise = 18_000\n")
     issues = check_python_file(f)
     assert issues == []
