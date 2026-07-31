@@ -22,7 +22,7 @@ def upgrade() -> None:
         sa.Column("account_type", sa.String(32), nullable=True),
         # account_type values: 'savings' | 'current' | 'credit_card' | 'fd' | 'broker'
         sa.Column("last4", sa.String(4), nullable=True),
-        sa.Column("sync_status", sa.String(16), nullable=False, server_default="pending"),
+        sa.Column("sync_status", sa.String(16), nullable=False, server_default=sa.text("'pending'")),
         sa.Column("last_synced_at", sa.TIMESTAMP(timezone=True), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -70,7 +70,7 @@ def upgrade() -> None:
     op.create_table(
         "settings",
         sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column("preferences", sa.JSON(), nullable=False, server_default="{}"),
+        sa.Column("preferences", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("updated_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.PrimaryKeyConstraint("user_id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
@@ -93,8 +93,8 @@ def upgrade() -> None:
         "notification_preferences",
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("channels", sa.JSON(), nullable=False,
-                  server_default='{"slack": false, "email": true}'),
-        sa.Column("tier2_toggles", sa.JSON(), nullable=False, server_default="{}"),
+                  server_default=sa.text("""'{"slack": false, "email": true}'""")),
+        sa.Column("tier2_toggles", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("updated_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
         sa.PrimaryKeyConstraint("user_id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
