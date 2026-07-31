@@ -6,6 +6,37 @@
 
 ---
 
+## 2026-07-30 — Session 003: Postgres schema — immutable event tables (Task 0.3)
+
+**Phase:** 0 — Foundations
+**Participants:** Sanket + Claude
+
+### Done
+- `backend/migrations/alembic.ini` — Alembic config, `script_location = migrations`, URL overridden in env.py.
+- `backend/migrations/env.py` — reads DATABASE_URL from environment; imports `Base` from core.events.models.
+- `backend/migrations/versions/000_identity.py` — creates `users`, `invite_allowlist`, `user_encryption_keys`.
+- `backend/migrations/versions/001_immutable.py` — creates 4 event tables with append-only triggers + M10 indexes on `transaction_events`.
+- `backend/core/__init__.py`, `backend/core/events/__init__.py` — package init files.
+- `backend/core/events/models.py` — SQLAlchemy 2.x ORM models for all 7 domain tables (identity + event).
+- `backend/core/events/types.py` — `TransactionType`, `Actor`, `BalanceCheck`, `IngestionStatus` enums.
+- Ran `alembic upgrade head` inside backend container — both migrations applied cleanly.
+- Verified: 8 tables (incl. alembic_version), 4 append-only triggers (8 rows in information_schema due to UPDATE+DELETE each), 3 M10 indexes on transaction_events, 0 NUMERIC/REAL/FLOAT columns.
+- Verified: `users` table is mutable (UPDATE works); `ingestion_events` trigger fires and blocks UPDATE.
+- Verified: `mypy --strict core/events/` — 0 issues in 3 source files.
+
+### Decisions made
+- `source_detail: Mapped[dict | None]` requires explicit `JSON` column type — SQLAlchemy 2.x cannot auto-resolve `dict` in `Mapped[]` annotations without it.
+- `uuidv7()` confirmed as Postgres 18 native built-in; no extension needed.
+- `psycopg` (psycopg3) driver URL (`postgresql+psycopg://`) works with synchronous Alembic env.py; no async driver needed for migrations.
+
+### Blocked / open
+- Nothing blocking next tasks.
+
+### Next session should
+- Task 0.4: Postgres schema — mutable settings tables (TRD §3.2) via `002_mutable.py`.
+
+---
+
 ## 2026-07-30 — Session 002: Docker local dev environment (Task 0.2)
 
 **Phase:** 0 — Foundations
