@@ -75,7 +75,7 @@ jobs:
       - run: npx tsc --noEmit
         working-directory: web
 
-  # ── G4–G15: Stubs (uncommented by later Phase 0 tasks) ──────
+  # ── G4–G13: Stubs (uncommented by later Phase 0 tasks) ──────
   # unit-tests:
   #   name: "G4 · Unit tests"
   #   ...
@@ -106,9 +106,26 @@ jobs:
   # secret-scan:
   #   name: "G13 · Secret scan"
   #   ...
-  # real-data-guard:
-  #   name: "G14 · Real-data guard"
-  #   ...
-  # migration-check:
-  #   name: "G15 · Migration check"
-  #   ...
+
+  # ── G14: Real-data guard ─────────────────────────────────────────────────────
+  real-data-guard:
+    name: "G14 · Real-data guard"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python ci/guards/real_data_guard.py .
+
+  # ── G15: Migration + float check ─────────────────────────────────────────────
+  migration-check:
+    name: "G15 · Migration + float check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python ci/guards/migration_check.py .
+      - run: python ci/guards/float_lint.py .

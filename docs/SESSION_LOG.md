@@ -6,6 +6,32 @@
 
 ---
 
+## 2026-07-31 — Session 004: Custom CI gates G14 + G15 (Task 0.11)
+
+**Phase:** 0 — Foundations
+**Participants:** Sanket + Claude
+
+### Done
+- `ci/__init__.py`, `ci/guards/__init__.py` — package init files for guard module.
+- `ci/guards/real_data_guard.py` — G14: scans `tests/` and `docs/` for PAN, Aadhaar, IFSC, 12-18 digit account numbers, and bank domains. Returns exit code 0 (clean) or 1 (violations).
+- `ci/guards/migration_check.py` — G15: scans migration versions for UPDATE/DELETE on immutable tables and forbidden column types (NUMERIC/REAL/DOUBLE/FLOAT). Returns exit code 0 or 1.
+- `ci/guards/float_lint.py` — G15 extension: AST-based scan of `core/`, `processing/`, `domain/` for float literals and float() calls.
+- `backend/tests/unit/test_guards.py` — 13 unit tests covering all three guards (positive + negative cases).
+- `backend/tests/conftest.py` — added `sys.path.insert(0, repo_root)` so `ci.guards.*` is importable from tests without Docker.
+- `.github/workflows/ci.yml` — activated G14 (`real-data-guard`) and G15 (`migration-check`) jobs; G4–G13 remain commented stubs.
+- `docs/PROJECT_STATE.md` — task 0.11 marked Done.
+
+### Verification results
+- All three guards pass against current repo (exit code 0).
+- 13/13 unit tests pass.
+- `python3 -m mypy --strict ci/` — success, no issues in 5 source files.
+
+### Decisions
+- Guards placed at repo root `ci/guards/` (not inside `backend/`) for CI clarity — scripts run directly without Docker.
+- `sys.path` patched in `backend/tests/conftest.py` (two levels up from conftest to repo root) to keep test file co-located with other unit tests.
+
+---
+
 ## 2026-07-30 — Session 003: Postgres schema — immutable event tables (Task 0.3)
 
 **Phase:** 0 — Foundations
