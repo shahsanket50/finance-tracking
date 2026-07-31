@@ -75,22 +75,90 @@ jobs:
       - run: npx tsc --noEmit
         working-directory: web
 
-  # ── G4–G13: Stubs (uncommented by later Phase 0 tasks) ──────
-  # unit-tests:
-  #   name: "G4 · Unit tests"
-  #   ...
-  # property-tests:
-  #   name: "G5 · Property tests"
-  #   ...
-  # golden-dataset:
-  #   name: "G6 · Golden dataset"
-  #   ...
-  # integration-tests:
-  #   name: "G7 · Integration tests"
-  #   ...
-  # coverage:
-  #   name: "G8 · Coverage"
-  #   ...
+  # ── G4: Unit tests ─────────────────────────────────────────
+  unit-tests:
+    name: "G4 · Unit tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: pytest backend/tests/unit/ -v --tb=short
+        env:
+          PYTHONPATH: backend
+
+  # ── G5: Property tests ──────────────────────────────────────
+  property-tests:
+    name: "G5 · Property tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: pytest backend/tests/property/ -v --hypothesis-seed=0 --tb=short
+        env:
+          PYTHONPATH: backend
+
+  # ── G6: Golden dataset ──────────────────────────────────────
+  golden-dataset:
+    name: "G6 · Golden dataset"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: |
+          pytest backend/tests/golden/ -v --tb=short
+          exit_code=$?
+          # pytest exit 5 = no tests collected — acceptable at Phase 0
+          if [ $exit_code -ne 0 ] && [ $exit_code -ne 5 ]; then exit $exit_code; fi
+        env:
+          PYTHONPATH: backend
+
+  # ── G7: Integration tests ───────────────────────────────────
+  integration-tests:
+    name: "G7 · Integration tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: pytest backend/tests/integration/ -m "integration and not integration_pitr" -v --tb=short
+        env:
+          PYTHONPATH: backend
+
+  # ── G8: Coverage ────────────────────────────────────────────
+  coverage:
+    name: "G8 · Coverage"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: |
+          pytest backend/tests/unit/ backend/tests/property/ \
+            --cov=core --cov=ci \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            --tb=short
+        env:
+          PYTHONPATH: backend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ── G9–G13: Stubs (uncommented by later Phase 0 tasks) ──────
   # complexity:
   #   name: "G9 · Complexity"
   #   ...
