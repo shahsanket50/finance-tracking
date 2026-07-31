@@ -1,4 +1,4 @@
-.PHONY: up down migrate test lint
+.PHONY: up down migrate test test-integration test-pitr lint
 
 up:
 	docker compose up -d
@@ -11,6 +11,12 @@ migrate:
 
 test:
 	docker compose exec backend pytest
+
+test-integration: ## Run integration tests (requires Docker running locally)
+	cd backend && python -m pytest tests/integration/ -m "integration and not integration_pitr" -v
+
+test-pitr: ## Run PITR test (requires compose stack running)
+	docker compose exec backend pytest backend/tests/integration/test_pitr.py -v
 
 lint:
 	docker compose exec backend ruff check .

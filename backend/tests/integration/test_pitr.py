@@ -16,6 +16,7 @@ import pytest
 
 
 @pytest.mark.integration
+@pytest.mark.integration_pitr
 def test_wal_level_is_replica() -> None:
     """Postgres must have wal_level = replica for PITR readiness (M9)."""
     import psycopg

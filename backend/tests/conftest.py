@@ -20,3 +20,7 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "integration: mark test as requiring a live database (deselect with -m 'not integration')",
     )
+    config.addinivalue_line(
+        "markers",
+        "integration_pitr: mark test as requiring the compose Postgres stack",
+    )
