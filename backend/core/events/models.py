@@ -3,12 +3,25 @@
 Implements TRD §3.1 (immutable event log) and the identity subset of TRD §3.2.
 """
 from __future__ import annotations
+
 import uuid
-import sqlalchemy as sa
 from datetime import date, datetime
-from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Identity, Integer
-from sqlalchemy import JSON, LargeBinary, SmallInteger, String, Text, TIMESTAMP
-from sqlalchemy import UniqueConstraint
+
+import sqlalchemy as sa
+from sqlalchemy import (
+    JSON,
+    TIMESTAMP,
+    BigInteger,
+    Boolean,
+    Date,
+    ForeignKey,
+    Identity,
+    Integer,
+    LargeBinary,
+    SmallInteger,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -20,10 +33,14 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
+    )
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     google_sub: Mapped[str | None] = mapped_column(String(255), unique=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
 
 
 class InviteAllowlist(Base):
@@ -31,23 +48,31 @@ class InviteAllowlist(Base):
 
     email: Mapped[str] = mapped_column(String(320), primary_key=True)
     invited_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
 
 
 class UserEncryptionKey(Base):
     __tablename__ = "user_encryption_keys"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     key_material: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
     deactivated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
 
 class IngestionEvent(Base):
     __tablename__ = "ingestion_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
+    )
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
     event_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
@@ -62,31 +87,45 @@ class IngestionEvent(Base):
     confidence: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     payload: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)
-    encryption_key_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("user_encryption_keys.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    encryption_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_encryption_keys.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
 
 
 class RawArtifact(Base):
     __tablename__ = "raw_artifacts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
+    )
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
     event_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
-    ingestion_event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ingestion_events.id"), nullable=False)
+    ingestion_event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ingestion_events.id"), nullable=False
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     retained: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
 
 
 class TransactionEvent(Base):
     __tablename__ = "transaction_events"
     __table_args__ = (sa.UniqueConstraint("idempotency_hash", name="uq_transaction_events_idempotency_hash"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
+    )
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
     event_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
-    ingestion_event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("ingestion_events.id"), nullable=False)
+    ingestion_event_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("ingestion_events.id"), nullable=False
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     account_ref: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -101,19 +140,29 @@ class TransactionEvent(Base):
     actor: Mapped[str] = mapped_column(String(16), nullable=False)
     confidence: Mapped[int | None] = mapped_column(Integer)
     payload: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)
-    encryption_key_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("user_encryption_keys.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    encryption_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_encryption_keys.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
 
 
 class DocumentEvent(Base):
     __tablename__ = "document_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
+    )
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
     event_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     document_type: Mapped[str] = mapped_column(String(32), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)
-    encryption_key_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("user_encryption_keys.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    encryption_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("user_encryption_keys.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
+    )
