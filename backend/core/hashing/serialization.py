@@ -3,6 +3,7 @@
 JSON.parse produces IEEE-754 doubles — this corrupts paise values that exceed
 2^53. Serialize money as strings, not numbers.
 """
+
 from __future__ import annotations
 
 from core.hashing.types import Paise

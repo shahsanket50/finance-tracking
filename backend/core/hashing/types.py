@@ -4,6 +4,7 @@ All financial quantities are scaled integers. No float anywhere.
 These classes exist to make type-level intent clear and to catch
 accidental mixing of scales at the type checker level.
 """
+
 from __future__ import annotations
 
 

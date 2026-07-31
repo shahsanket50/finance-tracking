@@ -4,6 +4,7 @@ C1: hash = SHA-256 of pipe-joined canonical fields.
 C2: occurrence_index = 0-based ordinal within (account, date, amount, narration) group.
 running_balance is deliberately excluded from the hash (C1 spec).
 """
+
 from __future__ import annotations
 
 import hashlib

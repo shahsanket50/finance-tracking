@@ -5,9 +5,8 @@ round_to_nearest_10: Sections 288A/288B tax rounding.
 
 No float arithmetic anywhere.
 """
-from __future__ import annotations
 
-from core.hashing.types import Paise
+from __future__ import annotations
 
 
 def largest_remainder(total_paise: int, weights: list[int]) -> list[int]:
