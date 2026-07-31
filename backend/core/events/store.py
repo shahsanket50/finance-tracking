@@ -9,7 +9,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -36,7 +35,7 @@ def append_event(
     user_id: uuid.UUID,
     event_type: str,
     aggregate_id: str,  # maps to account_ref
-    payload: dict[str, Any],  # plain dict — encrypted internally
+    payload: dict[str, object],  # plain dict — encrypted internally
     *,
     event_version: int = 1,
     # Required transaction_events columns — pulled from payload if not supplied:
@@ -47,7 +46,7 @@ def append_event(
     transaction_type: str = "expense",
     narration: str = "",
     actor: str = "system",
-    ingestion_event_id: uuid.UUID | None = None,
+    ingestion_event_id: uuid.UUID,
     confidence: int | None = None,
     running_balance_paise: int | None = None,
     normalized_narration: str | None = None,
@@ -57,11 +56,13 @@ def append_event(
     Returns the global seq number of the appended event.
     Encrypts the payload before writing (H2).
     """
-    encrypted_bytes, key_id = encrypt_payload(session, user_id, payload)
+    if idempotency_hash is None:
+        raise ValueError(
+            "idempotency_hash is required. Compute it via "
+            "core.hashing.hash.compute_idempotency_hash() before calling append_event."
+        )
 
-    # If ingestion_event_id is not supplied, look up or create one.
-    # For scaffold tests, supply ingestion_event_id explicitly.
-    # (Phase 1 ingestion pipeline will always supply it.)
+    encrypted_bytes, key_id = encrypt_payload(session, user_id, payload)
 
     row = TransactionEvent(
         user_id=user_id,
@@ -70,7 +71,7 @@ def append_event(
         account_ref=aggregate_id,
         value_date=value_date or date.today(),
         amount_paise=amount_paise,
-        idempotency_hash=idempotency_hash or "",
+        idempotency_hash=idempotency_hash,
         occurrence_index=occurrence_index,
         transaction_type=transaction_type,
         narration=narration,

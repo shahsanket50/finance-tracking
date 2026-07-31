@@ -115,6 +115,7 @@ def test_append_event_returns_int() -> None:
             event_type="TransactionIngested",
             aggregate_id="HDFC_SAVINGS_001",
             payload={"narration": "test"},
+            idempotency_hash="abc123def456",
             ingestion_event_id=ingestion_id,
         )
 
