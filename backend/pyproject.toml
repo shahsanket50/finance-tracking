@@ -31,6 +31,12 @@ dev = [
     "httpx>=0.28",                     # FastAPI test client
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["core", "ingestion", "processing", "domain", "api", "adapters"]
 
