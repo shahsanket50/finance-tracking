@@ -33,3 +33,12 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["core", "ingestion", "processing", "domain", "api", "adapters"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.ruff]
+# ruff.toml at repo root takes precedence, but keep this for IDE integration
+line-length = 100

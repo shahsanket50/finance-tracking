@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ── G1: Format ──────────────────────────────────────────────
+  format:
+    name: "G1 · Format"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff format --check backend/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx prettier --check .
+        working-directory: web
+
+  # ── G2: Lint ─────────────────────────────────────────────────
+  lint:
+    name: "G2 · Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check backend/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx eslint .
+        working-directory: web
+
+  # ── G3: Type check ───────────────────────────────────────────
+  typecheck:
+    name: "G3 · Type check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: mypy --strict backend/
+        env:
+          MYPYPATH: backend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx tsc --noEmit
+        working-directory: web
+
+  # ── G4–G15: Stubs (uncommented by later Phase 0 tasks) ──────
+  # unit-tests:
+  #   name: "G4 · Unit tests"
+  #   ...
+  # property-tests:
+  #   name: "G5 · Property tests"
+  #   ...
+  # golden-dataset:
+  #   name: "G6 · Golden dataset"
+  #   ...
+  # integration-tests:
+  #   name: "G7 · Integration tests"
+  #   ...
+  # coverage:
+  #   name: "G8 · Coverage"
+  #   ...
+  # complexity:
+  #   name: "G9 · Complexity"
+  #   ...
+  # dead-code:
+  #   name: "G10 · Dead code"
+  #   ...
+  # security-deps:
+  #   name: "G11 · Security (deps)"
+  #   ...
+  # security-code:
+  #   name: "G12 · Security (code)"
+  #   ...
+  # secret-scan:
+  #   name: "G13 · Secret scan"
+  #   ...
+  # real-data-guard:
+  #   name: "G14 · Real-data guard"
+  #   ...
+  # migration-check:
+  #   name: "G15 · Migration check"
+  #   ...

@@ -1,0 +1,14 @@
+name: Quality Report
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  report:
+    name: "Quality report"
+    runs-on: ubuntu-latest
+    # Placeholder — implemented in task 0.13
+    steps:
+      - run: echo "Quality report placeholder — implemented in task 0.13"
