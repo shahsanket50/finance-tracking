@@ -1,15 +1,16 @@
 """Property-based tests for hash invariants (C1, C2) using Hypothesis."""
+
 from __future__ import annotations
 
 from datetime import date
 
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from core.hashing.hash import compute_idempotency_hash
 from core.hashing.rounding import largest_remainder
 from core.hashing.serialization import json_str_to_paise, money_to_json_str
 from core.hashing.types import Paise
-
 
 # ── Hash determinism ───────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ def test_different_occurrence_index_different_hash(
 # ── JSON serialization round-trip ──────────────────────────────────────────────
 
 
-@given(amount=st.integers(min_value=-10**15, max_value=10**15))
+@given(amount=st.integers(min_value=-(10**15), max_value=10**15))
 def test_json_roundtrip_preserves_exact_value(amount: int) -> None:
     p = Paise(amount)
     s = money_to_json_str(p)

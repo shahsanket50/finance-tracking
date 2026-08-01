@@ -1,4 +1,5 @@
 """Unit tests for idempotency hash and occurrence index (C1, C2)."""
+
 from datetime import date
 
 from core.hashing.hash import compute_idempotency_hash, compute_occurrence_index

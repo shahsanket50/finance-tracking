@@ -46,6 +46,8 @@ packages = ["core", "ingestion", "processing", "domain", "api", "adapters"]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+disallow_subclassing_any = false  # SQLAlchemy DeclarativeBase has type Any
+disallow_untyped_decorators = false  # Hypothesis @given/@settings in tests
 
 [tool.ruff]
 # ruff.toml at repo root takes precedence, but keep this for IDE integration

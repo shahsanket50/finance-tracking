@@ -1,4 +1,5 @@
 """Unit tests for C5 newtypes."""
+
 from __future__ import annotations
 
 from core.hashing.types import BasisPoints, FxRate, Paise, Units4dp

@@ -1,8 +1,11 @@
 """Alembic migration environment. Implements TRD §3."""
+
 import os
 from logging.config import fileConfig
+
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
 from core.events.models import Base
 from core.models.mutable import (  # noqa: F401
     Account,

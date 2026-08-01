@@ -1,4 +1,5 @@
 """Domain enumerations for event classification. Implements TRD §3.1, T16."""
+
 from enum import StrEnum
 
 

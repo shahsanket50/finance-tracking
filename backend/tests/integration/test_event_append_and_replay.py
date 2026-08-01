@@ -2,9 +2,9 @@
 
 Tests the full path: write event → read back → build projection.
 """
+
 from __future__ import annotations
 
-import uuid
 from datetime import date
 
 import pytest

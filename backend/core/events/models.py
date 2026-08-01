@@ -2,6 +2,7 @@
 
 Implements TRD §3.1 (immutable event log) and the identity subset of TRD §3.2.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -59,7 +60,9 @@ class UserEncryptionKey(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     key_material: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
@@ -75,9 +78,11 @@ class IngestionEvent(Base):
     )
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
     event_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     source: Mapped[str] = mapped_column(String(32), nullable=False)
-    source_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # type: ignore[type-arg]
+    source_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     period_start: Mapped[date | None] = mapped_column(Date())
     period_end: Mapped[date | None] = mapped_column(Date())
     records_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -106,7 +111,9 @@ class RawArtifact(Base):
     ingestion_event_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("ingestion_events.id"), nullable=False
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     content_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     retained: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -116,7 +123,11 @@ class RawArtifact(Base):
 
 class TransactionEvent(Base):
     __tablename__ = "transaction_events"
-    __table_args__ = (sa.UniqueConstraint("idempotency_hash", name="uq_transaction_events_idempotency_hash"),)
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "user_id", "idempotency_hash", name="uq_transaction_events_user_idempotency_hash"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
@@ -126,7 +137,9 @@ class TransactionEvent(Base):
     ingestion_event_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("ingestion_events.id"), nullable=False
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     account_ref: Mapped[str] = mapped_column(String(128), nullable=False)
     value_date: Mapped[date] = mapped_column(Date(), nullable=False)
@@ -156,7 +169,9 @@ class DocumentEvent(Base):
     )
     seq: Mapped[int] = mapped_column(BigInteger, Identity(), unique=True, nullable=False)
     event_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
     document_type: Mapped[str] = mapped_column(String(32), nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)

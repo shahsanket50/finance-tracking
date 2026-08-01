@@ -41,7 +41,7 @@ This is not a slogan. It has concrete consequences:
 
 These must hold at all times. They are asserted in tests. Breaking one is a P0 bug, not a regression.
 
-1. **No transaction hash is ever counted more than once.** Idempotency hash = `hash(account_ref + date + amount + narration + running_balance)`.
+1. **No transaction hash is ever counted more than once.** Idempotency hash = `hash(account_ref + date + amount + normalized_narration + occurrence_index)`. `running_balance` is NOT in the hash (TRD §C1/C2).
 2. **Statement balance check must pass** (`opening + credits − debits == closing`) or the parse is rejected and logged — never partially ingested.
 3. **Event log replay is deterministic.** Replaying the same events twice produces byte-identical projections.
 4. **A matched internal-transfer pair never appears in expense totals.** (Transfers, credit-card bill payments, FD bookings.)
@@ -119,7 +119,7 @@ A lint rule bans float in `core/`, `processing/`, and `domain/`. Do not disable 
 
 ### 3.6 Timestamps: UTC storage, IST business logic
 
-Store all timestamps in UTC. Perform **all** financial-year, statement-period, and matching-window logic in IST. A transaction at `2026-03-31T23:30:00Z` is FY 2025-26 in IST, not FY 2026-27. Getting this wrong misfiles income across tax years.
+Store all timestamps in UTC. Perform **all** financial-year, statement-period, and matching-window logic in IST. A transaction at `2026-03-31T23:30:00Z` is `2026-04-01T05:00:00 IST` — month 4 → **FY 2026-27**, not FY 2025-26. Getting this wrong misfiles income across tax years.
 
 ---
 

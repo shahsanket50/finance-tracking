@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --no-cache-dir -e "backend/[dev]"
-      - run: mypy --strict backend/
+      - run: mypy --config-file backend/pyproject.toml backend/
         env:
           MYPYPATH: backend
 

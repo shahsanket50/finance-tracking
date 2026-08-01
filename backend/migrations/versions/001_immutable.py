@@ -3,8 +3,9 @@
 Append-only: enforced by DB-level trigger on each table.
 Implements TRD §3.1, invariants I1-I3.
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "001"
 down_revision = "000"
@@ -51,7 +52,12 @@ def upgrade() -> None:
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column("payload", sa.LargeBinary(), nullable=False),
         sa.Column("encryption_key_id", sa.UUID(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seq"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
@@ -68,7 +74,12 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("content_hash", sa.String(64), nullable=False),
         sa.Column("retained", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seq"),
         sa.UniqueConstraint("content_hash"),
@@ -98,17 +109,30 @@ def upgrade() -> None:
         sa.Column("confidence", sa.Integer(), nullable=True),
         sa.Column("payload", sa.LargeBinary(), nullable=False),
         sa.Column("encryption_key_id", sa.UUID(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seq"),
-        sa.UniqueConstraint("idempotency_hash", name="uq_transaction_events_idempotency_hash"),
+        sa.UniqueConstraint(
+            "user_id", "idempotency_hash", name="uq_transaction_events_user_idempotency_hash"
+        ),
         sa.ForeignKeyConstraint(["ingestion_event_id"], ["ingestion_events.id"]),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.ForeignKeyConstraint(["encryption_key_id"], ["user_encryption_keys.id"]),
     )
     # M10: indexes for known access paths
-    op.create_index("ix_transaction_events_user_date", "transaction_events", ["user_id", "value_date"])
-    op.create_index("ix_transaction_events_user_date_type", "transaction_events", ["user_id", "value_date", "transaction_type"])
+    op.create_index(
+        "ix_transaction_events_user_date", "transaction_events", ["user_id", "value_date"]
+    )
+    op.create_index(
+        "ix_transaction_events_user_date_type",
+        "transaction_events",
+        ["user_id", "value_date", "transaction_type"],
+    )
     _create_append_only_trigger("transaction_events")
 
     op.create_table(
@@ -121,7 +145,12 @@ def upgrade() -> None:
         sa.Column("event_type", sa.String(64), nullable=False),
         sa.Column("payload", sa.LargeBinary(), nullable=False),
         sa.Column("encryption_key_id", sa.UUID(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seq"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),

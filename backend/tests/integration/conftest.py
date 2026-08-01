@@ -2,14 +2,15 @@
 
 Spins up ephemeral Postgres 18, runs migrations, provides per-test sessions.
 """
+
 from __future__ import annotations
 
 import os
 import subprocess
 import sys
 import uuid
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from sqlalchemy import create_engine

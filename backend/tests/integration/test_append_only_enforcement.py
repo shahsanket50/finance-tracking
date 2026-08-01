@@ -2,6 +2,7 @@
 
 The DB trigger must prevent UPDATE and DELETE on immutable event tables.
 """
+
 from __future__ import annotations
 
 from datetime import date

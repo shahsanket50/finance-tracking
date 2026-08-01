@@ -2,6 +2,7 @@
 
 Calling build_projection twice on the same DB state produces identical output.
 """
+
 from __future__ import annotations
 
 import json

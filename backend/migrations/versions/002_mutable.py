@@ -4,8 +4,9 @@ merchant_section_map, settings, statement_credentials, notification_preferences.
 Normal CRUD — history doesn't matter. No append-only triggers.
 Implements TRD §3.2.
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "002"
 down_revision = "001"
@@ -22,9 +23,16 @@ def upgrade() -> None:
         sa.Column("account_type", sa.String(32), nullable=True),
         # account_type values: 'savings' | 'current' | 'credit_card' | 'fd' | 'broker'
         sa.Column("last4", sa.String(4), nullable=True),
-        sa.Column("sync_status", sa.String(16), nullable=False, server_default=sa.text("'pending'")),
+        sa.Column(
+            "sync_status", sa.String(16), nullable=False, server_default=sa.text("'pending'")
+        ),
         sa.Column("last_synced_at", sa.TIMESTAMP(timezone=True), nullable=True),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
     )
@@ -36,8 +44,18 @@ def upgrade() -> None:
         sa.Column("category", sa.String(64), nullable=False),
         sa.Column("month", sa.Date(), nullable=False),
         sa.Column("target_paise", sa.BigInteger(), nullable=False),  # C5: BIGINT paise
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "category", "month", name="uq_budgets_user_category_month"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
@@ -49,9 +67,16 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("normalized_merchant", sa.String(256), nullable=False),
         sa.Column("category", sa.String(64), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("user_id", "normalized_merchant", name="uq_category_overrides_user_merchant"),
+        sa.UniqueConstraint(
+            "user_id", "normalized_merchant", name="uq_category_overrides_user_merchant"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
     )
 
@@ -61,9 +86,16 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("normalized_merchant", sa.String(256), nullable=False),
         sa.Column("tax_section", sa.String(16), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("user_id", "normalized_merchant", name="uq_merchant_section_map_user_merchant"),
+        sa.UniqueConstraint(
+            "user_id", "normalized_merchant", name="uq_merchant_section_map_user_merchant"
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
     )
 
@@ -71,7 +103,12 @@ def upgrade() -> None:
         "settings",
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("preferences", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("user_id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
     )
@@ -83,7 +120,12 @@ def upgrade() -> None:
         sa.Column("account_id", sa.UUID(), nullable=True),
         sa.Column("credential_type", sa.String(32), nullable=False),
         sa.Column("encrypted_value", sa.LargeBinary(), nullable=False),
-        sa.Column("created_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.ForeignKeyConstraint(["account_id"], ["accounts.id"]),
@@ -92,10 +134,19 @@ def upgrade() -> None:
     op.create_table(
         "notification_preferences",
         sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column("channels", sa.JSON(), nullable=False,
-                  server_default=sa.text("""'{"slack": false, "email": true}'""")),
+        sa.Column(
+            "channels",
+            sa.JSON(),
+            nullable=False,
+            server_default=sa.text("""'{"slack": false, "email": true}'"""),
+        ),
         sa.Column("tier2_toggles", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
-        sa.Column("updated_at", sa.TIMESTAMP(timezone=True), server_default=sa.text("NOW()"), nullable=False),
+        sa.Column(
+            "updated_at",
+            sa.TIMESTAMP(timezone=True),
+            server_default=sa.text("NOW()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("user_id"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
     )

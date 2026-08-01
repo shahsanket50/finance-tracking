@@ -1,10 +1,10 @@
 """Unit tests for largest_remainder and round_to_nearest_10."""
+
 from __future__ import annotations
 
 import pytest
 
 from core.hashing.rounding import largest_remainder, round_to_nearest_10
-
 
 # ── largest_remainder ──────────────────────────────────────────────────────────
 
