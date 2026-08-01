@@ -76,9 +76,9 @@ def _delta(current: float, baseline: float) -> str:
     return "—"
 
 
-def _guard(status: str) -> str:
+def _guard(status: str, ok_text: str = "clean") -> str:
     if status == "success":
-        return "clean ✅"
+        return f"{ok_text} ✅"
     if status == "failure":
         return "FAIL ❌"
     return f"{status} ⚠️"
@@ -148,11 +148,12 @@ def generate_report(
     # ── Gates summary ─────────────────────────────────────────────────────────
     passed, warnings, failed = _count_gates()
     if passed or warnings or failed:
-        gate_parts = [f"✅ {passed} passed"]
-        if warnings:
-            gate_parts.append(f"⚠️ {warnings} warnings")
-        if failed:
-            gate_parts.append(f"❌ {failed} failed")
+        w_label = "warning" if warnings == 1 else "warnings"
+        gate_parts = [
+            f"✅ {passed} passed",
+            f"⚠️ {warnings} {w_label}",
+            f"❌ {failed} failed",
+        ]
         lines.append(f"Gates      {' · '.join(gate_parts)}")
         lines.append("")
 
@@ -231,7 +232,7 @@ def generate_report(
     migration = os.environ.get("MIGRATION_STATUS", "unknown")
 
     lines.append(f"Real-data   {_guard(real_data)}")
-    lines.append(f"Migrations  {_guard(migration)}")
+    lines.append(f"Migrations  {_guard(migration, ok_text='OK')}")
 
     return "\n".join(lines)
 
@@ -240,7 +241,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate PR quality report")
     parser.add_argument("--coverage-xml", default="coverage.xml")
     parser.add_argument("--test-results", default=None)
-    parser.add_argument("--pr-number", type=int, default=None)
+    parser.add_argument(
+        "--pr-number",
+        type=lambda x: int(x) if x else None,
+        default=None,
+    )
     args = parser.parse_args()
 
     coverage_xml = Path(args.coverage_xml)
