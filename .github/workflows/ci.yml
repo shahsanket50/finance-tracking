@@ -145,6 +145,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --no-cache-dir -e "backend/[dev]"
+      # Restore the most recent persisted baseline so the ratchet compares
+      # against real prior coverage rather than the repo's 0% seed.
+      - name: Restore coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
+          restore-keys: |
+            coverage-baseline-
       - run: |
           pytest backend/tests/unit/ backend/tests/property/ \
             --cov=core --cov=ci \
@@ -163,6 +172,12 @@ jobs:
       - run: python ci/coverage/ratchet.py coverage.xml
         env:
           PYTHONPATH: .
+      # Persist the updated baseline for the next run.
+      - name: Save coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
 
   # ── G9–G13: Stubs (uncommented by later Phase 0 tasks) ──────
   # complexity:

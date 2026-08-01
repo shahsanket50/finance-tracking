@@ -107,17 +107,24 @@ def compute_zone_coverage(
 
                 if line_el.get("branch", "false") == "true":
                     # condition-coverage example: "50% (1/2)"
-                    cb = line_el.get("condition-coverage", "100% (0/0)")
-                    try:
-                        fraction = cb.split("(")[1].rstrip(")")
-                        covered_str, total_str = fraction.split("/")
-                        total_paths = int(total_str)
-                        covered_paths = int(covered_str)
-                        if total_paths > 0:
-                            branch_paths[zone_name] += total_paths
-                            branch_miss_paths[zone_name] += total_paths - covered_paths
-                    except (IndexError, ValueError):
-                        pass
+                    # Absent = line never executed: treat as 1 path, 0 covered.
+                    cb = line_el.get("condition-coverage")
+                    if cb is None:
+                        branch_paths[zone_name] += 1
+                        branch_miss_paths[zone_name] += 1
+                    else:
+                        try:
+                            fraction = cb.split("(")[1].rstrip(")")
+                            covered_str, total_str = fraction.split("/")
+                            total_paths = int(total_str)
+                            covered_paths = int(covered_str)
+                            if total_paths > 0:
+                                branch_paths[zone_name] += total_paths
+                                branch_miss_paths[zone_name] += (
+                                    total_paths - covered_paths
+                                )
+                        except (IndexError, ValueError):
+                            pass
 
     results: dict[str, dict[str, float]] = {}
     for zone_name in _ZONE_ORDER:
@@ -146,7 +153,8 @@ def check_thresholds(
     Empty list = all thresholds met.
     """
     violations: list[tuple[str, str, float, int]] = []
-    for zone_name, zone_config in ZONES.items():
+    for zone_name in _ZONE_ORDER:
+        zone_config = ZONES[zone_name]
         coverage = zone_coverage.get(zone_name, {"line": 100.0, "branch": 100.0})
         line_threshold = zone_config.line_threshold
         branch_threshold = zone_config.branch_threshold
