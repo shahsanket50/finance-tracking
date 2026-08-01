@@ -55,6 +55,9 @@
             { label: 'Critical', data: records.map(r => r.coverage?.critical ?? null), borderColor: '#e17055', fill: false },
             { label: 'Standard', data: records.map(r => r.coverage?.standard ?? null), borderColor: '#fdcb6e', fill: false },
             { label: 'Peripheral', data: records.map(r => r.coverage?.peripheral ?? null), borderColor: '#55efc4', fill: false },
+            { label: '≥95% (Critical)', data: labels.map(() => 95), borderColor: '#e17055', borderDash: [6, 3], borderWidth: 1, pointRadius: 0, fill: false },
+            { label: '≥85% (Standard)', data: labels.map(() => 85), borderColor: '#fdcb6e', borderDash: [6, 3], borderWidth: 1, pointRadius: 0, fill: false },
+            { label: '≥70% (Peripheral)', data: labels.map(() => 70), borderColor: '#55efc4', borderDash: [6, 3], borderWidth: 1, pointRadius: 0, fill: false },
           ]
         },
         options: {
