@@ -30,6 +30,7 @@ dev = [
     "testcontainers[postgres]>=4.8",  # for integration tests
     "httpx>=0.28",                     # FastAPI test client
     "defusedxml>=0.7",                  # Safe XML parsing for coverage reports
+    "pytest-json-report>=1.5",          # JSON test results for quality-report bot
 ]
 
 [tool.pytest.ini_options]
