@@ -78,4 +78,5 @@ def _get_active_key(session: Session, user_id: uuid.UUID) -> UserEncryptionKey:
     key_row = session.scalars(stmt).first()
     if key_row is None:
         raise ValueError(f"No active encryption key for user {user_id}")
+    assert isinstance(key_row, UserEncryptionKey)
     return key_row

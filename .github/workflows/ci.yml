@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install --no-cache-dir -e "backend/[dev]"
-      - run: mypy --config-file backend/pyproject.toml backend/
+      - run: mypy --config-file backend/pyproject.toml --explicit-package-bases backend/
         env:
           MYPYPATH: backend
 
@@ -114,10 +114,10 @@ jobs:
           python-version: "3.12"
       - run: pip install --no-cache-dir -e "backend/[dev]"
       - run: |
-          pytest backend/tests/golden/ -v --tb=short
-          exit_code=$?
+          exit_code=0
+          pytest backend/tests/golden/ -v --tb=short || exit_code=$?
           # pytest exit 5 = no tests collected — acceptable at Phase 0
-          if [ $exit_code -ne 0 ] && [ $exit_code -ne 5 ]; then exit $exit_code; fi
+          if [ $exit_code -ne 0 ] && [ $exit_code -ne 5 ]; then exit "$exit_code"; fi
         env:
           PYTHONPATH: backend
 

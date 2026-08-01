@@ -56,10 +56,10 @@ def test_balance_check_math() -> None:
         transactions=[TXN_CREDIT, TXN_DEBIT],
         seed=100,
     )
-    opening = int(stmt["opening_balance_paise"])
-    closing = int(stmt["closing_balance_paise"])
-    credits = int(stmt["credits_total_paise"])
-    debits = int(stmt["debits_total_paise"])  # positive (abs value)
+    opening = int(stmt["opening_balance_paise"])  # type: ignore[call-overload]
+    closing = int(stmt["closing_balance_paise"])  # type: ignore[call-overload]
+    credits = int(stmt["credits_total_paise"])  # type: ignore[call-overload]
+    debits = int(stmt["debits_total_paise"])  # type: ignore[call-overload]
     assert opening + credits - debits == closing
 
 

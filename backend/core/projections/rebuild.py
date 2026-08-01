@@ -12,7 +12,6 @@ implementation using JSON snapshots.
 from __future__ import annotations
 
 import uuid
-from typing import cast
 
 from sqlalchemy.orm import Session
 
@@ -42,4 +41,4 @@ def rebuild_projection(
             if isinstance(last_event, dict):
                 last_seq = int(last_event.get("seq", 0))
                 save_snapshot(session, user_id, projection_type, state, last_seq)
-    return cast(dict[str, object], state)
+    return state
