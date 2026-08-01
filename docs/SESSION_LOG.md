@@ -6,6 +6,28 @@
 
 ---
 
+## 2026-08-01 — Session 007: Trend dashboard (Task 0.15)
+
+**Phase:** 0 — Foundations
+**Participants:** Sanket + Claude
+
+### Done
+- `ci/trends/__init__.py` — package init.
+- `ci/trends/publish.py` — appends one JSON record per main-branch run to `docs/trends/data.jsonl`. Reads `coverage.xml` via `compute_zone_coverage()` and `test-results.json` (pytest-json-report schema). Missing artifacts produce a record with empty sections (no fail). Passes `ruff check`, `ruff format --check`, `mypy --strict --explicit-package-bases`.
+- `docs/trends/data.jsonl` — empty seed file (trailing newline). Appended by CI on every merge to main.
+- `docs/trends/chart.umd.min.js` — Chart.js v4.4.4 UMD bundle vendored locally (~201KB). No CDN dependency.
+- `docs/trends/index.html` — static dashboard with 4 Chart.js line charts: coverage by zone (critical/standard/peripheral with 95/85/70 thresholds implied), test counts (unit/property/golden/integration), test duration, golden dataset size. Degrades gracefully when loaded as local file.
+- `.github/workflows/ci.yml` — added `trend-publish` job at bottom. Runs only on `push` to `main` (`if: github.ref == 'refs/heads/main' && github.event_name == 'push'`). Needs all 10 gate jobs. Commits updated `data.jsonl` back to main via `github-actions[bot]` with `[skip ci]`.
+
+### Decisions
+- Chart.js vendored locally to avoid CDN trust requirement (per brief security requirement).
+- `trend-publish` added to existing `ci.yml` (not a new workflow file) to avoid cross-workflow artifact issues.
+
+### Commit
+- `e855bcb` feat: trend dashboard — publish.py + Chart.js viewer (Phase 0 task 0.15)
+
+---
+
 ## 2026-07-31 — Session 004: Custom CI gates G14 + G15 (Task 0.11)
 
 **Phase:** 0 — Foundations

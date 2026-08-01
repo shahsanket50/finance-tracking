@@ -2,7 +2,7 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-07-31
+**Last updated:** 2026-08-01
 **Current phase:** Phase 0 — Foundations
 **Overall status:** In progress (tasks 0.1–0.3 done; 0.11–0.12 done)
 
@@ -33,7 +33,7 @@
 | 0.12 | Coverage tiering config + ratchet | Done | per-zone thresholds; ratchet prevents regression; baseline auto-updated |
 | 0.13 | PR quality-report comment bot | Not started | Per-run visible reporting |
 | 0.14 | Integration test harness (ephemeral Postgres) | Not started | See QUALITY.md §3.4 |
-| 0.15 | Trend dashboard publishing | Not started | Slope matters more than single-run numbers |
+| 0.15 | Trend dashboard publishing | Done | publish.py + Chart.js viewer; trend-publish CI job (main-push only) |
 
 ### Blockers
 _None currently blocking Phase 0 tasks._
