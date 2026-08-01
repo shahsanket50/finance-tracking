@@ -29,6 +29,7 @@ dev = [
     "ruff>=0.8",
     "testcontainers[postgres]>=4.8",  # for integration tests
     "httpx>=0.28",                     # FastAPI test client
+    "defusedxml>=0.0.1",               # Safe XML parsing for coverage reports
 ]
 
 [tool.pytest.ini_options]

@@ -157,6 +157,10 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+      - run: python ci/coverage/tiering.py coverage.xml
+      - run: python ci/coverage/ratchet.py coverage.xml
+        env:
+          PYTHONPATH: .
 
   # ── G9–G13: Stubs (uncommented by later Phase 0 tasks) ──────
   # complexity:

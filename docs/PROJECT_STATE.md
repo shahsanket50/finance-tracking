@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-07-31
 **Current phase:** Phase 0 — Foundations
-**Overall status:** In progress (tasks 0.1–0.3 done; 0.11 done)
+**Overall status:** In progress (tasks 0.1–0.3 done; 0.11–0.12 done)
 
 ---
 
@@ -30,7 +30,7 @@
 | 0.9 | Synthetic fixture generator (basic) | Not started | Realistic-but-fake statements |
 | 0.10 | CI pipeline with gates G1–G8 | Not started | See `docs/QUALITY.md` |
 | 0.11 | Custom gates: real-data guard + migration check | Done | G14, G15 active; 13/13 unit tests pass; mypy --strict clean |
-| 0.12 | Coverage tiering config + ratchet | Not started | Critical 95% / Standard 85% / Peripheral 70% |
+| 0.12 | Coverage tiering config + ratchet | Done | per-zone thresholds; ratchet prevents regression; baseline auto-updated |
 | 0.13 | PR quality-report comment bot | Not started | Per-run visible reporting |
 | 0.14 | Integration test harness (ephemeral Postgres) | Not started | See QUALITY.md §3.4 |
 | 0.15 | Trend dashboard publishing | Not started | Slope matters more than single-run numbers |

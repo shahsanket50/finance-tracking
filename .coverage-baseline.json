@@ -1,0 +1,14 @@
+{
+  "critical": {
+    "line": 100.0,
+    "branch": 100.0
+  },
+  "standard": {
+    "line": 100.0,
+    "branch": 100.0
+  },
+  "peripheral": {
+    "line": 100.0,
+    "branch": 100.0
+  }
+}
