@@ -82,7 +82,7 @@ class IngestionEvent(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     source: Mapped[str] = mapped_column(String(32), nullable=False)
-    source_detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source_detail: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     period_start: Mapped[date | None] = mapped_column(Date())
     period_end: Mapped[date | None] = mapped_column(Date())
     records_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
