@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finance Tracker — Trend Dashboard</title>
+  <style>
+    body { background: #1a1a2e; color: #eee; font-family: monospace; padding: 1rem; }
+    h1 { color: #a29bfe; }
+    h2 { color: #74b9ff; margin-top: 2rem; }
+    canvas { max-height: 400px; }
+    #error { color: #ff7675; }
+    #raw { font-size: 0.75rem; color: #636e72; margin-top: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>Finance Tracker — CI Trend Dashboard</h1>
+  <p id="error"></p>
+
+  <h2>Coverage by zone (%)</h2>
+  <canvas id="coverageChart"></canvas>
+
+  <h2>Test counts</h2>
+  <canvas id="testsChart"></canvas>
+
+  <h2>Test duration (s)</h2>
+  <canvas id="durationChart"></canvas>
+
+  <h2>Golden dataset size</h2>
+  <canvas id="goldenChart"></canvas>
+
+  <pre id="raw"></pre>
+
+  <script src="./chart.umd.min.js"></script>
+  <script>
+    async function main() {
+      let records;
+      try {
+        const res = await fetch('./data.jsonl');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        records = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+      } catch (e) {
+        document.getElementById('error').textContent = 'Could not load data.jsonl: ' + e.message;
+        return;
+      }
+
+      const labels = records.map(r => (r.sha || '').slice(0, 7));
+
+      // 1. Coverage chart
+      new Chart(document.getElementById('coverageChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Critical', data: records.map(r => r.coverage?.critical ?? null), borderColor: '#e17055', fill: false },
+            { label: 'Standard', data: records.map(r => r.coverage?.standard ?? null), borderColor: '#fdcb6e', fill: false },
+            { label: 'Peripheral', data: records.map(r => r.coverage?.peripheral ?? null), borderColor: '#55efc4', fill: false },
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { min: 0, max: 100, grid: { color: '#333' }, ticks: { color: '#eee' } }, x: { ticks: { color: '#eee' } } },
+          plugins: { legend: { labels: { color: '#eee' } } }
+        }
+      });
+
+      // 2. Test counts chart
+      new Chart(document.getElementById('testsChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Unit',        data: records.map(r => r.tests?.unit ?? null),        borderColor: '#74b9ff', fill: false },
+            { label: 'Property',    data: records.map(r => r.tests?.property ?? null),    borderColor: '#a29bfe', fill: false },
+            { label: 'Golden',      data: records.map(r => r.tests?.golden ?? null),      borderColor: '#fd79a8', fill: false },
+            { label: 'Integration', data: records.map(r => r.tests?.integration ?? null), borderColor: '#00cec9', fill: false },
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { min: 0, grid: { color: '#333' }, ticks: { color: '#eee' } }, x: { ticks: { color: '#eee' } } },
+          plugins: { legend: { labels: { color: '#eee' } } }
+        }
+      });
+
+      // 3. Duration chart
+      new Chart(document.getElementById('durationChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Duration (s)', data: records.map(r => r.tests?.duration_s ?? null), borderColor: '#a29bfe', fill: false },
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { min: 0, grid: { color: '#333' }, ticks: { color: '#eee' } }, x: { ticks: { color: '#eee' } } },
+          plugins: { legend: { labels: { color: '#eee' } } }
+        }
+      });
+
+      // 4. Golden dataset size
+      new Chart(document.getElementById('goldenChart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Golden fixtures', data: records.map(r => r.tests?.golden ?? null), borderColor: '#fd79a8', fill: false },
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { min: 0, grid: { color: '#333' }, ticks: { color: '#eee' } }, x: { ticks: { color: '#eee' } } },
+          plugins: { legend: { labels: { color: '#eee' } } }
+        }
+      });
+
+      // Debug: show last 5 records
+      const last5 = records.slice(-5).map(r => JSON.stringify(r)).join('\n');
+      document.getElementById('raw').textContent = 'Last 5 records:\n' + last5;
+    }
+
+    main();
+  </script>
+</body>
+</html>

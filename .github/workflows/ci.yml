@@ -302,3 +302,64 @@ jobs:
         with:
           header: quality-report
           path: /tmp/quality-report.md
+
+  # ── Trend publish ─────────────────────────────────────────────────────────
+  trend-publish:
+    name: "Trend publish"
+    runs-on: ubuntu-latest
+    needs:
+      - format
+      - lint
+      - typecheck
+      - unit-tests
+      - property-tests
+      - golden-dataset
+      - integration-tests
+      - coverage
+      - real-data-guard
+      - migration-check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: .
+        continue-on-error: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: .
+        continue-on-error: true
+
+      - name: Restore coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
+          restore-keys: |
+            coverage-baseline-
+
+      - run: python ci/trends/publish.py
+        env:
+          PYTHONPATH: .
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Commit trend data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/trends/data.jsonl
+          git diff --cached --quiet || git commit -m "ci: update trend data [skip ci]"
+          git push
