@@ -1,28 +1,70 @@
 """Generate the PR quality report from CI gate artifacts.
 
-Called by .github/workflows/quality-report.yml.
+Called by the quality-report job in .github/workflows/ci.yml.
 Reads coverage.xml and (optionally) test-results.json; outputs markdown to stdout.
 Implements QUALITY.md §5.1.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 from ci.coverage.tiering import _ZONE_ORDER, compute_zone_coverage
 
 BASELINE_PATH = Path(".coverage-baseline.json")
+
+# Gate env vars injected by the CI workflow (needs.<job>.result).
+_GATE_ENV_VARS = [
+    "GATE_FORMAT",
+    "GATE_LINT",
+    "GATE_TYPECHECK",
+    "GATE_UNIT_TESTS",
+    "GATE_PROPERTY_TESTS",
+    "GATE_GOLDEN_DATASET",
+    "GATE_INTEGRATION_TESTS",
+    "GATE_COVERAGE",
+    "GATE_REAL_DATA_GUARD",
+    "GATE_MIGRATION_CHECK",
+]
+
+
+class _Summary(TypedDict, total=False):
+    passed: int
+    failed: int
+    skipped: int
+
+
+class _TestEntry(TypedDict, total=False):
+    nodeid: str
+
+
+class _TestResults(TypedDict, total=False):
+    summary: _Summary
+    duration: float
+    tests: list[_TestEntry]
 
 
 def load_baseline() -> dict[str, dict[str, float]]:
     """Load the coverage baseline from .coverage-baseline.json."""
     if not BASELINE_PATH.exists():
         return {}
-    data = json.loads(BASELINE_PATH.read_text())
-    return {z: {m: float(v) for m, v in metrics.items()} for z, metrics in data.items()}
+    raw: object = json.loads(BASELINE_PATH.read_text())
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, dict[str, float]] = {}
+    for zone, metrics in raw.items():
+        if isinstance(zone, str) and isinstance(metrics, dict):
+            result[zone] = {
+                str(m): float(v)
+                for m, v in metrics.items()
+                if isinstance(v, (int, float))
+            }
+    return result
 
 
 def _delta(current: float, baseline: float) -> str:
@@ -42,6 +84,54 @@ def _guard(status: str) -> str:
     return f"{status} ⚠️"
 
 
+def _count_gates() -> tuple[int, int, int]:
+    """Return (passed, warnings, failed) counts from gate env vars."""
+    passed = warnings = failed = 0
+    for var in _GATE_ENV_VARS:
+        result = os.environ.get(var, "")
+        if result == "success":
+            passed += 1
+        elif result == "failure":
+            failed += 1
+        elif result:  # skipped, cancelled
+            warnings += 1
+    return passed, warnings, failed
+
+
+def _parse_test_results(path: Path) -> _TestResults | None:
+    """Parse pytest-json-report output, returning None on any error."""
+    try:
+        raw: object = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    result: _TestResults = {}
+    summary_raw = raw.get("summary")
+    if isinstance(summary_raw, dict):
+        summary: _Summary = {}
+        for key in ("passed", "failed", "skipped"):
+            val = summary_raw.get(key)
+            if isinstance(val, int):
+                summary[key] = val
+        result["summary"] = summary
+    duration_raw = raw.get("duration")
+    if isinstance(duration_raw, (int, float)):
+        result["duration"] = float(duration_raw)
+    tests_raw = raw.get("tests")
+    if isinstance(tests_raw, list):
+        entries: list[_TestEntry] = []
+        for item in tests_raw:
+            if isinstance(item, dict):
+                entry: _TestEntry = {}
+                nodeid = item.get("nodeid")
+                if isinstance(nodeid, str):
+                    entry["nodeid"] = nodeid
+                entries.append(entry)
+        result["tests"] = entries
+    return result
+
+
 def generate_report(
     coverage_xml: Path,
     test_results_json: Path | None,
@@ -55,6 +145,17 @@ def generate_report(
     lines.append(f"## Quality Report — {pr_str}")
     lines.append("")
 
+    # ── Gates summary ─────────────────────────────────────────────────────────
+    passed, warnings, failed = _count_gates()
+    if passed or warnings or failed:
+        gate_parts = [f"✅ {passed} passed"]
+        if warnings:
+            gate_parts.append(f"⚠️ {warnings} warnings")
+        if failed:
+            gate_parts.append(f"❌ {failed} failed")
+        lines.append(f"Gates      {' · '.join(gate_parts)}")
+        lines.append("")
+
     # ── Coverage ──────────────────────────────────────────────────────────────
     if coverage_xml.exists():
         zone_cov = compute_zone_coverage(coverage_xml)
@@ -65,12 +166,13 @@ def generate_report(
             "standard": (85, 75),
             "peripheral": (70, 60),
         }
-        ratchet_ok = True
-        for zone in _ZONE_ORDER:
-            base = baseline.get(zone, {"line": 0.0, "branch": 0.0})
-            curr = zone_cov.get(zone, {"line": 0.0, "branch": 0.0})
-            if curr["line"] < base["line"] or curr["branch"] < base["branch"]:
-                ratchet_ok = False
+        ratchet_ok = all(
+            zone_cov.get(z, {"line": 0.0, "branch": 0.0})["line"]
+            >= baseline.get(z, {"line": 0.0, "branch": 0.0})["line"]
+            and zone_cov.get(z, {"line": 0.0, "branch": 0.0})["branch"]
+            >= baseline.get(z, {"line": 0.0, "branch": 0.0})["branch"]
+            for z in _ZONE_ORDER
+        )
 
         lines.append("Coverage")
         for zone in _ZONE_ORDER:
@@ -94,42 +196,37 @@ def generate_report(
 
     # ── Tests ─────────────────────────────────────────────────────────────────
     if test_results_json and test_results_json.exists():
-        data: dict[str, object] = json.loads(test_results_json.read_text())
-        summary = data.get("summary", {})
-        assert isinstance(summary, dict)
-        passed: int = int(summary.get("passed", 0))
-        failed: int = int(summary.get("failed", 0))
-        skipped: int = int(summary.get("skipped", 0))
-        raw_duration = data.get("duration", 0)
-        duration: float = round(
-            float(raw_duration if isinstance(raw_duration, (int, float)) else 0), 1
-        )
+        data = _parse_test_results(test_results_json)
+        if data is not None:
+            summary = data.get("summary", {})
+            passed_t = summary.get("passed", 0)
+            failed_t = summary.get("failed", 0)
+            skipped_t = summary.get("skipped", 0)
+            duration = round(data.get("duration", 0.0), 1)
 
-        # Count by test path prefix
-        tests_list = data.get("tests", [])
-        assert isinstance(tests_list, list)
-        unit = sum(1 for t in tests_list if "/unit/" in str(t.get("nodeid", "")))
-        prop = sum(1 for t in tests_list if "/property/" in str(t.get("nodeid", "")))
-        golden = sum(1 for t in tests_list if "/golden/" in str(t.get("nodeid", "")))
-        integration = sum(
-            1 for t in tests_list if "/integration/" in str(t.get("nodeid", ""))
-        )
+            tests_list = data.get("tests", [])
+            unit = sum(1 for t in tests_list if "/unit/" in t.get("nodeid", ""))
+            prop = sum(1 for t in tests_list if "/property/" in t.get("nodeid", ""))
+            golden = sum(1 for t in tests_list if "/golden/" in t.get("nodeid", ""))
+            integration = sum(
+                1 for t in tests_list if "/integration/" in t.get("nodeid", "")
+            )
+            # Invariants: count property tests (each property test enforces one invariant)
+            inv_count = min(prop, 6)
+            inv_status = "✅" if prop >= 6 else "⚠️"
 
-        lines.append(
-            f"Tests       {passed} passed · {failed} failed · {skipped} skipped"
-            f"   ({duration}s)"
-        )
-        lines.append(
-            f"  Unit {unit} · Property {prop} · Golden {golden} · Integration {integration}"
-        )
-        inv_count_raw = data.get("invariants_passing", 6)
-        inv_count: int = int(inv_count_raw) if isinstance(inv_count_raw, int) else 6
-        inv_status = "✅" if inv_count == 6 else "⚠️"
-        lines.append(f"Invariants  {inv_count}/6 holding {inv_status}")
-        lines.append("")
+            lines.append(
+                f"Tests       {passed_t} passed · {failed_t} failed · {skipped_t} skipped"
+                f"   ({duration}s)"
+            )
+            lines.append(
+                f"  Unit {unit} · Property {prop} · Golden {golden}"
+                f" · Integration {integration}"
+            )
+            lines.append(f"Invariants  {inv_count}/6 holding {inv_status}")
+            lines.append("")
 
     # ── Guards ────────────────────────────────────────────────────────────────
-    # Guard status comes from workflow job conclusions (env vars injected by the workflow).
     real_data = os.environ.get("REAL_DATA_STATUS", "unknown")
     migration = os.environ.get("MIGRATION_STATUS", "unknown")
 
@@ -140,8 +237,6 @@ def generate_report(
 
 
 def main() -> int:
-    import argparse
-
     parser = argparse.ArgumentParser(description="Generate PR quality report")
     parser.add_argument("--coverage-xml", default="coverage.xml")
     parser.add_argument("--test-results", default=None)
