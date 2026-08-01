@@ -8,11 +8,13 @@ Implements QUALITY.md §2.
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from defusedxml import ElementTree as ET
 
 
+@dataclass
 class ZoneConfig:
     """Configuration for a coverage zone."""
 
@@ -20,16 +22,11 @@ class ZoneConfig:
     line_threshold: int
     branch_threshold: int
 
-    def __init__(
-        self,
-        modules: list[str],
-        line_threshold: int,
-        branch_threshold: int,
-    ) -> None:
-        self.modules = modules
-        self.line_threshold = line_threshold
-        self.branch_threshold = branch_threshold
 
+# Zone priority: Critical > Standard > Peripheral.
+# A package is assigned to the FIRST zone whose prefix it matches.
+# Ordered list preserves that priority.
+_ZONE_ORDER = ["critical", "standard", "peripheral"]
 
 ZONES: dict[str, ZoneConfig] = {
     "critical": ZoneConfig(
@@ -46,7 +43,9 @@ ZONES: dict[str, ZoneConfig] = {
         branch_threshold=90,
     ),
     "standard": ZoneConfig(
-        modules=["ingestion/parsers", "processing"],
+        # domain/* is Standard, except domain/ca_view which is Critical above.
+        # Priority ordering ensures domain.ca_view is never double-counted here.
+        modules=["ingestion/parsers", "processing", "domain"],
         line_threshold=85,
         branch_threshold=75,
     ),
@@ -58,10 +57,22 @@ ZONES: dict[str, ZoneConfig] = {
 }
 
 
+def _classify_package(pkg_name: str) -> str | None:
+    """Return the zone for a package name using priority ordering, or None."""
+    for zone_name in _ZONE_ORDER:
+        zone = ZONES[zone_name]
+        if any(pkg_name.startswith(m.replace("/", ".")) for m in zone.modules):
+            return zone_name
+    return None
+
+
 def compute_zone_coverage(
     coverage_xml_path: Path,
 ) -> dict[str, dict[str, float]]:
     """Parse coverage.xml and return per-zone line + branch coverage percentages.
+
+    Each package is assigned to exactly one zone (highest-priority match wins),
+    so domain/ca_view is counted in Critical, not Standard.
 
     Returns:
         {
@@ -70,58 +81,53 @@ def compute_zone_coverage(
             "peripheral": {"line": 71.0, "branch": 62.5},
         }
 
-    If a zone has no matching modules in the report, returns 100.0 (vacuously passing
-    at Phase 0 — zone starts empty).
+    If a zone has no matching modules in the report, returns 100.0 (vacuously
+    passing at Phase 0 — zone starts empty).
     """
     tree = ET.parse(str(coverage_xml_path))
     root = tree.getroot()
 
+    # Accumulators per zone
+    stmts: dict[str, int] = {z: 0 for z in _ZONE_ORDER}
+    miss: dict[str, int] = {z: 0 for z in _ZONE_ORDER}
+    branch_paths: dict[str, int] = {z: 0 for z in _ZONE_ORDER}
+    branch_miss_paths: dict[str, int] = {z: 0 for z in _ZONE_ORDER}
+
+    for pkg in root.iter("package"):
+        pkg_name = pkg.get("name", "")
+        zone_name = _classify_package(pkg_name)
+        if zone_name is None:
+            continue
+
+        for cls in pkg.iter("class"):
+            for line_el in cls.iter("line"):
+                stmts[zone_name] += 1
+                if line_el.get("hits", "0") == "0":
+                    miss[zone_name] += 1
+
+                if line_el.get("branch", "false") == "true":
+                    # condition-coverage example: "50% (1/2)"
+                    cb = line_el.get("condition-coverage", "100% (0/0)")
+                    try:
+                        fraction = cb.split("(")[1].rstrip(")")
+                        covered_str, total_str = fraction.split("/")
+                        total_paths = int(total_str)
+                        covered_paths = int(covered_str)
+                        if total_paths > 0:
+                            branch_paths[zone_name] += total_paths
+                            branch_miss_paths[zone_name] += total_paths - covered_paths
+                    except (IndexError, ValueError):
+                        pass
+
     results: dict[str, dict[str, float]] = {}
-    for zone_name, zone_config in ZONES.items():
-        module_prefixes = zone_config.modules
+    for zone_name in _ZONE_ORDER:
+        s = stmts[zone_name]
+        m = miss[zone_name]
+        bp = branch_paths[zone_name]
+        bm = branch_miss_paths[zone_name]
 
-        total_stmts = 0
-        total_miss = 0
-        total_branches = 0
-        total_branch_miss = 0
-
-        for pkg in root.iter("package"):
-            pkg_name = pkg.get("name", "")
-            # Match if the package name starts with any module prefix (with . separator)
-            if not any(
-                pkg_name.startswith(m.replace("/", ".")) for m in module_prefixes
-            ):
-                continue
-
-            for cls in pkg.iter("class"):
-                # Count lines and branches in this class
-                for line_el in cls.iter("line"):
-                    total_stmts += 1
-                    if line_el.get("hits", "0") == "0":
-                        total_miss += 1
-                    # Check if this line has branches
-                    if line_el.get("branch", "false") == "true":
-                        total_branches += 1
-                        cb = line_el.get("condition-coverage", "100% (0/0)")
-                        # condition-coverage like "50% (1/2)" or "100% (2/2)"
-                        try:
-                            cov_pct_str = cb.split("%")[0]
-                            cov_pct = float(cov_pct_str)
-                            if cov_pct < 100.0:
-                                total_branch_miss += 1
-                        except (ValueError, IndexError):
-                            pass
-
-        line_pct = (
-            100.0 * (total_stmts - total_miss) / total_stmts
-            if total_stmts > 0
-            else 100.0
-        )
-        branch_pct = (
-            100.0 * (total_branches - total_branch_miss) / total_branches
-            if total_branches > 0
-            else 100.0
-        )
+        line_pct = 100.0 * (s - m) / s if s > 0 else 100.0
+        branch_pct = 100.0 * (bp - bm) / bp if bp > 0 else 100.0
 
         results[zone_name] = {
             "line": round(line_pct, 1),
@@ -170,7 +176,7 @@ def main(coverage_xml_path: str = "coverage.xml") -> int:
     violations = check_thresholds(zone_coverage)
 
     print("Coverage by zone:")
-    for zone_name in sorted(ZONES.keys()):
+    for zone_name in _ZONE_ORDER:
         zone_config = ZONES[zone_name]
         coverage = zone_coverage.get(zone_name, {"line": 0.0, "branch": 0.0})
         line_thresh = zone_config.line_threshold

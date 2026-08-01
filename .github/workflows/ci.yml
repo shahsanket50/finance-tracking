@@ -158,6 +158,8 @@ jobs:
           name: coverage-report
           path: coverage.xml
       - run: python ci/coverage/tiering.py coverage.xml
+        env:
+          PYTHONPATH: .
       - run: python ci/coverage/ratchet.py coverage.xml
         env:
           PYTHONPATH: .
