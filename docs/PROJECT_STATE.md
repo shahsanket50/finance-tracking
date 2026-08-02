@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-01
-**Current phase:** Phase 0 — Foundations
-**Overall status:** In progress (tasks 0.1–0.3 done; 0.11–0.12 done)
+**Last updated:** 2026-08-02
+**Current phase:** Phase 1 — Ingestion & Trust
+**Overall status:** Phase 0 CLOSED (adversarial review passed 2026-08-02; all four gate blockers resolved)
 
 ---
 
@@ -77,7 +77,7 @@ All 6 blocking gaps were resolved in the journey walkthrough (see "User Stories 
 
 | Phase | Name | Status | Exit criterion (short) |
 |---|---|---|---|
-| 0 | Foundations | **In progress** | Event append → projection → deterministic replay; CI green; adversarial review pass; independent test authorship confirmed |
+| 0 | Foundations | **CLOSED** 2026-08-02 | Event append → projection → deterministic replay; CI green; adversarial review pass; independent test authorship confirmed |
 | 1 | Ingestion & Trust | Not started | Real statement parses via dry-run harness, balance check passes, writes nothing until confirmed |
 | 2 | Ledger & Correctness | Not started | Overlapping statements ingested twice → zero double-counting, provable in audit view |
 | 3 | Day-to-Day Layer | Not started | A full month tracked, budgeted; surplus reconciles against bank statement manually |
