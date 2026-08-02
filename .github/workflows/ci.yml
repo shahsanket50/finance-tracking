@@ -1,0 +1,365 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ── G1: Format ──────────────────────────────────────────────
+  format:
+    name: "G1 · Format"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff format --check backend/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx prettier --check .
+        working-directory: web
+
+  # ── G2: Lint ─────────────────────────────────────────────────
+  lint:
+    name: "G2 · Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check backend/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx eslint .
+        working-directory: web
+
+  # ── G3: Type check ───────────────────────────────────────────
+  typecheck:
+    name: "G3 · Type check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: mypy --config-file backend/pyproject.toml --explicit-package-bases backend/
+        env:
+          MYPYPATH: backend
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx tsc --noEmit
+        working-directory: web
+
+  # ── G4: Unit tests ─────────────────────────────────────────
+  unit-tests:
+    name: "G4 · Unit tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: pytest backend/tests/unit/ -v --tb=short
+        env:
+          PYTHONPATH: backend
+
+  # ── G5: Property tests ──────────────────────────────────────
+  property-tests:
+    name: "G5 · Property tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: pytest backend/tests/property/ -v --hypothesis-seed=0 --tb=short
+        env:
+          PYTHONPATH: backend
+
+  # ── G6: Golden dataset ──────────────────────────────────────
+  golden-dataset:
+    name: "G6 · Golden dataset"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: |
+          exit_code=0
+          pytest backend/tests/golden/ -v --tb=short || exit_code=$?
+          # pytest exit 5 = no tests collected — acceptable at Phase 0
+          if [ $exit_code -ne 0 ] && [ $exit_code -ne 5 ]; then exit "$exit_code"; fi
+        env:
+          PYTHONPATH: backend
+
+  # ── G7: Integration tests ───────────────────────────────────
+  integration-tests:
+    name: "G7 · Integration tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: pytest backend/tests/integration/ -m "integration and not integration_pitr" -v --tb=short
+        env:
+          PYTHONPATH: backend
+
+  # ── G8: Coverage ────────────────────────────────────────────
+  coverage:
+    name: "G8 · Coverage"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      # Restore the most recent persisted baseline so the ratchet compares
+      # against real prior coverage rather than the repo's 0% seed.
+      - name: Restore coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
+          restore-keys: |
+            coverage-baseline-
+      - run: |
+          pytest backend/tests/unit/ backend/tests/property/ \
+            --cov=core --cov=ci \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            --json-report --json-report-file=test-results.json \
+            --tb=short
+        env:
+          PYTHONPATH: backend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: test-results.json
+          if-no-files-found: ignore
+      - run: python ci/coverage/tiering.py coverage.xml
+        env:
+          PYTHONPATH: .
+      - run: python ci/coverage/ratchet.py coverage.xml
+        env:
+          PYTHONPATH: .
+      # Persist the updated baseline for the next run.
+      - name: Save coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
+
+  # ── G9–G13: Stubs (uncommented by later Phase 0 tasks) ──────
+  # complexity:
+  #   name: "G9 · Complexity"
+  #   ...
+  # dead-code:
+  #   name: "G10 · Dead code"
+  #   ...
+  # security-deps:
+  #   name: "G11 · Security (deps)"
+  #   ...
+  # security-code:
+  #   name: "G12 · Security (code)"
+  #   ...
+  # secret-scan:
+  #   name: "G13 · Secret scan"
+  #   ...
+
+  # ── G14: Real-data guard ─────────────────────────────────────────────────────
+  real-data-guard:
+    name: "G14 · Real-data guard"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python ci/guards/real_data_guard.py .
+
+  # ── G15: Migration + float check ─────────────────────────────────────────────
+  migration-check:
+    name: "G15 · Migration + float check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python ci/guards/migration_check.py .
+      - run: python ci/guards/float_lint.py .
+
+  # ── Quality Report ────────────────────────────────────────────────────────────
+  quality-report:
+    name: "Quality Report"
+    runs-on: ubuntu-latest
+    needs:
+      - format
+      - lint
+      - typecheck
+      - unit-tests
+      - property-tests
+      - golden-dataset
+      - integration-tests
+      - coverage
+      - real-data-guard
+      - migration-check
+    if: always()
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: .
+        continue-on-error: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: .
+        continue-on-error: true
+
+      - name: Restore coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
+          restore-keys: |
+            coverage-baseline-
+
+      - name: Generate report
+        id: report
+        run: |
+          python ci/reports/generate_report.py \
+            --coverage-xml coverage.xml \
+            --test-results test-results.json \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            > /tmp/quality-report.md
+          cat /tmp/quality-report.md
+        env:
+          PYTHONPATH: .
+          GATE_FORMAT: ${{ needs.format.result }}
+          GATE_LINT: ${{ needs.lint.result }}
+          GATE_TYPECHECK: ${{ needs.typecheck.result }}
+          GATE_UNIT_TESTS: ${{ needs.unit-tests.result }}
+          GATE_PROPERTY_TESTS: ${{ needs.property-tests.result }}
+          GATE_GOLDEN_DATASET: ${{ needs.golden-dataset.result }}
+          GATE_INTEGRATION_TESTS: ${{ needs.integration-tests.result }}
+          GATE_COVERAGE: ${{ needs.coverage.result }}
+          GATE_REAL_DATA_GUARD: ${{ needs.real-data-guard.result }}
+          GATE_MIGRATION_CHECK: ${{ needs.migration-check.result }}
+          REAL_DATA_STATUS: ${{ needs.real-data-guard.result }}
+          MIGRATION_STATUS: ${{ needs.migration-check.result }}
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: quality-report
+          path: /tmp/quality-report.md
+
+  # ── Trend publish ─────────────────────────────────────────────────────────
+  trend-publish:
+    name: "Trend publish"
+    runs-on: ubuntu-latest
+    needs:
+      - format
+      - lint
+      - typecheck
+      - unit-tests
+      - property-tests
+      - golden-dataset
+      - integration-tests
+      - coverage
+      - real-data-guard
+      - migration-check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: .
+        continue-on-error: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-results
+          path: .
+        continue-on-error: true
+
+      - name: Restore coverage baseline
+        uses: actions/cache@v4
+        with:
+          path: .coverage-baseline.json
+          key: coverage-baseline-${{ github.sha }}
+          restore-keys: |
+            coverage-baseline-
+
+      - run: python ci/trends/publish.py
+        env:
+          PYTHONPATH: .
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Commit trend data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/trends/data.jsonl
+          git diff --cached --quiet || git commit -m "ci: update trend data [skip ci]"
+          git push

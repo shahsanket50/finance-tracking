@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "finance-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",          # psycopg3 for SQLAlchemy 2 async
+    "alembic>=1.14",
+    "celery[redis]>=5.4",
+    "redis>=5.2",
+    "cryptography>=43",
+    "uuid6>=2024",                    # UUIDv7 in Python: uuid6.uuid7()
+    "pydantic>=2.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.115",
+    "mypy>=1.13",
+    "ruff>=0.8",
+    "testcontainers[postgres]>=4.8",  # for integration tests
+    "httpx>=0.28",                     # FastAPI test client
+    "defusedxml>=0.7",                  # Safe XML parsing for coverage reports
+    "pytest-json-report>=1.5",          # JSON test results for quality-report bot
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "ingestion", "processing", "domain", "api", "adapters"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+disallow_subclassing_any = false  # SQLAlchemy DeclarativeBase has type Any
+disallow_untyped_decorators = false  # Hypothesis @given/@settings in tests
+
+[tool.ruff]
+# ruff.toml at repo root takes precedence, but keep this for IDE integration
+line-length = 100
