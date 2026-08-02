@@ -13,7 +13,7 @@
 **Goal:** Establish the skeleton that everything else depends on — repo structure, local environment, database schema with the immutable/mutable split, event-log primitives, replay mechanism, and CI running the correctness harness.
 
 **Exit criterion (must be demonstrably true to advance):**
-> An event can be appended, a projection built from it, and a replay produces identical output. CI runs green on an empty golden dataset, **and all quality gates (G1–G15) run and publish a report on every push.**
+> An event can be appended, a projection built from it, and a replay produces identical output. CI runs green on an empty golden dataset, **and all quality gates (G1–G15) run and publish a report on every push. Additionally: (a) adversarial review pass with all findings logged and resolved or explicitly deferred, (b) critical-module tests confirmed independently authored.**
 
 ### Task board
 
@@ -77,7 +77,7 @@ All 6 blocking gaps were resolved in the journey walkthrough (see "User Stories 
 
 | Phase | Name | Status | Exit criterion (short) |
 |---|---|---|---|
-| 0 | Foundations | **In progress** | Event append → projection → deterministic replay; CI green |
+| 0 | Foundations | **In progress** | Event append → projection → deterministic replay; CI green; adversarial review pass; independent test authorship confirmed |
 | 1 | Ingestion & Trust | Not started | Real statement parses via dry-run harness, balance check passes, writes nothing until confirmed |
 | 2 | Ledger & Correctness | Not started | Overlapping statements ingested twice → zero double-counting, provable in audit view |
 | 3 | Day-to-Day Layer | Not started | A full month tracked, budgeted; surplus reconciles against bank statement manually |
@@ -94,6 +94,8 @@ All 6 blocking gaps were resolved in the journey walkthrough (see "User Stories 
 | Gmail restricted-scope verification with Google is a long lead time | Start the application early; it gates Phase 5, not Phase 1 | Open — not started |
 | AA TSP partner not selected | Blocks AA ingestion only; Gmail path is unblocked | Open — deferred |
 | AI-written code drifting from spec | Golden dataset + invariant tests + spec-traceability rule in `CLAUDE.md` | Mitigated by design |
+| `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. | Open — Phase 4 blocker |
+| Phase 0 critical-module tests not independently authored | Tests for `core/hashing/`, `core/events/`, `core/projections/` were co-authored with implementation (known gap). Re-authoring session needed before Phase 2 closes. | Open — Phase 2 gate requirement |
 
 ---
 
