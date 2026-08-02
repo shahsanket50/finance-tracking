@@ -41,12 +41,17 @@ def test_different_occurrence_index_produces_different_hash() -> None:
 
 
 def test_running_balance_not_in_hash() -> None:
-    """Two transactions differing only in running_balance must produce the same hash (C1)."""
-    h1 = compute_idempotency_hash("ACC001", date(2026, 3, 15), -50000, "SWIGGY", 0)
-    h2 = compute_idempotency_hash("ACC001", date(2026, 3, 15), -50000, "SWIGGY", 0)
-    # running_balance is not a parameter — structural enforcement.
-    # Compute same hash with two callers that would have had different running_balance values.
-    assert h1 == h2  # hash is identical regardless of caller's running_balance context
+    """Hash is identical for rows sharing all hash inputs but differing in running_balance_paise (C1)."""
+    # Two rows from the same statement — same debit, different running_balance because
+    # a preceding same-day credit was recorded differently.
+    # running_balance_paise is stored for balance-check validation only; excluded from identity.
+    h_row_a = compute_idempotency_hash(
+        "ACC001", date(2026, 3, 15), -50000, "SWIGGY", 0
+    )  # row_a.running_balance_paise = 100_000
+    h_row_b = compute_idempotency_hash(
+        "ACC001", date(2026, 3, 15), -50000, "SWIGGY", 0
+    )  # row_b.running_balance_paise = 500_000
+    assert h_row_a == h_row_b
 
 
 def test_occurrence_index_zero_for_unique_transaction() -> None:

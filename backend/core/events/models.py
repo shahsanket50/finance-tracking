@@ -102,6 +102,9 @@ class IngestionEvent(Base):
 
 class RawArtifact(Base):
     __tablename__ = "raw_artifacts"
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "content_hash", name="uq_raw_artifacts_user_content_hash"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=sa.text("uuidv7()")
@@ -114,7 +117,7 @@ class RawArtifact(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    content_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     retained: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")
@@ -148,7 +151,7 @@ class TransactionEvent(Base):
     occurrence_index: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     transaction_type: Mapped[str] = mapped_column(String(16), nullable=False)
     narration: Mapped[str] = mapped_column(Text(), nullable=False)
-    normalized_narration: Mapped[str | None] = mapped_column(Text())
+    canonical_narration: Mapped[str | None] = mapped_column(Text())
     running_balance_paise: Mapped[int | None] = mapped_column(BigInteger)
     actor: Mapped[str] = mapped_column(String(16), nullable=False)
     confidence: Mapped[int | None] = mapped_column(Integer)
