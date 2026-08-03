@@ -1,7 +1,7 @@
 """Idempotency hash (C1) and occurrence index (C2).
 
 C1: hash = SHA-256 of pipe-joined canonical fields.
-C2: occurrence_index = 0-based ordinal within (account, date, amount, narration) group.
+C2: occurrence_index = 0-based ordinal within (account, date, amount, canonical_narration) group.
 running_balance is deliberately excluded from the hash (C1 spec).
 """
 

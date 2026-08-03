@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-08-02 — Session 008: Phase 0 adversarial review + blocker resolution
+
+**Phase:** 0 — Foundations
+**Participants:** Sanket + Claude
+
+### Done
+- Phase 0 adversarial review completed. 9 findings: F-1, F-2, F-3, F-4, F-6, F-7, F-8 (blockers/important), F-5, F-9 (docs gaps).
+- Resolved all four wave-gate blockers across three commit groups.
+- Added TRD §11 (anti-drift process), ADR-012, CLAUDE.md §6 updates, QUALITY.md §8/§9.
+
+### Known gap recorded
+- **F-9 (retroactive gap):** Phase 0 critical-module tests (`core/events`, `core/projections`, `core/hashing`) were co-authored with the implementation in the same session — not independently authored as required by QUALITY.md §9 and TRD §11.2. Root cause: the independent-test-authoring process was not in place when Phase 0 was built; it was added during this adversarial review session.
+- **Consequence:** the invariant property tests and unit tests for critical modules may share the same blind spots as the implementation.
+- **Mitigation:** a re-authoring session (fresh context, spec-only, no implementation file access) must run for `core/hashing/`, `core/events/`, and `core/projections/` before Phase 2 closes. The Phase 2 adversarial review must confirm independent authorship for these modules.
+
+### Decisions made
+- `canonical_narration` replaces `normalized_narration` everywhere (TRD §9.1 C1, CLAUDE.md §2, hash.py, ORM model, migration). Canonicalization is frozen forever; distinct from step-4 merchant normalization.
+- `occurrence_index` tiebreaker: position in balance-validated statement sequence, provenance recorded on ingestion event (TRD §9.1 C2).
+- `raw_artifacts.content_hash` uniqueness scoped per-user: `UNIQUE(user_id, content_hash)`.
+- `append_event` `value_date` is now required (no silent `date.today()` default).
+
+### Commits
+- Group 1 `f3c3156` — F-8, F-1: canonical_narration spec + hash.py
+- Group 2 `0a1524f` — F-6, F-7, F-2: schema/code fixes
+- Group 3 (this commit) — F-3, F-4, F-9: docs
+
+### Next session should
+- Re-run adversarial review to confirm all four blockers cleared, then close Phase 0.
+- Begin Phase 1: ingestion layer.
+
+---
+
 ## 2026-08-01 — Session 007: Trend dashboard (Task 0.15)
 
 **Phase:** 0 — Foundations

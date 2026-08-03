@@ -41,7 +41,7 @@ This is not a slogan. It has concrete consequences:
 
 These must hold at all times. They are asserted in tests. Breaking one is a P0 bug, not a regression.
 
-1. **No transaction hash is ever counted more than once.** Idempotency hash = `hash(account_ref + date + amount + normalized_narration + occurrence_index)`. `running_balance` is NOT in the hash (TRD §C1/C2).
+1. **No transaction hash is ever counted more than once.** Idempotency hash = `hash(account_ref + value_date + amount_paise + canonical_narration + occurrence_index)`. `canonical_narration` = NFKC → strip → collapse whitespace → uppercase, applied at step 2, frozen forever (TRD §9.1 C1/C2). `running_balance` is NOT in the hash.
 2. **Statement balance check must pass** (`opening + credits − debits == closing`) or the parse is rejected and logged — never partially ingested.
 3. **Event log replay is deterministic.** Replaying the same events twice produces byte-identical projections.
 4. **A matched internal-transfer pair never appears in expense totals.** (Transfers, credit-card bill payments, FD bookings.)
@@ -160,6 +160,8 @@ Store all timestamps in UTC. Perform **all** financial-year, statement-period, a
 - **Property-based tests for invariants** (§2), not just example-based tests.
 - **A change that touches parsing, the resolver, or tax logic must run the full golden dataset.** A diff is a failure, not a discussion.
 - **All quality gates must pass before merge.** See `docs/QUALITY.md` for the full gate list, tiered coverage thresholds, and per-run reporting. Key rules: coverage may never decrease (ratchet); an invariant test failure is P0 and stops feature work; migrations that `UPDATE`/`DELETE` on immutable tables fail the build; the real-data guard is never bypassed.
+- **For critical modules (`core/`, `processing/resolver`, `processing/deductions`, `domain/ca_view`, tax rule-set evaluation), tests must be authored in a separate session from the implementation.** The test-authoring session reads the PRD/TRD spec and acceptance criteria; it must not open the implementation file. Tests derived from the same code they test only re-assert whatever the code happens to do — independence is what gives a test the ability to disagree with the implementation. See `docs/QUALITY.md` §9 and TRD §11.
+- **Tax constants carry `# UNVERIFIED — CA review pending`** until the Phase 4 CA review clears them. Never treat an AI-generated tax threshold, rate, or limit as validated.
 
 ---
 

@@ -55,12 +55,12 @@ The six invariants from `CLAUDE.md` §2, expressed as properties over generated 
 
 | Invariant | Property test |
 |---|---|
-| 1. No double-counting | For any set of overlapping statements, each hash appears exactly once in `transactions_current` |
-| 2. Balance check | For any statement, either it validates or it is rejected — never partially ingested |
-| 3. Replay determinism | For any event stream, `replay(s) == replay(s)` byte-identical |
-| 4. Transfer exclusion | For any matched transfer pair, neither leg appears in expense totals |
-| 5. FY immutability | For any closed FY, changing the active rule-set does not change its projection |
-| 6. Confidence gate | For any parse below threshold, no ledger write occurs without a confirm event |
+| 1. No double-counting | For any set of overlapping statements, each hash appears exactly once in `transactions_current` ✅ Phase 0 |
+| 2. Balance check | For any statement, either it validates or it is rejected — never partially ingested ⧗ Phase 1 — requires validator module |
+| 3. Replay determinism | For any event stream, `replay(s) == replay(s)` byte-identical ✅ Phase 0 |
+| 4. Transfer exclusion | For any matched transfer pair, neither leg appears in expense totals ⧗ Phase 2 — requires resolver module |
+| 5. FY immutability | For any closed FY, changing the active rule-set does not change its projection ⧗ Phase 4 — requires versioned rule-set |
+| 6. Confidence gate | For any parse below threshold, no ledger write occurs without a confirm event ⧗ Phase 1 — requires dry-run harness |
 
 These catch *classes* of bugs, which matters more than usual when an agent is generating edge cases it also chose.
 
@@ -164,3 +164,38 @@ These tasks are added to the Phase 0 board (`docs/PROJECT_STATE.md`):
 - **0.15** Trend dashboard publishing
 
 **Phase 0 exit criterion is amended:** the original criterion (event → projection → deterministic replay, CI green) now also requires that all gates run and publish a report on every push. Building the harness before the code is the point — retrofitting quality gates onto an AI-generated codebase is materially harder than starting with them.
+
+---
+
+## 8. Adversarial Review checklist (wave-gate)
+
+Run at the end of each wave/phase with a fresh context — not the session that built the wave. The reviewer's brief is: *"find where this diverges from the PRD/TRD, where a test asserts something the spec does not require, where an invariant could be violated without a test noticing, and where a constant was invented."*
+
+- [ ] **Spec divergence:** does every module docstring cite the correct PRD/TRD section? Does the implementation match what that section requires — not just what tests pass?
+- [ ] **Over-fit tests:** do any tests assert behaviour the spec does not require? A test that mirrors the implementation's output without deriving the expected value from the spec is grading its own homework.
+- [ ] **Unguarded invariants:** for each of the six invariants (CLAUDE.md §2), construct a counterexample — can you violate it without any test failing? Walk each one explicitly.
+- [ ] **Invented/unsourced constants:** does any code contain a numeric constant (threshold, rate, limit, deadline) not explicitly cited to a PRD/TRD section or a statutory source? Flag with `# UNVERIFIED`; stop the wave if it is tax-affecting.
+- [ ] **Orphan code:** is there any file, class, or function with no traceable PRD/TRD requirement? Missing module docstring section references (CLAUDE.md §5) are the signal.
+- [ ] **Decisions recomputed on replay:** for each LLM call or time-dependent lookup, confirm its result is recorded as an event. If any resolver pairing, category assignment, or confidence score is recomputed from current world-state on replay rather than from a recorded event, I3 is broken.
+
+**Findings are logged as wave-gate blockers in `docs/PROJECT_STATE.md`.** A wave does not advance until all Critical/Important findings are resolved or explicitly deferred with a tracked rationale.
+
+---
+
+## 9. Independent Test Authoring
+
+For correctness-critical modules, the test-authoring session must work from the spec **without reading the implementation**. Critical modules:
+
+- `core/events/` — event log append, read, encryption, upcasting
+- `core/projections/` — projection builder, replay, snapshots
+- `core/hashing/` — idempotency hash, occurrence index, newtypes
+- `core/ruleset/` — tax rule-set evaluation
+- `processing/resolver/` — transfer and CC bill-payment matching
+- `processing/deductions/` — deduction tagging and section mapping
+- `domain/ca_view/` — CA-layer financial health report
+
+**How:** fresh session, provide PRD/TRD acceptance criteria and invariant statements, forbid opening implementation files. A disagreement between independently-authored tests and the implementation is an investigation signal, not a test failure to fix.
+
+**Not required for:** peripheral modules (API routes, adapters, UI), configuration, scaffolding, utilities without financial calculation logic.
+
+**Record:** the wave-gate adversarial review (§8) confirms independent authorship for critical modules. The confirmation is logged in `docs/PROJECT_STATE.md`.

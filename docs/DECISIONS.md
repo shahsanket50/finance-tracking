@@ -61,6 +61,11 @@ Postgres runs with `wal_level=replica` from the first container start.
 4. Run `alembic upgrade head` and `pytest tests/integration/` — must pass clean.
 KMS upgrade deferred to Phase 5 per H3.
 
+## ADR-012: Anti-Drift Process — independent test authoring + adversarial wave-gate
+**Status:** Accepted · **Date:** 2026-08
+For correctness-critical modules, tests are authored in a separate session from implementation (spec-only, no implementation file access). At each wave boundary, a fresh-context adversarial review checks deliverables against the spec. Tax constants carry `# UNVERIFIED — CA review pending` until Phase 4.
+**Why:** the correctness harness checks code against tests but cannot check tests against spec. When the same agent writes both from the same reading, a misreading produces a passing test that enforces wrong behaviour — green CI, confidently wrong. Running a parallel agent does not fix this: correlated training → correlated blind spots. The fix is structural independence: tests authored without seeing the implementation, and wave-end review by a context that has not absorbed the build session's assumptions. See TRD §11 for the full specification.
+
 ---
 
 ## Template

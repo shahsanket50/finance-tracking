@@ -82,7 +82,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("seq"),
-        sa.UniqueConstraint("content_hash"),
+        sa.UniqueConstraint("user_id", "content_hash", name="uq_raw_artifacts_user_content_hash"),
         sa.ForeignKeyConstraint(["ingestion_event_id"], ["ingestion_events.id"]),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
     )
@@ -103,7 +103,7 @@ def upgrade() -> None:
         sa.Column("occurrence_index", sa.SmallInteger(), nullable=False, server_default="0"),
         sa.Column("transaction_type", sa.String(16), nullable=False),
         sa.Column("narration", sa.Text(), nullable=False),
-        sa.Column("normalized_narration", sa.Text(), nullable=True),
+        sa.Column("canonical_narration", sa.Text(), nullable=True),
         sa.Column("running_balance_paise", sa.BigInteger(), nullable=True),
         sa.Column("actor", sa.String(16), nullable=False),
         sa.Column("confidence", sa.Integer(), nullable=True),

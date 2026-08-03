@@ -95,7 +95,7 @@ All projections are disposable by design. A projection bug is fixed by correctin
 
 ## 3.4 The idempotency hash
 
-`hash(account_ref + date + amount + narration + running_balance)` - computed at ingestion, stored on the event. Powers the seen-vs-counted dedup ledger (PRD 15.2). Same hash seen twice, counted once = correct. Counted twice = a bug the audit view surfaces.
+`hash(account_ref + value_date + amount_paise + canonical_narration + occurrence_index)` — computed at parse time (step 2), stored on the event. `running_balance` is excluded — it is a validation signal only. Powers the seen-vs-counted dedup ledger (PRD 15.2). See §9.1 C1/C2 for the full definition.
 
 ---
 
@@ -324,8 +324,8 @@ All findings from the Architecture & Schema Review are now closed. These are bin
 
 | # | Resolution |
 | --- | --- |
-| **C1** | **Idempotency hash redesigned.** New definition: `hash(account_ref + value_date + amount + normalized_narration + occurrence_index)`. `running_balance` is **removed from identity** and used only as a validation signal feeding the balance check. |
-| **C2** | **`occurrence_index` added** — the ordinal of a transaction within its (account, date, amount, narration) group as it appears in the source statement. Deterministic per source; correctly distinguishes two genuine ₹250 coffees from one re-ingested duplicate. |
+| **C1** | **Idempotency hash redesigned.** New definition: `hash(account_ref + value_date + amount_paise + canonical_narration + occurrence_index)`. `running_balance` is **removed from identity** and used only as a validation signal feeding the balance check. `canonical_narration` is computed at parse time (step 2) via a frozen, deterministic function: Unicode NFKC normalization → strip leading/trailing whitespace → collapse all internal whitespace to a single space → uppercase. This is **distinct** from step-4 merchant normalization (a DECISION recorded as an event, feeding display/categorization). The canonical form is frozen for the lifetime of the hash — any future change to the canonicalization function invalidates all historical hashes and requires a migration, not a silent code change. |
+| **C2** | **`occurrence_index` added** — the 0-based ordinal of a transaction within its `(account_ref, value_date, amount_paise, canonical_narration)` group as it appears in the source statement. Deterministic per source; correctly distinguishes two genuine ₹250 coffees from one re-ingested duplicate. **Canonical tiebreaker:** within an identical-field group, `occurrence_index` is determined by position in the balance-validated statement sequence (the order transactions appear after the balance check passes). The ingestion event records the parser name, parser version, and sequence-within-statement offset as provenance, so replay reconstructs the exact ordering even when the source PDF is no longer retained (M1). Fallback for sources without line ordering (e.g. JSON feeds): order by `value_date` then by appearance order within the ingestion event payload. A cross-parser test (Phase 1) asserts that two parsers producing the same statement produce identical `occurrence_index` values for every group. |
 | **C3** | **Resolver outcomes are recorded events, never recomputation.** `MarkedInternalTransfer` (and equivalents for CC payment / FD booking) are authoritative. Replay reads recorded pairings; it never re-derives them. Re-running the resolver over new data emits *new* events — it never rewrites history. **This is the single most important fix: it is what makes Invariant 3 true.** |
 | **C4** | **`event_version` on every event from day one**, plus an upcaster layer in `core/events/`. Upcasters are pure functions with their own golden tests and are never deleted. |
 | **C5** | **Money stored as integer paise (`BIGINT`) end to end.** Python `int`, TypeScript `bigint` or string, never float, never `NUMERIC` in transport. Rupee formatting happens only at render. **Enforced by a lint rule** — an AI-generated codebase will otherwise reintroduce floats. |
@@ -492,3 +492,50 @@ Because this is an AI-generated codebase, these rules need mechanical enforcemen
 - Lint rules banning float in financial modules
 - Migration check extension prohibiting `NUMERIC`/`REAL` on money columns
 - JSON serialization convention (strings) wired into the API layer from the first endpoint
+
+---
+
+# 11. Anti-Drift Process (AI-Driven Development Safeguards)
+
+## 11.1 The gap the harness cannot close
+
+The correctness harness (§4.3) checks **code against tests**. It does not — and structurally cannot — check that the **tests are faithful to the spec**. When the same agent writes both the implementation and its tests from the same reading of the spec, a misreading produces a passing test that enforces the wrong behaviour: green CI, confidently wrong. The agent is grading its own homework.
+
+This matters most for tax logic, where the owner has stated they cannot self-verify, and where a wrong constant (a limit, a rate, a threshold) sails through every existing gate.
+
+**Running a second agent in parallel on the same tasks does not fix this** — two agents with correlated training have correlated blind spots, at double the cost. The fix is *independent, adversarial* checking by a different role, not a duplicate builder.
+
+## 11.2 Three layers (all adopted)
+
+**Layer 1 — Independent test authoring.** For correctness-critical modules (`core/`, `processing/resolver`, `processing/deductions`, `domain/ca_view`, tax rule-set evaluation), the agent that writes the tests must work from the spec *without reading the implementation*. Tests derived from the same code they test only re-assert whatever the code happens to do. Tests derived independently from the spec can disagree with the code — and that disagreement is the signal. Practically: separate the test-authoring session from the implementation session, prompt it from the PRD/TRD acceptance criteria and the journey doc, and forbid it from opening the implementation file.
+
+**Layer 2 — Adversarial review pass (per wave/phase).** At the end of each wave, a fresh-context review runs against the spec with an adversarial brief: *"find where this diverges from the PRD/TRD, where a test asserts something the spec does not require, where an invariant could be violated without a test noticing, and where a constant was invented."* Fresh context matters — an agent that just spent a wave building has absorbed its own assumptions and cannot see them. The review does not run every commit (too noisy, and correlated with the build session); it runs at the wave boundary when there is a coherent unit to audit.
+
+**Layer 3 — Human / CA gate (per phase).** Phase gates already require the owner to sign off. The tax rule-set and merchant→section seed table get a **qualified CA review at the Phase 4 gate** (already a Phase 4 exit condition). Per the owner's decision, tax logic is *not* independently checked on every change — the Phase 4 CA review is the designated checkpoint, keeping cost proportionate. Between now and Phase 4, tax constants are flagged `# UNVERIFIED — CA review pending` in code and rule-set, so nothing is mistaken for validated.
+
+## 11.3 Cadence
+
+| Layer | Runs | Scope |
+| --- | --- | --- |
+| Independent test authoring | Continuously, for critical modules only | `core/`, resolver, deductions, ca_view, rule-set |
+| Adversarial review pass | End of each wave/phase | The wave's deliverables vs spec |
+| Human sign-off | Each phase gate | Exit criterion + owner review |
+| CA review | Phase 4 gate | Tax rule-set + seed mapping table |
+
+Deliberately **not** every-commit: the owner ranked correctness first but also chose periodic over always-on here, because always-on adversarial review on every PR is costly and its per-commit signal is low. The wave boundary is where a coherent, auditable unit exists.
+
+## 11.4 What each layer catches that the others miss
+
+- **Golden/property tests (existing):** code regressions — behaviour that *changed*.
+- **Independent test authoring:** code that was *never right* — implementation and test sharing a wrong assumption.
+- **Adversarial review:** drift the tests don't cover at all — invented scope, missing invariant coverage, spec divergence no assertion guards.
+- **CA / human gate:** domain wrongness no amount of internal consistency can catch — a correctly-implemented, correctly-tested, wrong tax rule.
+
+The layers are ordered by how independent they are from the build. That independence is the whole point: each layer sees what the layer closer to the code is blind to.
+
+## 11.5 Recorded in the repo
+
+- `CLAUDE.md` gains a rule: **test-authoring for critical modules is a separate session from implementation, and must not read the implementation file.**
+- `QUALITY.md` gains the adversarial-review checklist as a wave-gate step.
+- `PROJECT_STATE.md` wave-gates gain an "adversarial review: pass/fail" line.
+- Tax constants carry `# UNVERIFIED — CA review pending` until the Phase 4 gate clears them.

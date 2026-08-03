@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -116,6 +116,7 @@ def test_append_event_returns_int() -> None:
             aggregate_id="HDFC_SAVINGS_001",
             payload={"narration": "test"},
             idempotency_hash="abc123def456",
+            value_date=date(2026, 3, 15),
             ingestion_event_id=ingestion_id,
         )
 
@@ -169,3 +170,18 @@ def test_read_stream_returns_events_in_seq_order() -> None:
     assert events[0].seq == 10
     assert events[1].seq == 20
     assert events[0].seq < events[1].seq
+
+
+def test_append_event_raises_without_value_date() -> None:
+    """value_date is required — silent date.today() default was removed (F-7)."""
+    with pytest.raises(TypeError, match="value_date"):
+        append_event(  # type: ignore[call-arg]
+            MagicMock(),
+            user_id=uuid.uuid4(),
+            event_type="TransactionIngested",
+            aggregate_id="ACC",
+            payload={},
+            idempotency_hash="abc",
+            ingestion_event_id=uuid.uuid4(),
+            # value_date intentionally omitted
+        )
