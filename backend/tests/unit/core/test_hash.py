@@ -42,7 +42,7 @@ def test_occurrence_index_increments_for_duplicates() -> None:
             "account_ref": "ACC001",
             "value_date": date(2026, 3, 15),
             "amount_paise": -50000,
-            "normalized_narration": "swiggy",
+            "canonical_narration": "swiggy",
         },
     ]
     idx = compute_occurrence_index(txns, "ACC001", date(2026, 3, 15), -50000, "swiggy")
@@ -55,7 +55,7 @@ def test_occurrence_index_independent_of_other_transactions() -> None:
             "account_ref": "ACC001",
             "value_date": date(2026, 3, 15),
             "amount_paise": -30000,
-            "normalized_narration": "zomato",
+            "canonical_narration": "zomato",
         },
     ]
     idx = compute_occurrence_index(txns, "ACC001", date(2026, 3, 15), -50000, "swiggy")
