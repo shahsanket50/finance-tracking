@@ -1,0 +1,28 @@
+{
+  "bank": "hdfc_cc",
+  "account_ref": "HDFC_CC_4321",
+  "period_start": "2026-01-01",
+  "period_end": "2026-01-31",
+  "opening_balance_paise": 420000,
+  "closing_balance_paise": 170000,
+  "transactions": [
+    {
+      "narration": "REFUND AMAZON",
+      "amount_paise": 50000,
+      "value_date": "2026-01-05",
+      "type": "income"
+    },
+    {
+      "narration": "SWIGGY ORDER",
+      "amount_paise": -18000,
+      "value_date": "2026-01-10",
+      "type": "expense"
+    },
+    {
+      "narration": "ZOMATO ORDER",
+      "amount_paise": -282000,
+      "value_date": "2026-01-15",
+      "type": "expense"
+    }
+  ]
+}

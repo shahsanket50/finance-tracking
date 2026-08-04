@@ -1,0 +1,22 @@
+{
+  "bank": "sbi_cc",
+  "account_ref": "SBI_CC_8765",
+  "period_start": "2026-02-01",
+  "period_end": "2026-02-28",
+  "opening_balance_paise": 0,
+  "closing_balance_paise": -95000,
+  "transactions": [
+    {
+      "narration": "GROCERY STORE BIG BAZAAR",
+      "amount_paise": -55000,
+      "value_date": "2026-02-03",
+      "type": "expense"
+    },
+    {
+      "narration": "FUEL PUMP HPCL",
+      "amount_paise": -40000,
+      "value_date": "2026-02-10",
+      "type": "expense"
+    }
+  ]
+}
