@@ -2,9 +2,8 @@
 
 from datetime import date
 
-from ingestion.validators.balance_check import BalanceCheckResult, validate_balance
-
 from ingestion.parsers.base import ParsedTransaction
+from ingestion.validators.balance_check import BalanceCheckResult, validate_balance
 
 
 def make_txn(amount_paise: int) -> ParsedTransaction:

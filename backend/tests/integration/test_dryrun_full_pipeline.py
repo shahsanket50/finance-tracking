@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import pickle
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core.events.models import IngestionEvent, TransactionEvent
 from ingestion.dryrun.abandon import abandon
-from ingestion.dryrun.confirm import SessionExpiredError, confirm
+from ingestion.dryrun.confirm import confirm
 from ingestion.dryrun.harness import dry_run
 from ingestion.dryrun.session import DryRunSession, _redis_key
 from ingestion.validators.balance_check import BalanceCheckResult
@@ -112,9 +113,7 @@ def test_confirm_writes_ingestion_event_to_db(
     with patch("ingestion.dryrun.confirm.get_redis_client", return_value=confirm_mock):
         confirm(dry_session.session_id, pg_session)
 
-    count = (
-        pg_session.query(IngestionEvent).filter_by(user_id=test_user.id).count()
-    )
+    count = pg_session.query(IngestionEvent).filter_by(user_id=test_user.id).count()
     assert count == 1
 
 
@@ -143,9 +142,7 @@ def test_confirm_writes_transaction_events_to_db(
     with patch("ingestion.dryrun.confirm.get_redis_client", return_value=confirm_mock):
         confirm(dry_session.session_id, pg_session)
 
-    count = (
-        pg_session.query(TransactionEvent).filter_by(user_id=test_user.id).count()
-    )
+    count = pg_session.query(TransactionEvent).filter_by(user_id=test_user.id).count()
     assert count == expected_count
 
 
@@ -210,7 +207,7 @@ def test_idempotent_confirm(
         account_ref=dry_session.account_ref,
         statement=dry_session.statement,
         balance_check=dry_session.balance_check,
-        raw_artifact_content_hash="b" * 64,  # different hash to avoid raw_artifact unique constraint
+        raw_artifact_content_hash="b" * 64,  # distinct hash, avoids raw_artifact conflict
         created_at=datetime.now(UTC),
     )
     second_pickled = pickle.dumps(second_session)
@@ -219,7 +216,7 @@ def test_idempotent_confirm(
     second_mock.get.return_value = second_pickled
 
     # Second confirm must fail — unique constraint on (user_id, idempotency_hash)
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         with patch("ingestion.dryrun.confirm.get_redis_client", return_value=second_mock):
             confirm(second_session.session_id, pg_session)
             pg_session.flush()

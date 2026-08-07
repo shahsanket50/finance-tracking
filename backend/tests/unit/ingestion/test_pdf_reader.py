@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 
 import pdfplumber
@@ -15,8 +14,12 @@ from ingestion.fetchers.pdf_reader import (
 )
 
 # Golden PDFs are unencrypted — use them as "normal PDF" fixtures
-HDFC_GOLDEN = Path(__file__).parent.parent.parent / "fixtures" / "golden" / "hdfc_cc" / "statement_001.pdf"
-SBI_GOLDEN = Path(__file__).parent.parent.parent / "fixtures" / "golden" / "sbi_cc" / "statement_001.pdf"
+HDFC_GOLDEN = (
+    Path(__file__).parent.parent.parent / "fixtures" / "golden" / "hdfc_cc" / "statement_001.pdf"
+)
+SBI_GOLDEN = (
+    Path(__file__).parent.parent.parent / "fixtures" / "golden" / "sbi_cc" / "statement_001.pdf"
+)
 
 
 def test_open_pdf_returns_pdfplumber_pdf() -> None:
@@ -54,7 +57,7 @@ def test_open_pdf_extracts_text() -> None:
 
 
 def test_open_pdf_garbage_bytes_raises() -> None:
-    """Passes garbage bytes → raises any exception (not PasswordRequiredError/PasswordIncorrectError)."""
+    """Garbage bytes → raises a non-password exception."""
     with pytest.raises(Exception) as exc_info:
         pdf = open_pdf(b"this is not a pdf")
         pdf.close()

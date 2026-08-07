@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-import pickle
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import UUID
@@ -19,7 +18,7 @@ from ingestion.dryrun.session import (
     load_session,
     save_session,
 )
-from ingestion.parsers.base import ParsedStatement, ParsedTransaction
+from ingestion.parsers.base import ParsedStatement
 from ingestion.validators.balance_check import BalanceCheckResult
 
 HDFC_GOLDEN_PDF = (
@@ -73,7 +72,7 @@ def minimal_session() -> DryRunSession:
         statement=stmt,
         balance_check=BalanceCheckResult.PASS,
         raw_artifact_content_hash="a" * 64,
-        created_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
     )
 
 
@@ -198,5 +197,5 @@ def test_dry_run_unknown_pdf_raises() -> None:
     """dry_run on garbage bytes raises an exception (not a DryRunSession)."""
     mock_redis = MagicMock()
     with patch("ingestion.dryrun.harness.get_redis_client", return_value=mock_redis):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match=r"."):
             dry_run(b"not a pdf", _TEST_USER_ID, "X")

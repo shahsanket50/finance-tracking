@@ -8,13 +8,13 @@ from datetime import UTC, date, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.orm import Session
+
+from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.confirm import (  # ImportError until T12 — expected
     SessionExpiredError,
     confirm,
 )
-from sqlalchemy.orm import Session
-
-from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.session import DryRunSession
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction
 from ingestion.validators.balance_check import BalanceCheckResult
