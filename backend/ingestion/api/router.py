@@ -49,7 +49,7 @@ _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 class TransactionPreview(BaseModel):
     account_ref: str
     value_date: date
-    amount_paise: int
+    amount_paise: str  # serialized as string — JSON numbers lose paise precision
     narration: str
     idempotency_hash: str
     occurrence_index: int
@@ -60,8 +60,8 @@ class DryRunPreview(BaseModel):
     account_ref: str
     period_start: date
     period_end: date
-    opening_balance_paise: int
-    closing_balance_paise: int
+    opening_balance_paise: str  # serialized as string — JSON numbers lose paise precision
+    closing_balance_paise: str  # serialized as string — JSON numbers lose paise precision
     balance_check: str  # "pass" or "fail"
     transaction_count: int
     transactions: list[TransactionPreview]
@@ -75,15 +75,15 @@ def _session_to_preview(session: DryRunSession) -> DryRunPreview:
         account_ref=stmt.account_ref,
         period_start=stmt.period_start,
         period_end=stmt.period_end,
-        opening_balance_paise=stmt.opening_balance_paise,
-        closing_balance_paise=stmt.closing_balance_paise,
+        opening_balance_paise=str(stmt.opening_balance_paise),
+        closing_balance_paise=str(stmt.closing_balance_paise),
         balance_check=session.balance_check.value,
         transaction_count=len(stmt.transactions),
         transactions=[
             TransactionPreview(
                 account_ref=t.account_ref,
                 value_date=t.value_date,
-                amount_paise=t.amount_paise,
+                amount_paise=str(t.amount_paise),
                 narration=t.narration,
                 idempotency_hash=t.idempotency_hash,
                 occurrence_index=t.occurrence_index,
@@ -123,7 +123,6 @@ def confirm_session(
     """Commit a dry-run session to the database."""
     try:
         confirm(session_id, db)
-        db.commit()
     except SessionExpiredError as exc:
         raise HTTPException(status_code=404, detail="Session not found or expired") from exc
 

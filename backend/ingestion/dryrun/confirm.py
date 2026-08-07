@@ -90,7 +90,7 @@ def confirm(session_id: str, db_session: Session) -> None:
     # Write TransactionEvents (PASS only)
     if is_pass:
         for txn in statement.transactions:
-            transaction_type = "expense" if txn.amount_paise < 0 else "income"
+            transaction_type = "debit" if txn.amount_paise < 0 else "credit"
             append_event(
                 db_session,
                 dry_session.user_id,
@@ -114,5 +114,8 @@ def confirm(session_id: str, db_session: Session) -> None:
                 running_balance_paise=txn.running_balance_paise,
             )
 
-    # Delete session from Redis (always — PASS and FAIL)
+    # Commit all DB writes before touching Redis — if commit fails, session stays in Redis
+    db_session.commit()
+
+    # Delete session from Redis only after DB commit succeeds (always — PASS and FAIL)
     redis_client.delete(_redis_key(session_id))
