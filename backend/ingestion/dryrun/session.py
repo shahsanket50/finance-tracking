@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from ingestion.parsers.base import ParsedStatement
@@ -42,10 +42,10 @@ def save_session(
 
 def load_session(client: redis_module.Redis, session_id: str) -> DryRunSession | None:
     """Load a DryRunSession from Redis; returns None if expired or not found."""
-    data = client.get(_redis_key(session_id))
+    data: Any = client.get(_redis_key(session_id))
     if data is None:
         return None
-    return cast(DryRunSession, pickle.loads(data))  # noqa: S301  # type: ignore[arg-type]
+    return cast(DryRunSession, pickle.loads(data))  # noqa: S301
 
 
 def delete_session(client: redis_module.Redis, session_id: str) -> None:

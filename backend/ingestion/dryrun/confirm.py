@@ -6,7 +6,7 @@ Implements TRD §9.1.
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -16,20 +16,17 @@ from core.events.store import append_event
 from ingestion.dryrun.session import DryRunSession, _redis_key, load_session  # noqa: F401
 from ingestion.validators.balance_check import BalanceCheckResult
 
-if TYPE_CHECKING:
-    import redis as redis_module
-
 
 class SessionExpiredError(Exception):
     """Raised when the DryRunSession has expired from Redis."""
 
 
-def get_redis_client() -> redis_module.Redis:  # type: ignore[type-arg]
+def get_redis_client() -> Any:
     """Return a Redis client. Reads REDIS_URL env var. Patched in unit tests."""
     import redis  # deferred so missing redis doesn't break module import
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(url)  # type: ignore[no-untyped-call, return-value]
+    return redis.from_url(url)  # type: ignore[no-untyped-call]
 
 
 def confirm(session_id: str, db_session: Session) -> None:

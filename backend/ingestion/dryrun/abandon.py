@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import redis as redis_module
+from typing import Any
 
 
-def get_redis_client() -> redis_module.Redis:  # type: ignore[type-arg]
+def get_redis_client() -> Any:
     """Return a Redis client. Reads REDIS_URL env var. Patched in unit tests."""
     import redis
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(url)  # type: ignore[no-untyped-call, return-value]
+    return redis.from_url(url)  # type: ignore[no-untyped-call]
 
 
 def abandon(session_id: str) -> None:

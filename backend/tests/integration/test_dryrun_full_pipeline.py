@@ -157,12 +157,13 @@ def test_abandon_writes_nothing(
 ) -> None:
     """abandon() deletes the Redis key and writes nothing to the database."""
     session_id = str(uuid.uuid4())
+    rows_before = pg_session.query(TransactionEvent).count()
 
     with patch("ingestion.dryrun.abandon.get_redis_client", return_value=mock_redis):
         abandon(session_id)
 
     mock_redis.delete.assert_called_once_with(_redis_key(session_id))
-    assert pg_session.query(TransactionEvent).count() == 0
+    assert pg_session.query(TransactionEvent).count() == rows_before
 
 
 # ── test 6: idempotent confirm — second call raises on unique constraint ──────
