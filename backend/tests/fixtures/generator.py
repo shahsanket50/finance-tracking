@@ -34,7 +34,11 @@ from __future__ import annotations
 
 from datetime import date
 
-from core.hashing.hash import compute_idempotency_hash, compute_occurrence_index
+from core.hashing.hash import (
+    canonicalize_narration,
+    compute_idempotency_hash,
+    compute_occurrence_index,
+)
 
 # Registry of bank templates
 _TEMPLATES: dict[str, object] = {}
@@ -90,7 +94,7 @@ def generate_statement(
     enriched: list[dict[str, object]] = []
     for txn in transactions:
         narration = str(txn.get("narration", ""))
-        normalized_narration = narration.lower().strip()
+        canonical_narration = canonicalize_narration(narration)
         amount_paise_obj = txn.get("amount_paise", 0)
         if not isinstance(amount_paise_obj, int):
             raise ValueError(f"amount_paise must be an int, got {type(amount_paise_obj)}")
@@ -100,16 +104,16 @@ def generate_statement(
             raise ValueError(f"value_date must be a date, got {type(value_date)}")
 
         occurrence_index = compute_occurrence_index(
-            enriched, account_ref, value_date, amount_paise, normalized_narration
+            enriched, account_ref, value_date, amount_paise, canonical_narration
         )
         idempotency_hash = compute_idempotency_hash(
-            account_ref, value_date, amount_paise, normalized_narration, occurrence_index
+            account_ref, value_date, amount_paise, canonical_narration, occurrence_index
         )
 
         enriched.append(
             {
                 **txn,
-                "normalized_narration": normalized_narration,
+                "canonical_narration": canonical_narration,
                 "occurrence_index": occurrence_index,
                 "idempotency_hash": idempotency_hash,
                 "account_ref": account_ref,

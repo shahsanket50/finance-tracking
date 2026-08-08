@@ -39,7 +39,7 @@ def append_event(
     *,
     event_version: int = 1,
     # Required transaction_events columns — pulled from payload if not supplied:
-    value_date: date | None = None,
+    value_date: date,
     amount_paise: int = 0,
     idempotency_hash: str | None = None,
     occurrence_index: int = 0,
@@ -49,7 +49,7 @@ def append_event(
     ingestion_event_id: uuid.UUID,
     confidence: int | None = None,
     running_balance_paise: int | None = None,
-    normalized_narration: str | None = None,
+    canonical_narration: str | None = None,
 ) -> int:
     """Append a TransactionEvent to the event log.
 
@@ -69,13 +69,13 @@ def append_event(
         event_type=event_type,
         event_version=event_version,
         account_ref=aggregate_id,
-        value_date=value_date or date.today(),
+        value_date=value_date,
         amount_paise=amount_paise,
         idempotency_hash=idempotency_hash,
         occurrence_index=occurrence_index,
         transaction_type=transaction_type,
         narration=narration,
-        normalized_narration=normalized_narration,
+        canonical_narration=canonical_narration,
         running_balance_paise=running_balance_paise,
         actor=actor,
         confidence=confidence,
