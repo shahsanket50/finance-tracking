@@ -41,7 +41,7 @@ def test_different_occurrence_index_produces_different_hash() -> None:
 
 
 def test_running_balance_not_in_hash() -> None:
-    """Hash is identical for rows sharing all hash inputs but differing in running_balance_paise (C1)."""
+    """Hash is identical when only running_balance_paise differs (C1 invariant)."""
     # Two rows from the same statement — same debit, different running_balance because
     # a preceding same-day credit was recorded differently.
     # running_balance_paise is stored for balance-check validation only; excluded from identity.
