@@ -201,13 +201,98 @@ def dict_to_pdf_sbi_cc(statement: dict[str, object]) -> bytes:
     return bytes(pdf.output())
 
 
+def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
+    """Convert a statement dict (hdfc_savings format) to synthetic PDF bytes.
+
+    The PDF layout reproduces HDFC Savings Account column order:
+    Date | Narration | Chq./Ref.No. | Value Dt | Withdrawal Amt. | Deposit Amt. | Closing Balance
+
+    pdfplumber's extract_text() collapses spaces in header tokens, so 'StatementFrom'
+    and 'WithdrawalAmt' (no spaces) must appear in the extracted text for can_parse.
+    The period header uses four-digit years; transaction rows use two-digit years (DD/MM/YY).
+    Opening balance is NOT explicit — the parser derives it from first_closing - first_amount.
+    """
+    try:
+        from fpdf import FPDF
+    except ImportError as e:
+        raise ImportError(
+            "fpdf2 is required for PDF generation. Install with: pip install fpdf2"
+        ) from e
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=10)
+
+    # Header block
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "HDFC Bank - Statement of Account", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    pdf.cell(0, 8, f"Account Number : {statement.get('account_ref', '')}", new_x="LMARGIN", new_y="NEXT")
+
+    period_start = statement.get("period_start")
+    period_end = statement.get("period_end")
+    if isinstance(period_start, date) and isinstance(period_end, date):
+        start_str = period_start.strftime("%d/%m/%Y")
+        end_str = period_end.strftime("%d/%m/%Y")
+        # pdfplumber collapses spaces → "StatementFrom" and format "StatementFrom : DD/MM/YYYY To : DD/MM/YYYY"
+        pdf.cell(
+            0,
+            8,
+            f"StatementFrom : {start_str} To : {end_str}",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+    pdf.ln(4)
+
+    # Table header — "WithdrawalAmt." appears as "WithdrawalAmt" after space collapse
+    pdf.set_font("Helvetica", "B", 8)
+    col_widths = [22, 55, 25, 22, 28, 25, 28]
+    headers = ["Date", "Narration", "Chq./Ref.No.", "Value Dt", "WithdrawalAmt.", "DepositAmt.", "ClosingBalance"]
+    for i, h in enumerate(headers):
+        pdf.cell(col_widths[i], 8, h, border=1)
+    pdf.ln()
+
+    # Rows — transaction dates use DD/MM/YY (two-digit year)
+    pdf.set_font("Helvetica", size=8)
+    transactions = statement.get("transactions", [])
+    assert isinstance(transactions, list)
+    for txn in transactions:
+        assert isinstance(txn, dict)
+        value_date = txn.get("value_date")
+        narration = str(txn.get("narration", ""))
+        amount_paise_raw = txn.get("amount_paise", 0)
+        closing_paise = txn.get("closing_balance_paise", 0)
+        assert isinstance(amount_paise_raw, int)
+        assert isinstance(closing_paise, int)
+        assert isinstance(value_date, date)
+
+        date_str = value_date.strftime("%d/%m/%y")  # two-digit year
+        closing_rupees = abs(closing_paise) / 100
+        closing_str = f"{closing_rupees:,.2f}"
+
+        if amount_paise_raw >= 0:
+            withdrawal_str = ""
+            deposit_str = f"{amount_paise_raw / 100:,.2f}"
+        else:
+            withdrawal_str = f"{abs(amount_paise_raw) / 100:,.2f}"
+            deposit_str = ""
+
+        row = [date_str, narration[:35], "", date_str, withdrawal_str, deposit_str, closing_str]
+        for i, cell in enumerate(row):
+            pdf.cell(col_widths[i], 7, str(cell)[:35], border=1)
+        pdf.ln()
+
+    return bytes(pdf.output())
+
+
 def dict_to_pdf(statement: dict[str, object], bank: str) -> bytes:
     """Dispatch to bank-specific PDF generator.
 
     Args:
         statement: Statement dict as produced by generate_statement() or loaded from JSON
                    (with date strings converted to date objects).
-        bank: One of "hdfc_cc", "sbi_cc".
+        bank: One of "hdfc_cc", "sbi_cc", "hdfc_savings".
 
     Returns:
         PDF bytes.
@@ -215,6 +300,7 @@ def dict_to_pdf(statement: dict[str, object], bank: str) -> bytes:
     generators = {
         "hdfc_cc": dict_to_pdf_hdfc_cc,
         "sbi_cc": dict_to_pdf_sbi_cc,
+        "hdfc_savings": dict_to_pdf_hdfc_savings,
     }
     if bank not in generators:
         raise ValueError(f"Unknown bank: {bank!r}. Known: {list(generators)}")
