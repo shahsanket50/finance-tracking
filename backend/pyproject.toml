@@ -17,6 +17,8 @@ dependencies = [
     "cryptography>=43",
     "uuid6>=2024",                    # UUIDv7 in Python: uuid6.uuid7()
     "pydantic>=2.9",
+    "pdfplumber>=0.11",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +33,7 @@ dev = [
     "httpx>=0.28",                     # FastAPI test client
     "defusedxml>=0.7",                  # Safe XML parsing for coverage reports
     "pytest-json-report>=1.5",          # JSON test results for quality-report bot
+    "fpdf2>=2.8",
 ]
 
 [tool.pytest.ini_options]
@@ -48,6 +51,19 @@ strict = true
 ignore_missing_imports = true
 disallow_subclassing_any = false  # SQLAlchemy DeclarativeBase has type Any
 disallow_untyped_decorators = false  # Hypothesis @given/@settings in tests
+
+[[tool.mypy.overrides]]
+# redis-py stubs vary by environment (installed vs not installed); type: ignore
+# comments needed in CI are flagged as unused locally.
+# test_generator/test_event_store: similar cross-env overload/call-arg variance.
+module = [
+    "ingestion.dryrun.harness",
+    "ingestion.dryrun.confirm",
+    "ingestion.dryrun.abandon",
+    "tests.unit.core.test_generator",
+    "tests.unit.core.test_event_store",
+]
+warn_unused_ignores = false
 
 [tool.ruff]
 # ruff.toml at repo root takes precedence, but keep this for IDE integration
