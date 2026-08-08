@@ -9,12 +9,12 @@ if TYPE_CHECKING:
     import redis as redis_module
 
 
-def get_redis_client() -> redis_module.Redis[bytes]:
+def get_redis_client() -> redis_module.Redis:  # type: ignore[type-arg]
     """Return a Redis client. Reads REDIS_URL env var. Patched in unit tests."""
     import redis
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(url)
+    return redis.from_url(url)  # type: ignore[no-untyped-call, return-value]
 
 
 def abandon(session_id: str) -> None:

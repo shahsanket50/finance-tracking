@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pdfplumber
 import pytest
-from ingestion.parsers.sbi_cc import SbiCcParser  # ImportError until T8 — expected
 
 from core.hashing.hash import (
     canonicalize_narration,
     compute_idempotency_hash,
 )
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction  # noqa: F401
+from ingestion.parsers.sbi_cc import SbiCcParser  # ImportError until T8 — expected
 
 GOLDEN_PDF = (
     Path(__file__).parent.parent.parent / "fixtures" / "golden" / "sbi_cc" / "statement_001.pdf"

@@ -31,7 +31,7 @@ def rebuild_projection(
 
     Returns the rebuilt projection state.
     """
-    state = build_projection(session, user_id, projection_type, since_seq=0)
+    state: dict[str, object] = build_projection(session, user_id, projection_type, since_seq=0)
     # Save the rebuilt state as a snapshot (last_seq = max seq in the projection)
     events_count = state.get("count", 0)
     if isinstance(events_count, int) and events_count > 0:

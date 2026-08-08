@@ -27,7 +27,7 @@ def test_open_pdf_returns_pdfplumber_pdf() -> None:
     pdf_bytes = HDFC_GOLDEN.read_bytes()
     pdf = open_pdf(pdf_bytes)
     try:
-        assert isinstance(pdf, pdfplumber.PDF)
+        assert isinstance(pdf, pdfplumber.PDF)  # type: ignore[attr-defined]
         assert len(pdf.pages) >= 1
     finally:
         pdf.close()
@@ -38,7 +38,7 @@ def test_open_pdf_no_password_normal_pdf() -> None:
     pdf_bytes = SBI_GOLDEN.read_bytes()
     pdf = open_pdf(pdf_bytes)
     try:
-        assert isinstance(pdf, pdfplumber.PDF)
+        assert isinstance(pdf, pdfplumber.PDF)  # type: ignore[attr-defined]
         assert len(pdf.pages) >= 1
     finally:
         pdf.close()

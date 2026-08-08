@@ -24,7 +24,7 @@ class SbiCcParser(AbstractParser):
         lower = text.lower()
         return "state bank of india" in lower and "credit card" in lower
 
-    def parse(self, pdf: pdfplumber.PDF) -> ParsedStatement:
+    def parse(self, pdf: pdfplumber.PDF) -> ParsedStatement:  # type: ignore[name-defined]
         raw_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
         account_ref = self._extract_account_ref(raw_text)
@@ -83,7 +83,7 @@ class SbiCcParser(AbstractParser):
         )
         return self._parse_amount(match.group(1)) if match else 0
 
-    def _extract_rows(self, page: pdfplumber.page.PageBase) -> list[list[str]]:
+    def _extract_rows(self, page: pdfplumber.page.PageBase) -> list[list[str]]:  # type: ignore[name-defined]
         table = page.extract_table()
         if not table:
             return []

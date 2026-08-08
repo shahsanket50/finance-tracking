@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pdfplumber
 import pytest
-from ingestion.parsers.hdfc_cc import HdfcCcParser  # will fail until T6 — expected
 
 from core.hashing.hash import (
     canonicalize_narration,
     compute_idempotency_hash,
 )
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction  # noqa: F401
+from ingestion.parsers.hdfc_cc import HdfcCcParser  # will fail until T6 — expected
 
 GOLDEN_PDF = (
     Path(__file__).parent.parent.parent / "fixtures" / "golden" / "hdfc_cc" / "statement_001.pdf"

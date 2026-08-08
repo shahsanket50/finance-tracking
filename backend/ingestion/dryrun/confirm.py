@@ -24,12 +24,12 @@ class SessionExpiredError(Exception):
     """Raised when the DryRunSession has expired from Redis."""
 
 
-def get_redis_client() -> redis_module.Redis[bytes]:
+def get_redis_client() -> redis_module.Redis:  # type: ignore[type-arg]
     """Return a Redis client. Reads REDIS_URL env var. Patched in unit tests."""
     import redis  # deferred so missing redis doesn't break module import
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(url)
+    return redis.from_url(url)  # type: ignore[no-untyped-call, return-value]
 
 
 def confirm(session_id: str, db_session: Session) -> None:

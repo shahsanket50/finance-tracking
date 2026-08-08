@@ -45,6 +45,6 @@ class AbstractParser(ABC):
         ...
 
     @abstractmethod
-    def parse(self, pdf: pdfplumber.PDF) -> ParsedStatement:
+    def parse(self, pdf: pdfplumber.PDF) -> ParsedStatement:  # type: ignore[name-defined]
         """Parse the given PDF and return a ParsedStatement."""
         ...

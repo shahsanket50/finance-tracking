@@ -24,7 +24,7 @@ def get_redis_client() -> Any:
     import redis  # imported here so redis absence doesn't break import at module load
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    return redis.from_url(url)
+    return redis.from_url(url)  # type: ignore[no-untyped-call]
 
 
 def dry_run(

@@ -34,20 +34,20 @@ def _redis_key(session_id: str) -> str:
 
 
 def save_session(
-    client: redis_module.Redis[bytes], session: DryRunSession, ttl: int = SESSION_TTL
+    client: redis_module.Redis, session: DryRunSession, ttl: int = SESSION_TTL
 ) -> None:
     """Serialize and store a DryRunSession in Redis with a TTL."""
     client.setex(_redis_key(session.session_id), ttl, pickle.dumps(session))
 
 
-def load_session(client: redis_module.Redis[bytes], session_id: str) -> DryRunSession | None:
+def load_session(client: redis_module.Redis, session_id: str) -> DryRunSession | None:
     """Load a DryRunSession from Redis; returns None if expired or not found."""
     data = client.get(_redis_key(session_id))
     if data is None:
         return None
-    return cast(DryRunSession, pickle.loads(data))  # noqa: S301  # trusted internal Redis
+    return cast(DryRunSession, pickle.loads(data))  # noqa: S301  # type: ignore[arg-type]
 
 
-def delete_session(client: redis_module.Redis[bytes], session_id: str) -> None:
+def delete_session(client: redis_module.Redis, session_id: str) -> None:
     """Delete a DryRunSession from Redis."""
     client.delete(_redis_key(session_id))
