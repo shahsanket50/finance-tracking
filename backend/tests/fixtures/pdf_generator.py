@@ -283,13 +283,13 @@ def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
 
         date_str = value_date.strftime("%d/%m/%y")  # two-digit year
         ref_no = f"REF{seq:03d}"
-        closing_str = f"{abs(running_paise) / 100:,.2f}"
+        closing_str = f"{abs(Decimal(running_paise)) / 100:,.2f}"
 
         if amount_paise_raw >= 0:
             withdrawal_str = ""
-            deposit_str = f"{amount_paise_raw / 100:,.2f}"
+            deposit_str = f"{Decimal(amount_paise_raw) / 100:,.2f}"
         else:
-            withdrawal_str = f"{abs(amount_paise_raw) / 100:,.2f}"
+            withdrawal_str = f"{abs(Decimal(amount_paise_raw)) / 100:,.2f}"
             deposit_str = ""
 
         row = [date_str, narration[:35], ref_no, date_str, withdrawal_str, deposit_str, closing_str]

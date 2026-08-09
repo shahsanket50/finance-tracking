@@ -67,8 +67,10 @@ class HdfcSavingsParser(AbstractParser):
         # 4. Derive opening and closing balances
         if transactions:
             first = transactions[0]
-            opening_balance_paise = first.running_balance_paise - first.amount_paise  # type: ignore[operator]
-            closing_balance_paise = transactions[-1].running_balance_paise or 0
+            assert first.running_balance_paise is not None
+            opening_balance_paise = first.running_balance_paise - first.amount_paise
+            rb = transactions[-1].running_balance_paise
+            closing_balance_paise = rb if rb is not None else 0
         else:
             opening_balance_paise = 0
             closing_balance_paise = 0
@@ -173,8 +175,8 @@ class HdfcSavingsParser(AbstractParser):
                         clos_x = float(w["x0"])
                 break
 
-        wd_dep_boundary = (wd_x + dep_x) / 2 if wd_x and dep_x else 400.0
-        dep_clos_boundary = (dep_x + clos_x) / 2 if dep_x and clos_x else 480.0
+        wd_dep_boundary = (wd_x + dep_x) / 2 if wd_x is not None and dep_x is not None else 400.0
+        dep_clos_boundary = (dep_x + clos_x) / 2 if dep_x is not None and clos_x is not None else 480.0
         return wd_dep_boundary, dep_clos_boundary
 
     def _parse_row_words(
