@@ -10,29 +10,25 @@
       "narration": "NEFTCR SALARY COMPANY",
       "amount_paise": 5000000,
       "value_date": "2026-01-05",
-      "type": "income",
-      "closing_balance_paise": 15000000
+      "running_balance_paise": 15000000
     },
     {
       "narration": "NEFTDR RENT PAYMENT",
       "amount_paise": -1800000,
       "value_date": "2026-01-10",
-      "type": "expense",
-      "closing_balance_paise": 13200000
+      "running_balance_paise": 13200000
     },
     {
       "narration": "UPI COFFEE SHOP",
       "amount_paise": -500000,
       "value_date": "2026-01-15",
-      "type": "expense",
-      "closing_balance_paise": 12700000
+      "running_balance_paise": 12700000
     },
     {
       "narration": "IMPS REFUND",
       "amount_paise": 200000,
       "value_date": "2026-01-15",
-      "type": "income",
-      "closing_balance_paise": 12900000
+      "running_balance_paise": 12900000
     }
   ]
 }

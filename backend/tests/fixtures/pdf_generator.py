@@ -204,13 +204,17 @@ def dict_to_pdf_sbi_cc(statement: dict[str, object]) -> bytes:
 def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
     """Convert a statement dict (hdfc_savings format) to synthetic PDF bytes.
 
-    The PDF layout reproduces HDFC Savings Account column order:
-    Date | Narration | Chq./Ref.No. | Value Dt | Withdrawal Amt. | Deposit Amt. | Closing Balance
+    The PDF layout reproduces the HDFC Savings column format:
+    Date | Narration | Chq./Ref.No. | ValueDt | WithdrawalAmt. | DepositAmt. | ClosingBalance
 
-    pdfplumber's extract_text() collapses spaces in header tokens, so 'StatementFrom'
-    and 'WithdrawalAmt' (no spaces) must appear in the extracted text for can_parse.
-    The period header uses four-digit years; transaction rows use two-digit years (DD/MM/YY).
-    Opening balance is NOT explicit — the parser derives it from first_closing - first_amount.
+    Key PDF characteristics that can_parse relies on:
+    - Header line: "StatementFrom : DD/MM/YYYY To : DD/MM/YYYY" (no space in "StatementFrom")
+    - Column header line with "WithdrawalAmt." and "DepositAmt." (no spaces around dots)
+    - Account line: "AccountNo : XXXXXXXXXXX"
+    - Text-extracted (not table-based) — use plain text cells, not borders
+    - Transaction date format: DD/MM/YY (two-digit year)
+    - Each row includes a synthetic reference number (REF001, REF002, ...) in Chq./Ref.No.
+      so the parser's ROW_RE can unambiguously split narration from ValueDt.
     """
     try:
         from fpdf import FPDF
@@ -227,14 +231,15 @@ def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 10, "HDFC Bank - Statement of Account", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=10)
-    pdf.cell(0, 8, f"Account Number : {statement.get('account_ref', '')}", new_x="LMARGIN", new_y="NEXT")
+    # "AccountNo" (no space) — parser regex: AccountNo\s*:\s*(\S+)
+    pdf.cell(0, 8, f"AccountNo : {statement.get('account_ref', '')}", new_x="LMARGIN", new_y="NEXT")
 
     period_start = statement.get("period_start")
     period_end = statement.get("period_end")
     if isinstance(period_start, date) and isinstance(period_end, date):
         start_str = period_start.strftime("%d/%m/%Y")
         end_str = period_end.strftime("%d/%m/%Y")
-        # pdfplumber collapses spaces → "StatementFrom" and format "StatementFrom : DD/MM/YYYY To : DD/MM/YYYY"
+        # "StatementFrom" (no space) — required for can_parse
         pdf.cell(
             0,
             8,
@@ -245,10 +250,18 @@ def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
 
     pdf.ln(4)
 
-    # Table header — "WithdrawalAmt." appears as "WithdrawalAmt" after space collapse
+    # Column header — WithdrawalAmt. and DepositAmt. must appear verbatim for can_parse
     pdf.set_font("Helvetica", "B", 8)
-    col_widths = [22, 55, 25, 22, 28, 25, 28]
-    headers = ["Date", "Narration", "Chq./Ref.No.", "Value Dt", "WithdrawalAmt.", "DepositAmt.", "ClosingBalance"]
+    col_widths = [22, 50, 22, 22, 28, 25, 31]
+    headers = [
+        "Date",
+        "Narration",
+        "Chq./Ref.No.",
+        "ValueDt",
+        "WithdrawalAmt.",
+        "DepositAmt.",
+        "ClosingBalance",
+    ]
     for i, h in enumerate(headers):
         pdf.cell(col_widths[i], 8, h, border=1)
     pdf.ln()
@@ -257,19 +270,20 @@ def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
     pdf.set_font("Helvetica", size=8)
     transactions = statement.get("transactions", [])
     assert isinstance(transactions, list)
-    for txn in transactions:
+    for seq, txn in enumerate(transactions, start=1):
         assert isinstance(txn, dict)
         value_date = txn.get("value_date")
         narration = str(txn.get("narration", ""))
         amount_paise_raw = txn.get("amount_paise", 0)
-        closing_paise = txn.get("closing_balance_paise", 0)
+        # Support both field names: spec uses running_balance_paise
+        running_paise = txn.get("running_balance_paise", txn.get("closing_balance_paise", 0))
         assert isinstance(amount_paise_raw, int)
-        assert isinstance(closing_paise, int)
+        assert isinstance(running_paise, int)
         assert isinstance(value_date, date)
 
         date_str = value_date.strftime("%d/%m/%y")  # two-digit year
-        closing_rupees = abs(closing_paise) / 100
-        closing_str = f"{closing_rupees:,.2f}"
+        ref_no = f"REF{seq:03d}"
+        closing_str = f"{abs(running_paise) / 100:,.2f}"
 
         if amount_paise_raw >= 0:
             withdrawal_str = ""
@@ -278,7 +292,7 @@ def dict_to_pdf_hdfc_savings(statement: dict[str, object]) -> bytes:
             withdrawal_str = f"{abs(amount_paise_raw) / 100:,.2f}"
             deposit_str = ""
 
-        row = [date_str, narration[:35], "", date_str, withdrawal_str, deposit_str, closing_str]
+        row = [date_str, narration[:35], ref_no, date_str, withdrawal_str, deposit_str, closing_str]
         for i, cell in enumerate(row):
             pdf.cell(col_widths[i], 7, str(cell)[:35], border=1)
         pdf.ln()
