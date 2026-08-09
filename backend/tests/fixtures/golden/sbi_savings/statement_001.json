@@ -1,0 +1,28 @@
+{
+  "bank": "sbi_savings",
+  "account_ref": "SBI_SAV_5280",
+  "period_start": "2026-02-01",
+  "period_end": "2026-02-28",
+  "opening_balance_paise": 500000,
+  "closing_balance_paise": 1070000,
+  "transactions": [
+    {
+      "narration": "UPI CREDIT SALARY",
+      "amount_paise": 1000000,
+      "value_date": "2026-02-05",
+      "running_balance_paise": 1500000
+    },
+    {
+      "narration": "UPI DEBIT SWIGGY",
+      "amount_paise": -350000,
+      "value_date": "2026-02-12",
+      "running_balance_paise": 1150000
+    },
+    {
+      "narration": "UPI DEBIT NETFLIX",
+      "amount_paise": -80000,
+      "value_date": "2026-02-20",
+      "running_balance_paise": 1070000
+    }
+  ]
+}
