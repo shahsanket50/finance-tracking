@@ -64,11 +64,12 @@ class SbiSavingsParser(AbstractParser):
                         transactions.append(txn)
 
         # 4. Closing balance = last transaction's running balance
-        closing_balance_paise = (
-            transactions[-1].running_balance_paise
-            if transactions and transactions[-1].running_balance_paise is not None
-            else 0
-        )
+        if not transactions:
+            raise ValueError("No transactions found in SBI savings statement")
+        last_rb = transactions[-1].running_balance_paise
+        if last_rb is None:
+            raise ValueError("Last transaction has no running balance — cannot determine closing balance")
+        closing_balance_paise = last_rb
 
         return ParsedStatement(
             bank="sbi_savings",
@@ -93,7 +94,7 @@ class SbiSavingsParser(AbstractParser):
 
     def _extract_period(self, text: str) -> tuple[date_type, date_type]:
         """Extract period from 'Account Statement from DD Mon YYYY to DD Mon YYYY'."""
-        match = re.search(r"Account Statement from (.+?) to (.+)", text)
+        match = re.search(r"Account Statement from (\d{1,2} \w{3} \d{4}) to (\d{1,2} \w{3} \d{4})", text)
         if match:
             start = datetime.strptime(match.group(1).strip(), "%d %b %Y").date()
             end = datetime.strptime(match.group(2).strip(), "%d %b %Y").date()
@@ -103,9 +104,9 @@ class SbiSavingsParser(AbstractParser):
     def _extract_opening_balance(self, text: str) -> int:
         """Extract opening balance from 'Balance as on DD Mon YYYY : X,XXX.XX'."""
         match = re.search(r"Balance as on .+? : ([\d,]+\.?\d*)", text)
-        if match:
-            return self._parse_paise(match.group(1))
-        return 0
+        if not match:
+            raise ValueError("Opening balance not found in SBI savings statement text")
+        return self._parse_paise(match.group(1))
 
     # ------------------------------------------------------------------ #
     # Transaction building

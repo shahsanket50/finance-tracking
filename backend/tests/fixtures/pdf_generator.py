@@ -342,7 +342,7 @@ def dict_to_pdf_sbi_savings(statement: dict[str, object]) -> bytes:
         # Opening balance line — uses period_start date
         opening = statement.get("opening_balance_paise", 0)
         assert isinstance(opening, int)
-        opening_str = f"{abs(Decimal(opening)) / 100:,.2f}"
+        opening_str = f"{abs(Decimal(opening)) / Decimal('100'):,.2f}"
         pdf.cell(
             0,
             8,
@@ -386,13 +386,13 @@ def dict_to_pdf_sbi_savings(statement: dict[str, object]) -> bytes:
         # Date cell: "DD Mon\nYYYY" — pdfplumber extracts newline from multi-line table cells
         date_str = value_date.strftime("%d %b\n%Y")
         ref_no = f"REF{seq:06d}"
-        balance_str = f"{abs(Decimal(running_paise)) / 100:,.2f}"
+        balance_str = f"{abs(Decimal(running_paise)) / Decimal('100'):,.2f}"
 
         if amount_paise_raw >= 0:
             debit_str = ""
-            credit_str = f"{Decimal(amount_paise_raw) / 100:,.2f}"
+            credit_str = f"{Decimal(amount_paise_raw) / Decimal('100'):,.2f}"
         else:
-            debit_str = f"{abs(Decimal(amount_paise_raw)) / 100:,.2f}"
+            debit_str = f"{abs(Decimal(amount_paise_raw)) / Decimal('100'):,.2f}"
             credit_str = ""
 
         row = [date_str, date_str, narration[:40], ref_no, debit_str, credit_str, balance_str]
