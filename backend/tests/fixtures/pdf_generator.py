@@ -407,6 +407,115 @@ def dict_to_pdf_sbi_savings(statement: dict[str, object]) -> bytes:
     return bytes(pdf.output())
 
 
+def format_date_slice(d: date) -> str:
+    """Format date as Slice uses: "DD Mon 'YY" (e.g. "05 May '26")."""
+    return d.strftime("%d %b '") + d.strftime("%y")
+
+
+def dict_to_pdf_slice_savings(statement: dict[str, object]) -> bytes:
+    """Convert a statement dict (slice_savings format) to synthetic PDF bytes.
+
+    Layout reproduces Slice Small Finance Bank (NESF) text-based savings statement.
+    Columns (space-separated text): DATE | DETAILS | REF NO. | AMOUNT | BALANCE
+    Header: "slice small finance bank" (can_parse signal, case-insensitive)
+    Header period line: "DD Mon 'YY - DD Mon 'YY"
+    Opening balance line: "Opening balance Rs.X,XXX.XX"  (rupee symbol, Unicode-safe via ASCII)
+    Closing balance line: "Closing balance Rs.X,XXX.XX"
+    Amount format: "Rs.X,XXX.XX" (no sign — direction determined from DETAILS keyword)
+    - Credits: narration must contain "Credit" or "Cr."
+    - Debits: narration must contain "Debit" or "Dr."
+
+    Note: fpdf2's built-in fonts (Helvetica) do not support the ₹ Unicode character.
+    This generator uses "Rs." as the amount prefix. The parser must accept both "Rs." and "₹"
+    prefixes, or be configured to match the generated fixture format.
+    """
+    try:
+        from fpdf import FPDF
+    except ImportError as e:
+        raise ImportError(
+            "fpdf2 is required for PDF generation. Install with: pip install fpdf2"
+        ) from e
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=10)
+
+    period_start = statement.get("period_start")
+    period_end = statement.get("period_end")
+    account_ref = statement.get("account_ref", "")
+    opening = statement.get("opening_balance_paise", 0)
+    closing = statement.get("closing_balance_paise", 0)
+    assert isinstance(opening, int)
+    assert isinstance(closing, int)
+    assert isinstance(account_ref, str)
+
+    def fmt_rupee(amount_paise: int) -> str:
+        """Format paise as 'Rs.X,XXX.XX' — ASCII-safe, parseable by Slice parser."""
+        rupees = Decimal(abs(amount_paise)).quantize(Decimal("0.01")) / 100
+        return f"Rs.{rupees:,.2f}"
+
+    # Bank name — required for can_parse: "slice small finance bank" in text.lower()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "Slice Small Finance Bank", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    pdf.cell(0, 8, "Northeast Small Finance Bank (NESF)", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Account Number : {account_ref}", new_x="LMARGIN", new_y="NEXT")
+
+    # Period line: "DD Mon 'YY - DD Mon 'YY"
+    if isinstance(period_start, date) and isinstance(period_end, date):
+        period_str = f"{format_date_slice(period_start)} - {format_date_slice(period_end)}"
+        pdf.cell(0, 8, f"Statement Period: {period_str}", new_x="LMARGIN", new_y="NEXT")
+
+    # Opening/closing balance lines
+    pdf.cell(
+        0,
+        8,
+        f"Opening balance {fmt_rupee(opening)}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.cell(
+        0,
+        8,
+        f"Closing balance {fmt_rupee(closing)}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+
+    pdf.ln(4)
+
+    # Column header (text-based, no table borders)
+    pdf.set_font("Helvetica", "B", 9)
+    headers_line = "DATE            DETAILS                              REF NO.          AMOUNT        BALANCE"
+    pdf.cell(0, 8, headers_line, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    # Rows — text-based, no table
+    pdf.set_font("Helvetica", size=9)
+    transactions = statement.get("transactions", [])
+    assert isinstance(transactions, list)
+    for seq, txn in enumerate(transactions, start=1):
+        assert isinstance(txn, dict)
+        value_date = txn.get("value_date")
+        narration = str(txn.get("narration", ""))
+        amount_paise_raw = txn.get("amount_paise", 0)
+        running_paise = txn.get("running_balance_paise", 0)
+        assert isinstance(amount_paise_raw, int)
+        assert isinstance(running_paise, int)
+        assert isinstance(value_date, date)
+
+        date_str = format_date_slice(value_date)
+        ref_no = f"REF{seq:09d}"
+        amount_str = fmt_rupee(amount_paise_raw)
+        balance_str = fmt_rupee(running_paise)
+
+        # Pad fields to simulate columnar text layout
+        row_line = f"{date_str:<16}{narration:<37}{ref_no:<17}{amount_str:<14}{balance_str}"
+        pdf.cell(0, 7, row_line[:120], new_x="LMARGIN", new_y="NEXT")
+
+    return bytes(pdf.output())
+
+
 def dict_to_pdf(statement: dict[str, object], bank: str) -> bytes:
     """Dispatch to bank-specific PDF generator.
 
@@ -423,6 +532,7 @@ def dict_to_pdf(statement: dict[str, object], bank: str) -> bytes:
         "sbi_cc": dict_to_pdf_sbi_cc,
         "hdfc_savings": dict_to_pdf_hdfc_savings,
         "sbi_savings": dict_to_pdf_sbi_savings,
+        "slice_savings": dict_to_pdf_slice_savings,
     }
     if bank not in generators:
         raise ValueError(f"Unknown bank: {bank!r}. Known: {list(generators)}")
