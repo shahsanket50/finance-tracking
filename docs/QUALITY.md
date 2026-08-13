@@ -101,6 +101,12 @@ Every module must have a docstring naming the PRD/TRD section it implements (`CL
 ### G17 — Prompt golden tests
 Prompts are versioned code (ADR-005). Changing a prompt file triggers its golden test set. Prompt changes cannot merge without their fixtures passing.
 
+### G18 — Harness parser registration
+Every concrete `AbstractParser` subclass must appear in `_DEFAULT_PARSERS` in `ingestion/dryrun/harness.py`.
+- **Why this gate exists:** Three fully-built, fully-tested parsers (HdfcSavingsParser, SbiSavingsParser, SliceSavingsParser) shipped in Phase 1 without being registered in the harness. They were unreachable from the API and would have been invisible to users. The final whole-branch review caught it — but it was not caught by any per-task review. This gate prevents recurrence.
+- **Enforcement:** A test in `tests/unit/ingestion/test_dryrun_harness.py` must iterate `_DEFAULT_PARSERS` and assert membership by class type. When a new parser is added, updating `_DEFAULT_PARSERS` AND the test is required before the PR can merge.
+- **Signal:** `grep -rn "class.*AbstractParser" ingestion/parsers/` lists all concrete parsers. Compare against `_DEFAULT_PARSERS` in `harness.py`. Any class missing from the list is a blocker.
+
 ---
 
 ## 5. Per-run reporting

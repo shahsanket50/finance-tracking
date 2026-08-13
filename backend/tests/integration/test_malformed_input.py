@@ -26,8 +26,8 @@ def test_malformed_pdf_writes_zero_rows(pg_session: Session, test_user: object) 
         with pytest.raises(Exception):
             dry_run(GARBAGE_BYTES, test_user.id, "TEST_ACC")
 
-    assert pg_session.query(TransactionEvent).count() == 0
-    assert pg_session.query(IngestionEvent).count() == 0
+    assert pg_session.query(TransactionEvent).filter(TransactionEvent.user_id == test_user.id).count() == 0
+    assert pg_session.query(IngestionEvent).filter(IngestionEvent.user_id == test_user.id).count() == 0
 
 
 @pytest.mark.integration
@@ -43,5 +43,5 @@ def test_empty_pdf_bytes_writes_zero_rows(pg_session: Session, test_user: object
         with pytest.raises(Exception):
             dry_run(b"", test_user.id, "TEST_ACC")
 
-    assert pg_session.query(TransactionEvent).count() == 0
-    assert pg_session.query(IngestionEvent).count() == 0
+    assert pg_session.query(TransactionEvent).filter(TransactionEvent.user_id == test_user.id).count() == 0
+    assert pg_session.query(IngestionEvent).filter(IngestionEvent.user_id == test_user.id).count() == 0

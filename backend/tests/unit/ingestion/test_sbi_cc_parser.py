@@ -173,3 +173,39 @@ def test_parse_golden_running_balance_is_none(parsed_statement: ParsedStatement)
 def test_parse_golden_confidence_high(parsed_statement: ParsedStatement) -> None:
     """A successfully matched SBI CC layout must produce confidence >= 8000 basis points."""
     assert parsed_statement.confidence >= 8000
+
+
+# ── NULL ≠ 0 guard ────────────────────────────────────────────────────────────
+
+
+def test_no_previous_balance_row_raises_value_error() -> None:
+    """Text with no 'Previous Balance:' line must raise ValueError, not return 0.
+
+    This tests the IMPORTANT-3 fix: _extract_opening_balance must raise on regex miss.
+    Returning 0 would allow a false balance-check PASS.
+    """
+    from ingestion.parsers.sbi_cc import SbiCcParser
+
+    parser = SbiCcParser()
+    bad_text = (
+        "SBI Credit Card Statement\n"
+        "17 Jan 2026 AMAZON PURCHASE 1,200.00 Dr\n"
+        # No 'Previous Balance:' or 'New Balance:' lines
+    )
+    with pytest.raises(ValueError, match="Could not locate opening balance"):
+        parser._extract_opening_balance(bad_text)
+
+
+def test_no_new_balance_row_raises_value_error() -> None:
+    """Text with no 'New Balance:' line must raise ValueError from _extract_closing_balance."""
+    from ingestion.parsers.sbi_cc import SbiCcParser
+
+    parser = SbiCcParser()
+    bad_text = (
+        "SBI Credit Card Statement\n"
+        "Previous Balance: 3,500.00 Cr\n"
+        "17 Jan 2026 AMAZON PURCHASE 1,200.00 Dr\n"
+        # No 'New Balance:' line
+    )
+    with pytest.raises(ValueError, match="Could not locate closing balance"):
+        parser._extract_closing_balance(bad_text)

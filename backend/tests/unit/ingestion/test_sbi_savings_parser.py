@@ -234,3 +234,26 @@ def test_parse_golden_running_balance_values(parsed_statement: ParsedStatement) 
 def test_parse_golden_confidence_high(parsed_statement: ParsedStatement) -> None:
     """A successfully matched SBI Savings layout must produce confidence >= 8000 basis points."""
     assert parsed_statement.confidence >= 8000
+
+
+# ── NULL ≠ 0 guard ────────────────────────────────────────────────────────────
+
+
+def test_missing_opening_balance_header_raises_value_error() -> None:
+    """Text that passes can_parse but has no 'Balance as on' line must raise ValueError.
+
+    This tests the CRITICAL-2 fix: _extract_opening_balance must raise, never coerce None→0.
+    A missing header line must never produce a false balance-check PASS.
+    """
+    from ingestion.parsers.sbi_savings import SbiSavingsParser
+
+    parser = SbiSavingsParser()
+    bad_text = (
+        "Account Statement from 01 Jan 2026 to 28 Feb 2026\n"
+        "Txn Date Value Date Description Ref No. Debit Credit Balance\n"
+        "05 Jan 2026 05 Jan 2026 NEFT CREDIT 1000.00 1000.00\n"
+        # No 'Balance as on' line here
+    )
+    assert parser.can_parse(bad_text), "Precondition: text must pass can_parse"
+    with pytest.raises(ValueError, match="Opening balance not found"):
+        parser._extract_opening_balance(bad_text)

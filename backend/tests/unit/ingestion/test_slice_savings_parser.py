@@ -246,3 +246,31 @@ def test_parse_golden_running_balance_values(parsed_statement: ParsedStatement) 
 def test_parse_golden_confidence_high(parsed_statement: ParsedStatement) -> None:
     """A successfully matched Slice Savings layout must produce confidence >= 8000 basis points."""
     assert parsed_statement.confidence >= 8000
+
+
+# ── ₹ prefix regex (bypasses fpdf2 rendering limitation) ─────────────────────
+
+
+def test_real_rupee_prefix_opening_balance_parsed_correctly() -> None:
+    """_extract_opening_balance must handle a literal ₹ prefix, not just Rs.
+
+    fpdf2's built-in Helvetica cannot render ₹ so synthetic PDFs use Rs.
+    Real Slice statements use ₹. This test feeds ₹-prefixed text directly
+    into the parser method, bypassing PDF rendering entirely.
+    """
+    from ingestion.parsers.slice_savings import SliceSavingsParser
+
+    parser = SliceSavingsParser()
+    text_with_rupee = "Opening balance ₹1,234.56\nSome other line"
+    result = parser._extract_opening_balance(text_with_rupee)
+    assert result == 123456
+
+
+def test_real_rupee_prefix_closing_balance_parsed_correctly() -> None:
+    """_extract_closing_balance must handle a literal ₹ prefix."""
+    from ingestion.parsers.slice_savings import SliceSavingsParser
+
+    parser = SliceSavingsParser()
+    text_with_rupee = "Closing balance ₹9,876.00\nSome other line"
+    result = parser._extract_closing_balance(text_with_rupee)
+    assert result == 987600

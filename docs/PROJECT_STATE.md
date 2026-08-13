@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-08
-**Current phase:** Phase 1 — Ingestion & Trust
-**Overall status:** Phase 1 IN PROGRESS — core ingestion layer complete; integration tests complete; Phase 1 exit gate pending (acceptance checklist + docs + Dynamic Parser Builder design)
+**Last updated:** 2026-08-13
+**Current phase:** Phase 1 — Ingestion & Trust → CLOSED
+**Overall status:** Phase 1 CLOSED — 8/8 integration tests passing against real Docker containers (Postgres + Redis testcontainers); 212 unit + property tests passing; all acceptance criteria met; G18 gate added; PR #4 open for merge
 
 ---
 
@@ -73,11 +73,13 @@ All 6 blocking gaps were resolved in the journey walkthrough (see "User Stories 
 
 ---
 
-## Current phase: Phase 1 — Ingestion & Trust
+## Phase 1 — Ingestion & Trust [CLOSED 2026-08-13]
 
 **Goal:** PDF bank statement → dry-run preview → user confirms → ledger events written. Nothing writes before Confirm.
 
 **Exit criterion:** Synthetic PDF parses through dry-run harness, balance check passes, every parsed transaction appears in the preview, and `transaction_events` is empty until Confirm fires. All acceptance checklist items checked.
+
+**Exit gate result:** 8/8 integration tests passed against real Docker testcontainers (Postgres + Redis). 212 unit + property tests passing. G18 parser-registration gate added. PR #4 open.
 
 ### Phase 1 task board
 
@@ -138,6 +140,7 @@ _None currently blocking Phase 1 tasks._
 | AI-written code drifting from spec | Golden dataset + invariant tests + spec-traceability rule in `CLAUDE.md` | Mitigated by design |
 | `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. | Open — Phase 4 blocker |
 | Phase 0 critical-module tests not independently authored | Tests for `core/hashing/`, `core/events/`, `core/projections/` were co-authored with implementation (known gap). Re-authoring session needed before Phase 2 closes. | Open — Phase 2 gate requirement |
+| Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
 
 ---
 

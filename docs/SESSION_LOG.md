@@ -6,6 +6,38 @@
 
 ---
 
+## 2026-08-13 — Session 010: Phase 1 hard close — integration tests run for real + gate hardening
+
+**Phase:** 1 — Ingestion & Trust → CLOSED
+**Participants:** Sanket + Claude
+
+### Done
+
+- **Ran 8 integration tests against real Docker testcontainers** (psycopg[binary] installed to fix missing libpq; testcontainers Postgres + Redis). All 8 pass: `test_idempotent_ingest`, `test_malformed_input` (user-scoped count fix), `test_session_expiry`, `test_password_protected`.
+- **Fixed `test_malformed_input.py`**: `count() == 0` was checking the whole table; changed to `.filter(TransactionEvent.user_id == test_user.id).count() == 0`. Real bug — prior committed tests had left rows in the shared DB.
+- **Added 5 negative tests** (NULL≠0 guard):
+  - `test_sbi_savings_parser.py`: `test_missing_opening_balance_header_raises_value_error`
+  - `test_hdfc_cc_parser.py`: `test_no_previous_balance_row_raises_value_error`, `test_no_new_balance_row_raises_value_error`
+  - `test_sbi_cc_parser.py`: `test_no_previous_balance_row_raises_value_error`, `test_no_new_balance_row_raises_value_error`
+- **Added 2 ₹-prefix regex tests** in `test_slice_savings_parser.py`: `test_real_rupee_prefix_opening_balance_parsed_correctly`, `test_real_rupee_prefix_closing_balance_parsed_correctly` — feed literal ₹ directly into parser methods, bypassing fpdf2 rendering limitation.
+- **Added G18 gate** (`docs/QUALITY.md`): permanent gate requiring every `AbstractParser` subclass in `_DEFAULT_PARSERS`. Enforcement test in `test_dryrun_harness.py::test_all_concrete_parsers_registered_in_default_parsers`.
+- **Added Slice ref-number open item** to `docs/PROJECT_STATE.md` standing risks: `\S+` regex not confirmed against a real Slice statement.
+- **Marked Phase 1 CLOSED** in `docs/PROJECT_STATE.md`.
+- Total: 212 unit + property tests passing.
+
+### Decisions
+
+- User-scoped filter on malformed-input assertions is correct: `dry_run()` never writes to DB, so rows for a fresh `test_user` are always 0 regardless of what other tests committed.
+- `setex` deprecation warning left in place — Redis still supports it; fixing is cosmetic and not blocking.
+
+### Next
+
+- Phase 2: Dynamic Parser Builder (LLM fallback). Plan at `docs/superpowers/plans/2026-08-08-dynamic-parser-builder.md`.
+- Fix `compute_occurrence_index()` arg-order bug in Phase 2 plan before implementation begins.
+- Validate Slice ref-number regex against a real Slice statement before Phase 2 Slice work.
+
+---
+
 ## 2026-08-08 — Session 009: Phase 1 closure — savings parsers + integration tests
 
 **Phase:** 1 — Ingestion & Trust
