@@ -34,6 +34,7 @@ dev = [
     "defusedxml>=0.7",                  # Safe XML parsing for coverage reports
     "pytest-json-report>=1.5",          # JSON test results for quality-report bot
     "fpdf2>=2.8",
+    "pikepdf>=9.0",
 ]
 
 [tool.pytest.ini_options]
