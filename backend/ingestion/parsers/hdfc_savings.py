@@ -67,10 +67,17 @@ class HdfcSavingsParser(AbstractParser):
         # 4. Derive opening and closing balances
         if transactions:
             first = transactions[0]
-            assert first.running_balance_paise is not None
+            if first.running_balance_paise is None:
+                raise ValueError(
+                    "First transaction missing running_balance_paise; cannot derive opening balance"
+                )
             opening_balance_paise = first.running_balance_paise - first.amount_paise
             rb = transactions[-1].running_balance_paise
-            closing_balance_paise = rb if rb is not None else 0
+            if rb is None:
+                raise ValueError(
+                    "Last transaction missing running_balance_paise; closing balance unknown"
+                )
+            closing_balance_paise = rb
         else:
             opening_balance_paise = 0
             closing_balance_paise = 0

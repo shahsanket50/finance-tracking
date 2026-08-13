@@ -13,10 +13,19 @@ from ingestion.dryrun.session import DryRunSession, save_session
 from ingestion.fetchers.pdf_reader import open_pdf
 from ingestion.parsers.base import AbstractParser
 from ingestion.parsers.hdfc_cc import HdfcCcParser
+from ingestion.parsers.hdfc_savings import HdfcSavingsParser
 from ingestion.parsers.sbi_cc import SbiCcParser
+from ingestion.parsers.sbi_savings import SbiSavingsParser
+from ingestion.parsers.slice_savings import SliceSavingsParser
 from ingestion.validators.balance_check import validate_balance
 
-_DEFAULT_PARSERS: list[AbstractParser] = [HdfcCcParser(), SbiCcParser()]
+_DEFAULT_PARSERS: list[AbstractParser] = [
+    HdfcCcParser(),
+    SbiCcParser(),
+    HdfcSavingsParser(),
+    SbiSavingsParser(),
+    SliceSavingsParser(),
+]
 
 
 def get_redis_client() -> Any:
