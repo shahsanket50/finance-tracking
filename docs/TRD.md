@@ -539,3 +539,122 @@ The layers are ordered by how independent they are from the build. That independ
 - `QUALITY.md` gains the adversarial-review checklist as a wave-gate step.
 - `PROJECT_STATE.md` wave-gates gain an "adversarial review: pass/fail" line.
 - Tax constants carry `# UNVERIFIED — CA review pending` until the Phase 4 gate clears them.
+---
+
+# 12. Dynamic Parser Builder — LLM Fallback for Unrecognised Layouts
+
+**Phase scope: Phase 2.** Nothing in this section is implemented in Phase 1. Phase 1 closes with five hard-coded template parsers. The Dynamic Parser Builder is the safety valve for new bank layouts that arrive before a template is written.
+
+## 12.1 Problem statement
+
+Template parsers (`HdfcCcParser`, `SbiCcParser`, `HdfcSavingsParser`, `SbiSavingsParser`, `SliceSavingsParser`) cover the five known layouts. A sixth bank — or a layout change to an existing bank — produces `ValueError("No parser found for this PDF")`. Without a fallback, the system is fully unusable for that statement until a developer writes a new parser.
+
+The Dynamic Parser Builder provides a low-confidence path that works for any PDF layout by asking an LLM to extract the data directly, while the system logs the gap and queues a template-authoring request.
+
+## 12.2 Architecture
+
+### Decision boundary
+
+The LLM extraction result is a **decision** (TRD §9.2): it depends on which model ran, which prompt version ran, and the state of the PDF at the time. It must be recorded as an event (`IngestionEvent.source_detail = {"parser": "llm_fallback", "model": "...", "prompt_version": "..."}`) so replay is deterministic. Never re-run the LLM call on replay; use the stored decision.
+
+### Harness integration
+
+The dry-run harness (`ingestion/dryrun/harness.py`) tries template parsers first. If none match, it instantiates `LlmFallbackParser` and calls `parse()`. The fallback is transparent to `confirm()` — it returns a standard `ParsedStatement`, just with `confidence < 7500` (the LLM threshold).
+
+```
+template parsers → can_parse() → first match → parse()
+              ↓ (no match)
+        LlmFallbackParser.parse()
+              ↓
+        confidence = 6000 bps (LLM fallback)
+              ↓ (< 7500 threshold)
+        DryRunSession with balance_check result
+        User sees low-confidence warning in preview
+        Confirm requires explicit acknowledgement
+```
+
+### Adapter layer
+
+All LLM calls go through `adapters/llm/base.py` (interface) and a concrete adapter per provider (`adapters/llm/claude.py`). The adapter contract:
+
+```python
+class LlmAdapter(Protocol):
+    def complete(
+        self,
+        prompt: str,
+        response_schema: type[BaseModel],
+        model: str,
+        max_tokens: int = 4096,
+    ) -> BaseModel: ...
+```
+
+Model routing: LLM fallback is low-volume / high-stakes → use the strongest available model (configured via `LLM_FALLBACK_MODEL` env var, default `claude-opus-4-7`). Cheap models have higher extraction error rates on unfamiliar layouts.
+
+## 12.3 Structured output schema
+
+The LLM returns a Pydantic model, never free text:
+
+```python
+class LlmParsedTransaction(BaseModel):
+    value_date: date
+    narration: str
+    amount_paise: int          # signed: debits negative, credits positive
+    running_balance_paise: int | None
+
+class LlmParsedStatement(BaseModel):
+    bank: str                  # LLM's best guess (e.g. "axis_bank")
+    account_ref: str           # last 4 digits with prefix e.g. "AXIS_XXXX"
+    period_start: date
+    period_end: date
+    opening_balance_paise: int
+    closing_balance_paise: int
+    transactions: list[LlmParsedTransaction]
+    extraction_notes: str      # LLM's own confidence notes
+```
+
+`LlmFallbackParser.parse()` converts `LlmParsedStatement` to `ParsedStatement`, computing `canonical_narration`, `occurrence_index`, and `idempotency_hash` via the shared `core.hashing.hash` module (same as all template parsers — no duplication).
+
+## 12.4 Confidence and gates
+
+| Parser type | Confidence (basis points) | Confirm behaviour |
+|---|---|---|
+| Template parser | 9000 | Standard confirm flow |
+| LLM fallback | 6000 | User sees low-confidence warning; confirm requires explicit "I've verified this" tick |
+
+Invariant: confidence is a property of `DryRunSession.statement.confidence`. The dry-run preview always shows it. Below 7500 (configurable in settings), the UI disables one-click confirm and requires the acknowledgement field.
+
+## 12.5 Parser promotion path (Phase 3+)
+
+When the LLM successfully parses N statements of the same `bank` value (configurable, default 3), the system creates a `parser_promotion_queue` record. A developer reviews the LLM's extractions, writes a template parser, and the promotion record is cleared. This converts a fallback path into a permanent template parser — the long tail shrinks over time.
+
+This is a **Phase 3+ feature**. The queue table and review UI are out of Phase 2 scope.
+
+## 12.6 Prompt engineering requirements
+
+The fallback prompt must:
+1. Show the full extracted text from `extract_text()` for all pages (truncated if > 8000 tokens).
+2. State the target schema explicitly (field names, types, sign convention).
+3. Instruct the model to set `running_balance_paise = null` if the column is absent — never to invent a value.
+4. Instruct the model to return `opening_balance_paise = 0` only if the statement explicitly states zero; otherwise return `null` (which will produce `BalanceCheckResult.FAIL`).
+5. Include the balance-check formula so the LLM can self-verify before returning.
+
+Prompts live in `ingestion/parsers/prompts/llm_fallback_v1.txt`. Prompt version is stored in `IngestionEvent.source_detail`. A prompt change bumps the version — never overwrites.
+
+## 12.7 Test requirements
+
+- Unit: mock the LLM adapter; verify `LlmFallbackParser` produces valid `ParsedStatement` from a known response.
+- Golden: at least one LLM-fallback golden fixture per wave (a bank layout with no template parser). LLM response is pre-recorded — no live call in CI.
+- Integration: `test_llm_fallback_pipeline.py` — verify the full dry_run → confirm path with a mocked adapter.
+- Property: `LlmParsedTransaction.amount_paise` is always an `int`, never a float (the LLM tends to return `1234.56` — the schema must coerce or reject).
+
+## 12.8 Phase 2 deliverables
+
+| Deliverable | File |
+|---|---|
+| LLM adapter interface | `backend/adapters/llm/base.py` |
+| Claude adapter | `backend/adapters/llm/claude.py` |
+| LLM fallback parser | `backend/ingestion/parsers/llm_fallback.py` |
+| Fallback prompt v1 | `backend/ingestion/parsers/prompts/llm_fallback_v1.txt` |
+| Harness update | extend `_DEFAULT_PARSERS` fallback in `harness.py` |
+| Unit tests | `backend/tests/unit/ingestion/test_llm_fallback_parser.py` |
+| Integration test | `backend/tests/integration/test_llm_fallback_pipeline.py` |
