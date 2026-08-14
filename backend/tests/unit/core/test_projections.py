@@ -93,3 +93,89 @@ def test_build_projection_from_events_counts() -> None:
 def test_build_projection_unknown_type_raises() -> None:
     with pytest.raises(ValueError, match="Unknown projection type"):
         build_projection_from_events([], projection_type="nonexistent")
+
+
+# ── Replay determinism, snapshots, decisions vs derivations (C-1, C-2, C-3) ───
+
+
+def test_build_projection_from_events_is_pure() -> None:
+    """build_projection_from_events is a pure function: same input → byte-identical output (I3)."""
+    import json
+
+    from core.events.store import Event
+
+    user_id = uuid.uuid4()
+    events = [
+        Event(
+            id=uuid.uuid4(),
+            seq=1,
+            event_version=1,
+            event_type="TransactionIngested",
+            user_id=user_id,
+            aggregate_id="ACC",
+            payload={"narration": "coffee", "amount": "-500"},
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    ]
+
+    result_a = build_projection_from_events(events)
+    result_b = build_projection_from_events(events)
+
+    assert json.dumps(result_a, sort_keys=True) == json.dumps(result_b, sort_keys=True)
+
+
+def test_load_snapshot_corrupt_returns_none() -> None:
+    """Corrupt snapshot must return None so callers trigger a full rebuild, not silently use empty state.
+
+    Current load_snapshot returns ({}, last_seq) for unexpected data types — a bug.
+    A caller receiving ({}, 500) treats it as a valid snapshot, skipping events 0–500
+    and producing a wrong projection.
+    """
+    from unittest.mock import MagicMock
+
+    from core.projections.snapshot import load_snapshot
+
+    session = MagicMock()
+    # Raw column returns an integer — neither str nor dict (simulates a corrupt/migrated row)
+    session.execute.return_value.first.return_value = (42, 500)
+
+    result = load_snapshot(session, uuid.uuid4(), "events_list")
+
+    # EXPECTED TO FAIL against current code: load_snapshot returns ({}, 500) not None.
+    # Must return None so the caller detects corruption and rebuilds from seq=0.
+    assert result is None, "Corrupt snapshot must return None, not ({}, last_seq)"
+
+
+def test_resolver_decisions_read_from_events_not_recomputed() -> None:
+    """MarkedInternalTransfer events are read from the log; resolver is never re-invoked (TRD §9.2).
+
+    build_projection_from_events must not call any matching/resolver logic —
+    the decision is already recorded in the event payload.
+    Forward-compatibility guard for Phase 2 expense-totals projection.
+    """
+    from core.events.store import Event
+
+    user_id = uuid.uuid4()
+    transfer_event = Event(
+        id=uuid.uuid4(),
+        seq=1,
+        event_version=1,
+        event_type="MarkedInternalTransfer",
+        user_id=user_id,
+        aggregate_id="HDFC_SAVINGS_001",
+        payload={
+            "debit_hash": "deadbeef",
+            "credit_hash": "cafebabe",
+            "matched_by": "resolver_v1",
+            "confidence": 9500,
+        },
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    # Must not raise — no resolver is invoked during projection replay
+    result = build_projection_from_events([transfer_event])
+
+    events_out = result["events"]
+    assert isinstance(events_out, list)
+    assert len(events_out) == 1
+    assert events_out[0]["event_type"] == "MarkedInternalTransfer"  # type: ignore[index]

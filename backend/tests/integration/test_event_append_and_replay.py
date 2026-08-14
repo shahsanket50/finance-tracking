@@ -138,3 +138,49 @@ def test_payload_round_trip(
     matching = [e for e in events if e.aggregate_id == "ACC008"]
     assert len(matching) >= 1
     assert matching[-1].payload == original_payload
+
+
+@pytest.mark.integration
+def test_sequence_is_globally_monotonic(
+    pg_session: Session,
+    test_user: User,
+    test_ingestion_event: IngestionEvent,
+) -> None:
+    """Sequence numbers are global across aggregates, not reset per-aggregate (TRD §9.1)."""
+    h1 = compute_idempotency_hash("AGG_ALPHA", date(2026, 3, 1), -10_000, "txn alpha", 0)
+    h2 = compute_idempotency_hash("AGG_BETA", date(2026, 3, 2), -20_000, "txn beta", 0)
+
+    seq_a = append_event(
+        pg_session,
+        user_id=test_user.id,
+        event_type="TransactionIngested",
+        aggregate_id="AGG_ALPHA",
+        payload={"narration": "txn alpha"},
+        value_date=date(2026, 3, 1),
+        amount_paise=-10_000,
+        idempotency_hash=h1,
+        transaction_type="expense",
+        narration="txn alpha",
+        actor="system",
+        ingestion_event_id=test_ingestion_event.id,
+    )
+    pg_session.flush()
+
+    seq_b = append_event(
+        pg_session,
+        user_id=test_user.id,
+        event_type="TransactionIngested",
+        aggregate_id="AGG_BETA",
+        payload={"narration": "txn beta"},
+        value_date=date(2026, 3, 2),
+        amount_paise=-20_000,
+        idempotency_hash=h2,
+        transaction_type="expense",
+        narration="txn beta",
+        actor="system",
+        ingestion_event_id=test_ingestion_event.id,
+    )
+    pg_session.flush()
+
+    # Sequence must be globally monotonic — different aggregates share the same counter
+    assert seq_b > seq_a, "seq must be globally increasing, not reset per aggregate"

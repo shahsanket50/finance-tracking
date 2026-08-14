@@ -2,6 +2,8 @@
 
 from datetime import date
 
+import pytest
+
 from core.hashing.hash import (
     canonicalize_narration,
     compute_idempotency_hash,
@@ -109,3 +111,27 @@ def test_cross_parser_occurrence_index_stub() -> None:
     ]
     # Third identical entry → index 2, regardless of which parser built the list
     assert compute_occurrence_index(txns, "ACC", date(2026, 1, 1), -100, "COFFEE") == 2
+
+
+# ── Field-integrity guards (A-2, A-3) ─────────────────────────────────────────
+
+
+def test_hash_field_boundary_collision_resistance() -> None:
+    """Pipe separator prevents narration/occurrence_index field-boundary collisions.
+
+    Without a separator, "SWIGGY" + "10" and "SWIGGY1" + "0" concatenate to the
+    same raw string, yielding the same hash for two distinct records.
+    """
+    h1 = compute_idempotency_hash("ACC", date(2026, 1, 1), -50000, "SWIGGY", 10)
+    h2 = compute_idempotency_hash("ACC", date(2026, 1, 1), -50000, "SWIGGY1", 0)
+    assert h1 != h2
+
+
+def test_hash_rejects_float_amount() -> None:
+    """amount_paise must be int; float silently produces the wrong hash string (TRD §10).
+
+    250.0 formats as "250.0" in an f-string, not "250" — a different hash with no
+    error raised. The function must raise TypeError rather than accept float input.
+    """
+    with pytest.raises(TypeError):
+        compute_idempotency_hash("ACC", date(2026, 1, 1), 250.0, "SWIGGY", 0)  # type: ignore[arg-type]
