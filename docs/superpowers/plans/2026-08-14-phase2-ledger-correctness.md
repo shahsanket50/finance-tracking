@@ -1310,4 +1310,64 @@ def test_non_transfer_transaction_still_counted(pg_session, test_ingestion_event
 
 ### Task 5: Wave 5 — Full test suite + gate + Phase 2 close
 
-*To be detailed before Wave 5 begins.*
+**What this does:** Runs the complete test suite (unit + integration + property), fixes the one known minor gap from Wave 1 (test_payloads_are_frozen using bare `Exception`), updates PROJECT_STATE.md, and closes Phase 2.
+
+**Files:**
+- Modify: `backend/tests/unit/processing/test_resolver_events.py` — fix `test_payloads_are_frozen` to catch `ValidationError` not bare `Exception`
+- Modify: `docs/PROJECT_STATE.md` — update Phase 2 section
+
+**Steps:**
+
+- [ ] **Step 1:** Fix `test_payloads_are_frozen` in `test_resolver_events.py`:
+  ```python
+  # Before:
+  with pytest.raises(Exception):
+      p.confidence = 5000
+  # After:
+  from pydantic import ValidationError
+  ...
+  with pytest.raises(ValidationError):
+      p.confidence = 5000
+  ```
+  `ValidationError` is already imported at the top of that test file.
+
+- [ ] **Step 2:** Run full unit test suite:
+  ```bash
+  cd backend && PYTHONPATH=. python3 -m pytest tests/unit/ -v --tb=short
+  ```
+  Expected: all pass.
+
+- [ ] **Step 3:** Run full integration test suite (requires Docker):
+  ```bash
+  cd backend && PYTHONPATH=. python3 -m pytest tests/integration/ -v -m integration --tb=short
+  ```
+  Expected: all pass.
+
+- [ ] **Step 4:** Run mypy on all Phase 2 modules:
+  ```bash
+  cd backend && python3 -m mypy --config-file pyproject.toml --explicit-package-bases processing/ core/projections/ -v
+  ```
+  Expected: 0 errors.
+
+- [ ] **Step 5:** Update `docs/PROJECT_STATE.md` Phase 2 section — mark exit criterion items as checked, update status line.
+
+- [ ] **Step 6:** Append to `docs/SESSION_LOG.md` a closing entry for Phase 2 Wave 5.
+
+- [ ] **Step 7:** Commit:
+  ```bash
+  git commit -m "Wave 5: Phase 2 close — fix frozen-payload test + update docs
+
+  Fix test_payloads_are_frozen to assert ValidationError (not bare Exception).
+  Flagged by Wave 1 task review (Minor finding). 
+
+  All Phase 2 acceptance criteria met:
+  - MarkedInternalTransfer/CCPayment/FDBooking/Reversal events in schema
+  - Resolver records decisions as events, never re-runs at projection time
+  - Match windows as named config constants (calibration risk tracked)
+  - Overlapping statements → UniqueConstraint prevents duplicate events
+  - Audit view (Level B seen/counted ledger) passes for transfer fixture
+  - Transfer/CC-payment/FD-booking/Reversal excluded from expense totals (I4)
+  - F-9 closed: Phase 0 bugs A-3 + C-2 fixed; independently-authored tests pass
+
+  PROJECT_STATE.md updated. SESSION_LOG.md entry appended."
+  ```
