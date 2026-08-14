@@ -3,13 +3,10 @@
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.config import (
     RESOLVER_CONFIDENCE_THRESHOLD,
-    TRANSFER_MATCH_WINDOW_DAYS,
+    REVERSAL_MATCH_WINDOW_DAYS,
 )
 from processing.resolver.events import MarkedReversalPayload
 from processing.resolver.matching import score_candidate_pair
-
-# Reversals use the same window as transfers — a reversal typically posts within days.
-_REVERSAL_WINDOW_DAYS = TRANSFER_MATCH_WINDOW_DAYS
 
 
 def find_matches(candidates: list[CandidateTxn]) -> list[MarkedReversalPayload]:
@@ -36,7 +33,7 @@ def find_matches(candidates: list[CandidateTxn]) -> list[MarkedReversalPayload]:
             confidence = score_candidate_pair(
                 debit.amount_paise, debit.value_date,
                 credit.amount_paise, credit.value_date,
-                _REVERSAL_WINDOW_DAYS,
+                REVERSAL_MATCH_WINDOW_DAYS,
             )
             if confidence >= RESOLVER_CONFIDENCE_THRESHOLD:
                 results.append(MarkedReversalPayload(

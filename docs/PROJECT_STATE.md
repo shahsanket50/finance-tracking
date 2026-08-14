@@ -55,7 +55,7 @@ All 6 blocking gaps were resolved in the journey walkthrough (see "User Stories 
 
 | Item | Needs | Blocks |
 |---|---|---|
-| Match-window tolerance calibration | Real statement data to tune | Phase 2 |
+| Match-window tolerance calibration | Real statement data to tune | Phase 3 |
 | Confidence/assumption trail UI | Design work (mechanism decided) | Phase 4 |
 | Form 16 parser spec | TRACES Part A/B structure spec | Phase 4 |
 
@@ -197,6 +197,7 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | AI-written code drifting from spec | Golden dataset + invariant tests + spec-traceability rule in `CLAUDE.md` | Mitigated by design |
 | `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. | Open — Phase 4 blocker |
 | Phase 0 critical-module tests not independently authored | F-9: Re-authoring complete (2026-08-14). 10 new tests written; 2 Phase 0 bugs confirmed (A-3 float hash, C-2 corrupt snapshot). Both bugs fixed in Phase 2. | **CLOSED** — fixed A-3 + C-2; all independently-authored tests pass |
+| Confidence formula constants not validated against real data | `CONFIDENCE_BASE_BP` (9000), `CONFIDENCE_SAME_DAY_BONUS_BP` (500), `CONFIDENCE_PER_DAY_PENALTY_BP` (200) are working assumptions in `config.py`. The formula produces scores that gate on `RESOLVER_CONFIDENCE_THRESHOLD` (8500), meaning 3-day matches (8400 bp) are rejected. Calibrate before live data ingestion. | Open — Phase 3 |
 | Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
 
 ---

@@ -6,6 +6,12 @@ changes (window, scoring formula) are made here once, not in four places.
 
 from datetime import date
 
+from processing.resolver.config import (
+    CONFIDENCE_BASE_BP,
+    CONFIDENCE_PER_DAY_PENALTY_BP,
+    CONFIDENCE_SAME_DAY_BONUS_BP,
+)
+
 
 def score_candidate_pair(
     amount_a_paise: int,
@@ -35,5 +41,7 @@ def score_candidate_pair(
     day_diff = abs((date_b - date_a).days)
     if day_diff > window_days:
         return 0
-    confidence = 9000 + (500 if day_diff == 0 else -200 * day_diff)
+    confidence = CONFIDENCE_BASE_BP + (
+        CONFIDENCE_SAME_DAY_BONUS_BP if day_diff == 0 else -CONFIDENCE_PER_DAY_PENALTY_BP * day_diff
+    )
     return max(0, min(10000, confidence))
