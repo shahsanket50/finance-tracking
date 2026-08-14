@@ -199,3 +199,25 @@ def test_dry_run_unknown_pdf_raises() -> None:
     with patch("ingestion.dryrun.harness.get_redis_client", return_value=mock_redis):
         with pytest.raises(Exception, match=r"."):
             dry_run(b"not a pdf", _TEST_USER_ID, "X")
+
+
+# ── G18 — harness parser registration ────────────────────────────────────────
+
+
+def test_all_concrete_parsers_registered_in_default_parsers() -> None:
+    """Every concrete AbstractParser subclass must appear in _DEFAULT_PARSERS (G18).
+
+    When a new parser is added, updating _DEFAULT_PARSERS is required before merge.
+    Rationale: three parsers shipped Phase 1 unregistered — this test prevents recurrence.
+    """
+    from ingestion.dryrun.harness import _DEFAULT_PARSERS
+    from ingestion.parsers.hdfc_cc import HdfcCcParser
+    from ingestion.parsers.hdfc_savings import HdfcSavingsParser
+    from ingestion.parsers.sbi_cc import SbiCcParser
+    from ingestion.parsers.sbi_savings import SbiSavingsParser
+    from ingestion.parsers.slice_savings import SliceSavingsParser
+
+    registered_types = {type(p) for p in _DEFAULT_PARSERS}
+    required = {HdfcCcParser, SbiCcParser, HdfcSavingsParser, SbiSavingsParser, SliceSavingsParser}
+    missing = required - registered_types
+    assert not missing, f"Parsers not registered in _DEFAULT_PARSERS: {missing}"

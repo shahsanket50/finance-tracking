@@ -6,6 +6,103 @@
 
 ---
 
+## 2026-08-13 — Session 010: Phase 1 hard close — integration tests run for real + gate hardening
+
+**Phase:** 1 — Ingestion & Trust → CLOSED
+**Participants:** Sanket + Claude
+
+### Done
+
+- **Ran 8 integration tests against real Docker testcontainers** (psycopg[binary] installed to fix missing libpq; testcontainers Postgres + Redis). All 8 pass: `test_idempotent_ingest`, `test_malformed_input` (user-scoped count fix), `test_session_expiry`, `test_password_protected`.
+- **Fixed `test_malformed_input.py`**: `count() == 0` was checking the whole table; changed to `.filter(TransactionEvent.user_id == test_user.id).count() == 0`. Real bug — prior committed tests had left rows in the shared DB.
+- **Added 5 negative tests** (NULL≠0 guard):
+  - `test_sbi_savings_parser.py`: `test_missing_opening_balance_header_raises_value_error`
+  - `test_hdfc_cc_parser.py`: `test_no_previous_balance_row_raises_value_error`, `test_no_new_balance_row_raises_value_error`
+  - `test_sbi_cc_parser.py`: `test_no_previous_balance_row_raises_value_error`, `test_no_new_balance_row_raises_value_error`
+- **Added 2 ₹-prefix regex tests** in `test_slice_savings_parser.py`: `test_real_rupee_prefix_opening_balance_parsed_correctly`, `test_real_rupee_prefix_closing_balance_parsed_correctly` — feed literal ₹ directly into parser methods, bypassing fpdf2 rendering limitation.
+- **Added G18 gate** (`docs/QUALITY.md`): permanent gate requiring every `AbstractParser` subclass in `_DEFAULT_PARSERS`. Enforcement test in `test_dryrun_harness.py::test_all_concrete_parsers_registered_in_default_parsers`.
+- **Added Slice ref-number open item** to `docs/PROJECT_STATE.md` standing risks: `\S+` regex not confirmed against a real Slice statement.
+- **Marked Phase 1 CLOSED** in `docs/PROJECT_STATE.md`.
+- Total: 212 unit + property tests passing.
+
+### Decisions
+
+- User-scoped filter on malformed-input assertions is correct: `dry_run()` never writes to DB, so rows for a fresh `test_user` are always 0 regardless of what other tests committed.
+- `setex` deprecation warning left in place — Redis still supports it; fixing is cosmetic and not blocking.
+
+### Next
+
+- Phase 2: Dynamic Parser Builder (LLM fallback). Plan at `docs/superpowers/plans/2026-08-08-dynamic-parser-builder.md`.
+- Fix `compute_occurrence_index()` arg-order bug in Phase 2 plan before implementation begins.
+- Validate Slice ref-number regex against a real Slice statement before Phase 2 Slice work.
+
+---
+
+## 2026-08-08 — Session 009: Phase 1 closure — savings parsers + integration tests
+
+**Phase:** 1 — Ingestion & Trust
+**Participants:** Sanket + Claude
+
+### Done
+
+**Three new savings parsers (T1–T6):**
+- `backend/ingestion/parsers/hdfc_savings.py` — HdfcSavingsParser using `extract_words()` + x-position bounding box column detection; `running_balance_paise` non-None for all transactions; opening balance derived as `first.running_balance_paise - first.amount_paise`; 15 tests pass.
+- `backend/ingestion/parsers/sbi_savings.py` — SbiSavingsParser using `extract_tables()`; opening balance from "Balance as on" header regex; raises `ValueError` on missing opening balance or empty transactions; 15 tests pass.
+- `backend/ingestion/parsers/slice_savings.py` — SliceSavingsParser using line regex with `\S+` ref number (handles alphanumeric synthetic refs); handles `₹` and `Rs.` prefixes; apostrophe date format `"DD Mon 'YY"` via `str.replace("'", "20")`; 15 tests pass.
+
+**Golden fixtures for all three parsers:**
+- `backend/tests/fixtures/golden/hdfc_savings/statement_001.{json,pdf}` — 4 transactions, opening 10 000 000 paise
+- `backend/tests/fixtures/golden/sbi_savings/statement_001.{json,pdf}` — 3 transactions, opening 500 000 paise
+- `backend/tests/fixtures/golden/slice_savings/statement_001.{json,pdf}` — 3 transactions, opening 100 000 paise
+
+**`backend/tests/fixtures/pdf_generator.py`** — added `dict_to_pdf_hdfc_savings()`, `dict_to_pdf_sbi_savings()`, `dict_to_pdf_slice_savings()`; all use `Decimal` arithmetic (no raw float division).
+
+**Four integration tests (T7–T10):**
+- `test_idempotent_ingest.py` — two scenarios: confirming same statement twice → IntegrityError; genuine same-day duplicate → both rows with occurrence_index 0 and 1.
+- `test_malformed_input.py` — garbage bytes + empty bytes → exception from harness → zero DB rows.
+- `test_session_expiry.py` — real Redis testcontainer TTL=1 second + `time.sleep(2)` → real key eviction confirmed before calling confirm() → `SessionExpiredError` raised → zero DB rows.
+- `test_password_protected.py` — pikepdf AES-128 in-memory fixture; correct password → full parse + PASS balance check; missing password → `PasswordRequiredError`; wrong password → `PasswordIncorrectError`.
+
+**`backend/tests/integration/conftest.py`** — added `redis_container` (session-scoped `RedisContainer("redis:7-alpine")`) and `redis_client` (per-test, flushdb on teardown) fixtures.
+
+**`backend/ingestion/fetchers/pdf_reader.py`** — fixed password-exception detection: modern pdfminer wraps `PDFPasswordIncorrect` in `PdfminerException` with empty string; now inspects `exc.__context__.__class__.__name__` as primary path, string-match kept as fallback.
+
+**`backend/pyproject.toml`** — added `pikepdf>=9.0` and `testcontainers[postgres,redis]` (upgraded from postgres-only) to dev extras.
+
+### Decisions made
+
+- `extract_words()` + x-position bounding boxes is the correct approach for HDFC Savings (pdfplumber collapses all inter-column whitespace to single spaces in `extract_text()`; regex on text cannot distinguish columns).
+- Slice Savings ref number regex uses `\S+` not `\d{10,25}` — real bank statements have long numeric refs but synthetic fixtures use alphanumeric `REFxxxxxxxxx`.
+- fpdf2 Helvetica cannot render ₹ Unicode — synthetic PDFs use `Rs.`; all Slice parser regex patterns handle both `(?:₹|Rs\.)`.
+- Password detection in pdf_reader.py should use `exc.__context__` inspection (not `str(exc)`) for compatibility with modern pdfminer.
+- All savings parsers raise `ValueError` (not return `0`) on missing opening/closing balance — `0` would violate NULL≠0 invariant and silently corrupt balance-check math.
+
+### Commits (T1–T10)
+- `49e1ae3` test: T1 HDFC Savings independent test-authoring
+- `6da579f` feat: T2 HdfcSavingsParser + golden fixtures
+- `144ab0d` fix: T2 None checks, Decimal generator, assert not type:ignore
+- `c95d4ef` test: T3 SBI Savings independent test-authoring
+- `286caf5` feat: T4 SbiSavingsParser + golden fixtures
+- `3802ddd` fix: T4 raise on missing balances, tighter period regex, Decimal divisors
+- `7e5a037` test: T5 Slice Savings independent test-authoring
+- `6d6189d` feat: T6 SliceSavingsParser + golden fixtures
+- `9528e55` test: T7 idempotent ingest integration tests
+- `1ee23e2` test: T8 malformed input integration tests
+- `0f7a6bb` test: T9 session expiry integration test (real Redis TTL)
+- `a2a2839` test: T10 password-protected integration test (pikepdf + pdf_reader fix)
+
+### Blocked / open
+- T19: Dynamic Parser Builder design (spec only, no implementation) — deferred to end of Phase 1
+- Integration tests require Docker (testcontainers) to run — syntax verified only; full runtime requires `docker compose up`
+- Phase 0 known gap (F-9): `core/hashing/`, `core/events/`, `core/projections/` tests need re-authoring before Phase 2 closes
+
+### Next session should
+- T19: Spec Dynamic Parser Builder into TRD §9.2 + PRD §14; write implementation plan to `docs/superpowers/plans/`; flag as Phase 2 scope
+- Run full Phase 1 acceptance checklist (run unit tests, verify quality gates)
+- Final whole-branch review → `superpowers:finishing-a-development-branch`
+
+---
+
 ## 2026-08-02 — Session 008: Phase 0 adversarial review + blocker resolution
 
 **Phase:** 0 — Foundations

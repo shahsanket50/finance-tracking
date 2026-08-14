@@ -1,0 +1,28 @@
+{
+  "bank": "slice_savings",
+  "account_ref": "SLICE_SAV_4439",
+  "period_start": "2026-05-01",
+  "period_end": "2026-05-31",
+  "opening_balance_paise": 100000,
+  "closing_balance_paise": 148800,
+  "transactions": [
+    {
+      "narration": "UPI-Credit-123456789-Test Merchant",
+      "amount_paise": 50000,
+      "value_date": "2026-05-05",
+      "running_balance_paise": 150000
+    },
+    {
+      "narration": "UPI-Debit-987654321-Coffee Shop",
+      "amount_paise": -20000,
+      "value_date": "2026-05-10",
+      "running_balance_paise": 130000
+    },
+    {
+      "narration": "Interest Cr. for 14-May-2026",
+      "amount_paise": 18800,
+      "value_date": "2026-05-15",
+      "running_balance_paise": 148800
+    }
+  ]
+}

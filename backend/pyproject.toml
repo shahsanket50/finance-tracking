@@ -29,11 +29,12 @@ dev = [
     "hypothesis>=6.115",
     "mypy>=1.13",
     "ruff>=0.8",
-    "testcontainers[postgres]>=4.8",  # for integration tests
+    "testcontainers[postgres,redis]>=4.13.0",  # 4.13+ required for testcontainers.community module
     "httpx>=0.28",                     # FastAPI test client
     "defusedxml>=0.7",                  # Safe XML parsing for coverage reports
     "pytest-json-report>=1.5",          # JSON test results for quality-report bot
     "fpdf2>=2.8",
+    "pikepdf>=9.0",
 ]
 
 [tool.pytest.ini_options]
@@ -62,6 +63,7 @@ module = [
     "ingestion.dryrun.abandon",
     "tests.unit.core.test_generator",
     "tests.unit.core.test_event_store",
+    "tests.integration.conftest",
 ]
 warn_unused_ignores = false
 

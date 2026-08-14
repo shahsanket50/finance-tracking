@@ -422,6 +422,12 @@ Channel selection (Slack, email, or both) + per-event toggles for Tier 2 milesto
 
 If balance check fails → parse is rejected and logged. Never partially ingested.
 
+**Template parsers (Phase 1, live):** HDFC CC, SBI CC, HDFC Savings, SBI Savings, Slice Savings. All produce confidence ≥ 9000 bps.
+
+**LLM fallback (Phase 2):** When no template matches, an LLM extracts transactions from the raw PDF text using a structured schema. Confidence = 6000 bps. User sees a low-confidence warning in the dry-run preview and must explicitly acknowledge before confirming. See TRD §12 for the full technical spec.
+
+**Parser promotion (Phase 3+):** After N successful LLM extractions for the same bank layout, the system queues a developer prompt to write a template parser, eliminating the LLM cost for future statements from that bank.
+
 ### 14.3 Dry-Run Harness
 
 Standalone preview mode. User selects a statement PDF:

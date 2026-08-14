@@ -73,7 +73,9 @@ class SbiCcParser(AbstractParser):
             text,
             re.IGNORECASE,
         )
-        return self._parse_amount(match.group(1)) if match else 0
+        if not match:
+            raise ValueError("Could not locate opening balance in SBI CC statement header")
+        return self._parse_amount(match.group(1))
 
     def _extract_closing_balance(self, text: str) -> int:
         match = re.search(
@@ -81,7 +83,9 @@ class SbiCcParser(AbstractParser):
             text,
             re.IGNORECASE,
         )
-        return self._parse_amount(match.group(1)) if match else 0
+        if not match:
+            raise ValueError("Could not locate closing balance in SBI CC statement header")
+        return self._parse_amount(match.group(1))
 
     def _extract_rows(self, page: pdfplumber.page.PageBase) -> list[list[str]]:  # type: ignore[name-defined]
         table = page.extract_table()

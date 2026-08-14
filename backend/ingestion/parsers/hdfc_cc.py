@@ -85,9 +85,9 @@ class HdfcCcParser(AbstractParser):
             text,
             re.IGNORECASE,
         )
-        if match:
-            return self._parse_amount(match.group(1))
-        return 0
+        if not match:
+            raise ValueError("Could not locate opening balance in HDFC CC statement header")
+        return self._parse_amount(match.group(1))
 
     def _extract_closing_balance(self, text: str) -> int:
         """Extract 'New Balance: X,XXX.XX Cr/Dr' → paise."""
@@ -96,9 +96,9 @@ class HdfcCcParser(AbstractParser):
             text,
             re.IGNORECASE,
         )
-        if match:
-            return self._parse_amount(match.group(1))
-        return 0
+        if not match:
+            raise ValueError("Could not locate closing balance in HDFC CC statement header")
+        return self._parse_amount(match.group(1))
 
     # ------------------------------------------------------------------ #
     # Table extraction

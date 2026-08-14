@@ -1,6 +1,6 @@
 """Integration test fixtures using testcontainers-python.
 
-Spins up ephemeral Postgres 18, runs migrations, provides per-test sessions.
+Spins up ephemeral Postgres 18 and Redis 7, runs migrations, provides per-test sessions.
 """
 
 from __future__ import annotations
@@ -13,10 +13,17 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+import redis as redis_module
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
-from testcontainers.community.postgres import PostgresContainer
+
+try:
+    from testcontainers.community.postgres import PostgresContainer
+    from testcontainers.community.redis import RedisContainer
+except ModuleNotFoundError:
+    from testcontainers.postgres import PostgresContainer  # type: ignore[no-redef]
+    from testcontainers.redis import RedisContainer  # type: ignore[no-redef]
 
 from core.events.encryption import create_user_key, encrypt_payload
 from core.events.models import IngestionEvent, User
@@ -98,3 +105,21 @@ def test_ingestion_event(pg_session: Session, test_user: User) -> IngestionEvent
     pg_session.add(ingestion)
     pg_session.flush()
     return ingestion
+
+
+@pytest.fixture(scope="session")
+def redis_container() -> Generator[RedisContainer, None, None]:
+    """Session-scoped ephemeral Redis 7 container for integration tests."""
+    with RedisContainer("redis:7-alpine") as container:
+        yield container
+
+
+@pytest.fixture
+def redis_client(redis_container: RedisContainer) -> Generator[redis_module.Redis, None, None]:
+    """Per-test Redis client connected to the session-scoped container.
+
+    Flushes the DB after each test so tests don't share key state.
+    """
+    client: redis_module.Redis = redis_container.get_client()
+    yield client
+    client.flushdb()
