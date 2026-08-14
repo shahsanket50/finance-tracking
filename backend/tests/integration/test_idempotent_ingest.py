@@ -8,7 +8,7 @@ Two distinct idempotency scenarios:
 
 Implements CLAUDE.md §2 Invariant 1, TRD §9.1 C1/C2.
 Requires Docker (testcontainers). Verify syntax with:
-    cd backend && PYTHONPATH=. python -c "import tests.integration.test_idempotent_ingest; print('OK')"
+    cd backend && PYTHONPATH=. python -c "import tests.integration.test_idempotent_ingest"
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from __future__ import annotations
 import pickle
 import uuid
 from datetime import UTC, date, datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -26,16 +27,12 @@ from core.events.models import TransactionEvent
 from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.confirm import confirm
 from ingestion.dryrun.harness import dry_run
-from ingestion.dryrun.session import DryRunSession, _redis_key
+from ingestion.dryrun.session import DryRunSession
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction
 from ingestion.validators.balance_check import BalanceCheckResult
 
 HDFC_CC_GOLDEN_PDF = (
-    __import__("pathlib").Path(__file__).parent.parent
-    / "fixtures"
-    / "golden"
-    / "hdfc_cc"
-    / "statement_001.pdf"
+    Path(__file__).parent.parent / "fixtures" / "golden" / "hdfc_cc" / "statement_001.pdf"
 )
 
 
@@ -95,9 +92,7 @@ def test_overlapping_statement_confirms_raises_on_duplicate(
     assert isinstance(test_user, User)
 
     # First DryRunSession: parse HDFC CC golden PDF
-    first_session = _dry_run_with_mock(
-        hdfc_cc_pdf_bytes, test_user.id, "HDFC_CC_4321", mock_redis
-    )
+    first_session = _dry_run_with_mock(hdfc_cc_pdf_bytes, test_user.id, "HDFC_CC_4321", mock_redis)
     first_session.user_id = test_user.id
 
     expected_count = len(first_session.statement.transactions)
@@ -106,9 +101,7 @@ def test_overlapping_statement_confirms_raises_on_duplicate(
     # Confirm first session — should succeed and commit N rows
     _confirm_with_session(first_session, pg_session)
 
-    count_after_first = (
-        pg_session.query(TransactionEvent).filter_by(user_id=test_user.id).count()
-    )
+    count_after_first = pg_session.query(TransactionEvent).filter_by(user_id=test_user.id).count()
     assert count_after_first == expected_count
 
     # Build a second session: same statement data, new session_id, different content_hash

@@ -56,7 +56,11 @@ def test_can_parse_returns_true_for_hdfc_savings_text() -> None:
     can_parse uses case-insensitive substring match on 'statementfrom' and 'withdrawalamt'.
     """
     parser = HdfcSavingsParser()
-    text = "HDFC Bank - Statement of Account\nStatementFrom : 01/01/2026 To : 31/01/2026\nWithdrawalAmt. DepositAmt."
+    text = (
+        "HDFC Bank - Statement of Account\n"
+        "StatementFrom : 01/01/2026 To : 31/01/2026\n"
+        "WithdrawalAmt. DepositAmt."
+    )
     assert parser.can_parse(text) is True
 
 
@@ -129,10 +133,10 @@ def test_parse_golden_amount_signs(parsed_statement: ParsedStatement) -> None:
       IMPS REFUND           — Deposit 2,000.00 → +200000
     """
     txns = parsed_statement.transactions
-    assert txns[0].amount_paise == 5000000   # Deposit 50,000.00
+    assert txns[0].amount_paise == 5000000  # Deposit 50,000.00
     assert txns[1].amount_paise == -1800000  # Withdrawal 18,000.00
-    assert txns[2].amount_paise == -500000   # Withdrawal 5,000.00
-    assert txns[3].amount_paise == 200000    # Deposit 2,000.00
+    assert txns[2].amount_paise == -500000  # Withdrawal 5,000.00
+    assert txns[3].amount_paise == 200000  # Deposit 2,000.00
 
 
 # ── canonical_narration ───────────────────────────────────────────────────────

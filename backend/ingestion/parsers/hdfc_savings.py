@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
+from typing import cast
 
 import pdfplumber
 
@@ -120,7 +121,8 @@ class HdfcSavingsParser(AbstractParser):
     # ------------------------------------------------------------------ #
 
     def _extract_transaction_rows(
-        self, page: pdfplumber.page.PageBase  # type: ignore[name-defined]
+        self,
+        page: pdfplumber.page.PageBase,  # type: ignore[name-defined]
     ) -> list[dict[str, object]]:
         """Extract structured transaction rows from a page using extract_words.
 
@@ -175,24 +177,26 @@ class HdfcSavingsParser(AbstractParser):
                 for w in row_words:
                     t = str(w["text"])
                     if "WithdrawalAmt" in t:
-                        wd_x = float(w["x0"])
+                        wd_x = cast(float, w["x0"])
                     elif "DepositAmt" in t:
-                        dep_x = float(w["x0"])
+                        dep_x = cast(float, w["x0"])
                     elif "ClosingBalance" in t:
-                        clos_x = float(w["x0"])
+                        clos_x = cast(float, w["x0"])
                 break
 
         wd_dep_boundary = (wd_x + dep_x) / 2 if wd_x is not None and dep_x is not None else 400.0
-        dep_clos_boundary = (dep_x + clos_x) / 2 if dep_x is not None and clos_x is not None else 480.0
+        dep_clos_boundary = (
+            (dep_x + clos_x) / 2 if dep_x is not None and clos_x is not None else 480.0
+        )
         return wd_dep_boundary, dep_clos_boundary
 
-    def _parse_row_words(
+    def _classify_row_words(
         self,
         row_words: list[dict[str, object]],
         wd_dep_boundary: float,
         dep_clos_boundary: float,
-    ) -> dict[str, object] | None:
-        """Parse a list of words from one transaction row into a structured dict."""
+    ) -> tuple[str | None, str | None, str | None, list[str], str | None]:
+        """Iterate words and classify each into withdrawal/deposit/closing/narration/date."""
         withdrawal_str: str | None = None
         deposit_str: str | None = None
         closing_str: str | None = None
@@ -202,52 +206,53 @@ class HdfcSavingsParser(AbstractParser):
 
         for w in row_words:
             text = str(w["text"])
-            x = float(w["x0"])
+            x = cast(float, w["x0"])
 
             if _ROW_DATE_RE.match(text):
                 seen_dates += 1
                 if seen_dates == 2:
                     value_dt_str = text
-                continue
-
-            if _AMOUNT_RE.match(text):
+            elif _AMOUNT_RE.match(text):
                 if x < wd_dep_boundary:
                     withdrawal_str = text
                 elif x < dep_clos_boundary:
                     deposit_str = text
                 else:
                     closing_str = text
-                continue
+            elif not _REF_RE.match(text):
+                narration_parts.append(text)
 
-            if _REF_RE.match(text):
-                continue
+        return withdrawal_str, deposit_str, closing_str, narration_parts, value_dt_str
 
-            narration_parts.append(text)
+    def _parse_row_words(
+        self,
+        row_words: list[dict[str, object]],
+        wd_dep_boundary: float,
+        dep_clos_boundary: float,
+    ) -> dict[str, object] | None:
+        """Parse a list of words from one transaction row into a structured dict."""
+        withdrawal_str, deposit_str, closing_str, narration_parts, value_dt_str = (
+            self._classify_row_words(row_words, wd_dep_boundary, dep_clos_boundary)
+        )
 
-        narration = " ".join(narration_parts)
-
-        # Determine signed amount: deposit → positive, withdrawal → negative
         if deposit_str:
-            amount_str = deposit_str
-            sign = 1
+            amount_str, sign = deposit_str, 1
         elif withdrawal_str:
-            amount_str = withdrawal_str
-            sign = -1
+            amount_str, sign = withdrawal_str, -1
         else:
-            return None  # no transaction amount found — skip row
+            return None
 
         if closing_str is None:
-            return None  # no closing balance — skip row
+            return None
 
         amount_paise = sign * int(Decimal(amount_str.replace(",", "")) * 100)
         running_balance_paise = int(Decimal(closing_str.replace(",", "")) * 100)
-
-        value_date: date_type | None = None
-        if value_dt_str:
-            value_date = datetime.strptime(value_dt_str, "%d/%m/%y").date()
+        value_date: date_type | None = (
+            datetime.strptime(value_dt_str, "%d/%m/%y").date() if value_dt_str else None
+        )
 
         return {
-            "narration": narration,
+            "narration": " ".join(narration_parts),
             "amount_paise": amount_paise,
             "running_balance_paise": running_balance_paise,
             "value_date": value_date,
@@ -265,7 +270,7 @@ class HdfcSavingsParser(AbstractParser):
     ) -> ParsedTransaction | None:
         """Build a ParsedTransaction from a parsed row dict."""
         narration_raw = str(row.get("narration", ""))
-        amount_paise = int(row.get("amount_paise", 0))  # type: ignore[arg-type]
+        amount_paise = cast(int, row.get("amount_paise", 0))
         running_balance_paise = row.get("running_balance_paise")
         value_date = row.get("value_date")
 

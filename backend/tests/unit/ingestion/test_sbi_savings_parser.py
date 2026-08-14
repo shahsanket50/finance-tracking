@@ -145,9 +145,9 @@ def test_parse_golden_amount_signs(parsed_statement: ParsedStatement) -> None:
       UPI DEBIT NETFLIX — Debit  800.00    → -80000 paise
     """
     txns = parsed_statement.transactions
-    assert txns[0].amount_paise == 1000000    # Credit 10,000.00
-    assert txns[1].amount_paise == -350000    # Debit 3,500.00
-    assert txns[2].amount_paise == -80000     # Debit 800.00
+    assert txns[0].amount_paise == 1000000  # Credit 10,000.00
+    assert txns[1].amount_paise == -350000  # Debit 3,500.00
+    assert txns[2].amount_paise == -80000  # Debit 800.00
 
 
 # ── canonical_narration ───────────────────────────────────────────────────────

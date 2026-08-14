@@ -188,8 +188,7 @@ def test_no_previous_balance_row_raises_value_error() -> None:
 
     parser = SbiCcParser()
     bad_text = (
-        "SBI Credit Card Statement\n"
-        "17 Jan 2026 AMAZON PURCHASE 1,200.00 Dr\n"
+        "SBI Credit Card Statement\n17 Jan 2026 AMAZON PURCHASE 1,200.00 Dr\n"
         # No 'Previous Balance:' or 'New Balance:' lines
     )
     with pytest.raises(ValueError, match="Could not locate opening balance"):

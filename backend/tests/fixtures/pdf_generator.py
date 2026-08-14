@@ -321,7 +321,9 @@ def dict_to_pdf_sbi_savings(statement: dict[str, object]) -> bytes:
 
     # Header block
     pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 10, "State Bank of India - Savings Account Statement", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0, 10, "State Bank of India - Savings Account Statement", new_x="LMARGIN", new_y="NEXT"
+    )
     pdf.set_font("Helvetica", size=10)
 
     account_ref = statement.get("account_ref", "")
@@ -486,7 +488,10 @@ def dict_to_pdf_slice_savings(statement: dict[str, object]) -> bytes:
 
     # Column header (text-based, no table borders)
     pdf.set_font("Helvetica", "B", 9)
-    headers_line = "DATE            DETAILS                              REF NO.          AMOUNT        BALANCE"
+    headers_line = (
+        "DATE            DETAILS                              "
+        "REF NO.          AMOUNT        BALANCE"
+    )
     pdf.cell(0, 8, headers_line, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 

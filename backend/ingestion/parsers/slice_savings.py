@@ -31,17 +31,15 @@ from ingestion.parsers.base import AbstractParser, ParsedStatement, ParsedTransa
 # AMOUNT: Rs.X,XXX.XX or ₹X,XXX.XX
 # BALANCE: same format
 _TXN_RE = re.compile(
-    r"(\d{1,2} \w{3} '\d{2})\s+"          # date: "DD Mon 'YY"
-    r"(.+?)\s+"                             # details (non-greedy)
-    r"(\S+)\s+"                             # ref number (any non-space token)
-    r"(?:₹|Rs\.)\s*([\d,]+\.?\d*)\s+"     # amount
-    r"(?:₹|Rs\.)\s*([\d,]+\.?\d*)"        # balance
+    r"(\d{1,2} \w{3} '\d{2})\s+"  # date: "DD Mon 'YY"
+    r"(.+?)\s+"  # details (non-greedy)
+    r"(\S+)\s+"  # ref number (any non-space token)
+    r"(?:₹|Rs\.)\s*([\d,]+\.?\d*)\s+"  # amount
+    r"(?:₹|Rs\.)\s*([\d,]+\.?\d*)"  # balance
 )
 
 # Matches the period header line: "Statement Period: DD Mon 'YY - DD Mon 'YY"
-_PERIOD_RE = re.compile(
-    r"Statement Period:\s*(\d{1,2} \w{3} '\d{2})\s*-\s*(\d{1,2} \w{3} '\d{2})"
-)
+_PERIOD_RE = re.compile(r"Statement Period:\s*(\d{1,2} \w{3} '\d{2})\s*-\s*(\d{1,2} \w{3} '\d{2})")
 
 # Matches the opening balance line: "Opening balance Rs.X,XXX.XX" or "Opening balance ₹X,XXX.XX"
 _OPENING_RE = re.compile(r"Opening balance\s+(?:₹|Rs\.)\s*([\d,]+\.?\d*)")
@@ -97,7 +95,7 @@ class SliceSavingsParser(AbstractParser):
     # ------------------------------------------------------------------ #
 
     def _extract_account_ref(self, text: str) -> str:
-        """Extract account ref from 'Account Number : XXXXXXXXXXX', return last 4 digits as 'SLICE_SAV_XXXX'."""
+        """Extract 'Account Number : XXXX' → 'SLICE_SAV_XXXX' (last 4 digits of account number)."""
         match = _ACCOUNT_RE.search(text)
         if not match:
             raise ValueError("Account number not found in Slice Savings statement")

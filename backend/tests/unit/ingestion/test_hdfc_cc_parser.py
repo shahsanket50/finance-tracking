@@ -201,8 +201,7 @@ def test_no_previous_balance_row_raises_value_error() -> None:
 
     parser = HdfcCcParser()
     bad_text = (
-        "HDFC Bank Swiggy Credit Card Statement\n"
-        "17 Jan 2026 SWIGGY ORDER 850.00 Dr\n"
+        "HDFC Bank Swiggy Credit Card Statement\n17 Jan 2026 SWIGGY ORDER 850.00 Dr\n"
         # No 'Previous Balance:' or 'New Balance:' lines
     )
     with pytest.raises(ValueError, match="Could not locate opening balance"):

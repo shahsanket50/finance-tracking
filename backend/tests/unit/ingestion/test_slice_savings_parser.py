@@ -100,7 +100,7 @@ def test_can_parse_returns_false_for_empty_text() -> None:
 
 
 def test_parse_golden_statement_account_ref(parsed_statement: ParsedStatement) -> None:
-    """Parsed account_ref must be 'SLICE_SAV_4439' (last 4 digits from 'Account Number :' header)."""
+    """Parsed account_ref must be 'SLICE_SAV_4439' (last 4 of 'Account Number :' header)."""
     assert parsed_statement.account_ref == "SLICE_SAV_4439"
 
 
@@ -156,9 +156,9 @@ def test_parse_golden_amount_signs(parsed_statement: ParsedStatement) -> None:
       Interest Cr. for 14-May-2026       — Credit 188.00 → +18800 paise
     """
     txns = parsed_statement.transactions
-    assert txns[0].amount_paise == 50000    # Credit 500.00
-    assert txns[1].amount_paise == -20000   # Debit 200.00
-    assert txns[2].amount_paise == 18800    # Credit 188.00
+    assert txns[0].amount_paise == 50000  # Credit 500.00
+    assert txns[1].amount_paise == -20000  # Debit 200.00
+    assert txns[2].amount_paise == 18800  # Credit 188.00
 
 
 # ── canonical_narration ───────────────────────────────────────────────────────

@@ -23,11 +23,12 @@ class SbiSavingsParser(AbstractParser):
     Extraction strategy:
     - Uses page.extract_text() for header fields (account_ref, period, opening balance).
     - Uses page.extract_tables() for transaction rows — SBI Savings emits clean one-row-per-txn
-      tables with columns: Txn Date | Value Date | Description | Ref No./Cheque No. | Debit | Credit | Balance
+      tables with columns: Txn Date | Value Date | Description | Ref No./Cheque No. |
+      Debit | Credit | Balance
     """
 
     def can_parse(self, text: str) -> bool:
-        """Return True if text contains 'account statement from' AND ('txn date' or 'balance as on').
+        """Return True if text contains 'account statement from' AND 'txn date'/'balance as on'.
 
         Both tokens are distinctive SBI Savings markers. HDFC Savings uses 'StatementFrom'
         and 'WithdrawalAmt' — neither appears in SBI Savings statements.
@@ -68,7 +69,9 @@ class SbiSavingsParser(AbstractParser):
             raise ValueError("No transactions found in SBI savings statement")
         last_rb = transactions[-1].running_balance_paise
         if last_rb is None:
-            raise ValueError("Last transaction has no running balance — cannot determine closing balance")
+            raise ValueError(
+                "Last transaction has no running balance — cannot determine closing balance"
+            )
         closing_balance_paise = last_rb
 
         return ParsedStatement(
@@ -94,7 +97,9 @@ class SbiSavingsParser(AbstractParser):
 
     def _extract_period(self, text: str) -> tuple[date_type, date_type]:
         """Extract period from 'Account Statement from DD Mon YYYY to DD Mon YYYY'."""
-        match = re.search(r"Account Statement from (\d{1,2} \w{3} \d{4}) to (\d{1,2} \w{3} \d{4})", text)
+        match = re.search(
+            r"Account Statement from (\d{1,2} \w{3} \d{4}) to (\d{1,2} \w{3} \d{4})", text
+        )
         if match:
             start = datetime.strptime(match.group(1).strip(), "%d %b %Y").date()
             end = datetime.strptime(match.group(2).strip(), "%d %b %Y").date()
