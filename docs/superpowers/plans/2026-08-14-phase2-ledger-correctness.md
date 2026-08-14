@@ -724,7 +724,215 @@ def find_matches(candidates: list[CandidateTxn]) -> list[MarkedReversalPayload]:
 
 ### Task 3: Wave 3 — Projection reducer for resolver events (CRITICAL — independent test authoring)
 
-*To be detailed before Wave 3 begins.*
+**What this does:** Registers a `"transactions_view"` projection reducer with the existing builder registry. The reducer builds a state containing all ingested transactions, the set of hashes excluded by resolver decisions, and derived totals. Resolver events are READ from the event log (per TRD §9.1 C3) — the reducer never calls matcher logic.
+
+**Architecture:**
+- `processing/resolver/reducer.py` — defines initial state + reducer, calls `register_reducer`
+- Modify: `backend/core/projections/builder.py` — import reducer to trigger registration
+- `backend/tests/unit/processing/test_transactions_view_reducer.py` — independently authored tests
+
+**Event contracts (what the reducer reads from `Event.payload`):**
+
+`TransactionIngested` payload fields used by reducer:
+```python
+{
+    "idempotency_hash": str,   # 64-char hex
+    "amount_paise": int,       # signed (debits negative)
+    "value_date": str,         # ISO date "YYYY-MM-DD"
+    "account_ref": str,
+    "canonical_narration": str | None,
+    "transaction_type": str,   # "income" | "expense" | "transfer" | "investment"
+}
+```
+
+Resolver event payload fields used by reducer (read from `Event.payload`):
+
+| event_type | hash fields to exclude |
+|---|---|
+| `MarkedInternalTransfer` | `debit_hash`, `credit_hash` |
+| `MarkedCCPayment` | `savings_debit_hash`, `cc_credit_hash` |
+| `MarkedFDBooking` | `savings_debit_hash`, `fd_credit_hash` |
+| `MarkedReversal` | `original_hash`, `reversal_hash` |
+
+Unknown `event_type` values are silently ignored (pass-through — forward compatibility).
+
+**State structure:**
+```python
+{
+    "transactions": [
+        {
+            "idempotency_hash": str,
+            "amount_paise": int,
+            "value_date": str,
+            "account_ref": str,
+            "canonical_narration": str | None,
+            "transaction_type": str,
+        },
+        ...
+    ],
+    "excluded_hashes": list[str],   # JSON-serializable; use set() for O(1) lookups internally
+    "totals": {
+        "income_paise": int,        # sum of amount_paise for non-excluded income transactions
+        "expense_paise": int,       # abs() sum of amount_paise for non-excluded expense transactions (positive)
+        "excluded_count": int,      # number of transactions excluded from totals
+    }
+}
+```
+
+**`processing/resolver/reducer.py` — exact content:**
+
+```python
+"""Transactions-view projection reducer (TRD §9.1 C3, §9.2).
+
+Builds a view of all ingested transactions, tracking which are excluded by
+resolver decisions (internal transfers, CC payments, FD bookings, reversals).
+
+This reducer reads resolver DECISIONS from recorded events — it never calls
+matcher logic. Calling matchers here would break Invariant 3 (replay
+determinism) and violate TRD §9.2 (decisions vs derivations).
+
+Registers the 'transactions_view' projection type with the builder registry.
+"""
+
+from __future__ import annotations
+
+from core.events.store import Event
+from core.projections.builder import register_reducer
+
+
+def _initial_state() -> dict[str, object]:
+    return {
+        "transactions": [],
+        "excluded_hashes": [],
+        "totals": {
+            "income_paise": 0,
+            "expense_paise": 0,
+            "excluded_count": 0,
+        },
+    }
+
+
+def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
+    transactions: list[dict[str, object]] = list(
+        state["transactions"]  # type: ignore[arg-type]
+    )
+    excluded: list[str] = list(state["excluded_hashes"])  # type: ignore[arg-type]
+
+    if event.event_type == "TransactionIngested":
+        p = event.payload
+        transactions.append(
+            {
+                "idempotency_hash": p["idempotency_hash"],
+                "amount_paise": p["amount_paise"],
+                "value_date": p["value_date"],
+                "account_ref": p.get("account_ref", event.aggregate_id),
+                "canonical_narration": p.get("canonical_narration"),
+                "transaction_type": p.get("transaction_type", "expense"),
+            }
+        )
+    elif event.event_type == "MarkedInternalTransfer":
+        p = event.payload
+        excluded.append(str(p["debit_hash"]))
+        excluded.append(str(p["credit_hash"]))
+    elif event.event_type == "MarkedCCPayment":
+        p = event.payload
+        excluded.append(str(p["savings_debit_hash"]))
+        excluded.append(str(p["cc_credit_hash"]))
+    elif event.event_type == "MarkedFDBooking":
+        p = event.payload
+        excluded.append(str(p["savings_debit_hash"]))
+        excluded.append(str(p["fd_credit_hash"]))
+    elif event.event_type == "MarkedReversal":
+        p = event.payload
+        excluded.append(str(p["original_hash"]))
+        excluded.append(str(p["reversal_hash"]))
+    # Unknown event types are silently ignored (forward compatibility).
+
+    excluded_set = set(excluded)
+    active = [t for t in transactions if t["idempotency_hash"] not in excluded_set]
+
+    income_paise = sum(
+        int(t["amount_paise"])  # type: ignore[arg-type]
+        for t in active
+        if t.get("transaction_type") == "income"
+    )
+    expense_paise = sum(
+        abs(int(t["amount_paise"]))  # type: ignore[arg-type]
+        for t in active
+        if t.get("transaction_type") == "expense"
+    )
+    excluded_count = len(transactions) - len(active)
+
+    return {
+        "transactions": transactions,
+        "excluded_hashes": excluded,
+        "totals": {
+            "income_paise": income_paise,
+            "expense_paise": expense_paise,
+            "excluded_count": excluded_count,
+        },
+    }
+
+
+register_reducer("transactions_view", _initial_state, _reducer)
+```
+
+**Modification to `backend/core/projections/builder.py`:**
+
+Add this import at the end of the existing imports block (after the `register_reducer` call for `events_list`):
+
+```python
+# Register transactions_view reducer (side-effect import — must stay at module level)
+import processing.resolver.reducer  # noqa: F401, E402
+```
+
+**Test cases for independent test authoring:**
+
+`test_transactions_view_reducer.py` must cover:
+
+*Basic ingestion:*
+- Empty event list → `{"transactions": [], "excluded_hashes": [], "totals": {"income_paise": 0, "expense_paise": 0, "excluded_count": 0}}`
+- One `TransactionIngested` (expense –50000) → transactions has 1 entry, totals.expense_paise == 50000, excluded_count == 0
+- One `TransactionIngested` (income +100000) → totals.income_paise == 100000
+- Two `TransactionIngested` events → transactions has 2 entries, totals accumulate correctly
+
+*Exclusion:*
+- `TransactionIngested` then `MarkedInternalTransfer` covering its hash → excluded_count == 1, totals.expense_paise == 0 (INVARIANT 4)
+- `MarkedCCPayment` excludes both `savings_debit_hash` and `cc_credit_hash`
+- `MarkedFDBooking` excludes both `savings_debit_hash` and `fd_credit_hash`
+- `MarkedReversal` excludes both `original_hash` and `reversal_hash`
+- Resolver event before `TransactionIngested` for its hash (out-of-order) → excluded_hashes contains the hash; when the TransactionIngested arrives, it is still excluded
+
+*Invariant 4 — no double-count in totals:*
+- Two savings accounts, each with debit/credit pair, `MarkedInternalTransfer` covering both → totals.expense_paise == 0, totals.income_paise == 0
+- An excluded transaction's amount does NOT appear in expense_paise or income_paise
+
+*Determinism:*
+- Build projection twice from same events → identical result dict
+
+*Unknown events:*
+- Unknown `event_type` passes through without error, state unchanged
+
+*Projection type registration:*
+- `build_projection_from_events(events, "transactions_view")` does not raise (projection type is registered)
+
+- [ ] **Step 1 (TEST-AUTHORING SESSION):** Dispatch independent test-authoring subagent. It reads this spec (Task 3 section), `core/events/store.py` (the `Event` dataclass), and `core/projections/builder.py` (the `build_projection_from_events` interface). It does NOT open `reducer.py` (which doesn't exist yet). Commits with message `"Wave 3 (independent test-authoring): transactions_view reducer tests"`.
+
+- [ ] **Step 2 (IMPLEMENTATION SESSION):** Dispatch implementation subagent. Creates `reducer.py`, modifies `builder.py`. Commits with message `"Wave 3: transactions_view reducer + builder registration"`.
+
+- [ ] **Step 3:** Run tests:
+  ```bash
+  cd backend && PYTHONPATH=. python3 -m pytest tests/unit/processing/test_transactions_view_reducer.py -v
+  ```
+  Expected: all PASS.
+
+- [ ] **Step 4:** Run mypy:
+  ```bash
+  cd backend && python3 -m mypy --config-file pyproject.toml --explicit-package-bases processing/resolver/ core/projections/ -v
+  ```
+  Expected: no errors.
+
+- [ ] **Step 5:** Confirm independence: test commit must predate implementation commit in `git log`.
 
 ---
 
