@@ -17,8 +17,12 @@ import redis as redis_module
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
-from testcontainers.community.postgres import PostgresContainer
-from testcontainers.community.redis import RedisContainer
+try:
+    from testcontainers.community.postgres import PostgresContainer
+    from testcontainers.community.redis import RedisContainer
+except ModuleNotFoundError:
+    from testcontainers.postgres import PostgresContainer  # type: ignore[no-redef]
+    from testcontainers.redis import RedisContainer  # type: ignore[no-redef]
 
 from core.events.encryption import create_user_key, encrypt_payload
 from core.events.models import IngestionEvent, User
