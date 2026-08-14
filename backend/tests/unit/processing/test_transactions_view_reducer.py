@@ -202,6 +202,31 @@ def test_marked_fd_booking_excludes_both_legs() -> None:
     assert totals["excluded_count"] == 2  # type: ignore[index]
 
 
+def test_two_transfer_pairs_both_excluded() -> None:
+    """Two simultaneous transfer pairs: both pairs excluded → zero totals."""
+    d1, c1 = "1" * 64, "2" * 64
+    d2, c2 = "3" * 64, "4" * 64
+    events = [
+        _txn(d1, -50000, "expense", account_ref="HDFC_SAVINGS"),
+        _txn(c1, 50000, "income", account_ref="SBI_SAVINGS"),
+        _txn(d2, -30000, "expense", account_ref="AXIS_SAVINGS"),
+        _txn(c2, 30000, "income", account_ref="ICICI_SAVINGS"),
+        _resolver_event(
+            "MarkedInternalTransfer",
+            {"debit_hash": d1, "credit_hash": c1, "matched_by": "transfer_v1", "confidence": 9500},
+        ),
+        _resolver_event(
+            "MarkedInternalTransfer",
+            {"debit_hash": d2, "credit_hash": c2, "matched_by": "transfer_v1", "confidence": 9500},
+        ),
+    ]
+    result = build_projection_from_events(events, "transactions_view")
+    totals = result["totals"]
+    assert totals["expense_paise"] == 0, "Both transfer debits must be excluded from expense totals"
+    assert totals["income_paise"] == 0, "Both transfer credits must be excluded from income totals"
+    assert totals["excluded_count"] == 4  # type: ignore[index]
+
+
 def test_marked_reversal_excludes_both_legs() -> None:
     original_hash = "o" * 64
     reversal_hash = "r" * 64
