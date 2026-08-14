@@ -63,6 +63,7 @@ module = [
     "ingestion.dryrun.abandon",
     "tests.unit.core.test_generator",
     "tests.unit.core.test_event_store",
+    "tests.integration.conftest",
 ]
 warn_unused_ignores = false
 
