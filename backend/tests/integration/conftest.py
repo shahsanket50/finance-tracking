@@ -17,6 +17,7 @@ import redis as redis_module
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
+
 try:
     from testcontainers.community.postgres import PostgresContainer
     from testcontainers.community.redis import RedisContainer
