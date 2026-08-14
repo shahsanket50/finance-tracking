@@ -6,7 +6,7 @@ transactions_view projection → assert excluded_count and zero totals for match
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 
 import pytest
 
