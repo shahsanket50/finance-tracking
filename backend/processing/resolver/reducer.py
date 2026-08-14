@@ -22,6 +22,7 @@ def _initial_state() -> dict[str, object]:
     return {
         "transactions": [],
         "excluded_hashes": [],
+        "exclusion_reasons": {},   # dict[str, str]: hash → "internal_transfer" | "cc_payment" | "fd_booking" | "reversal"
         "totals": {
             "income_paise": 0,
             "expense_paise": 0,
@@ -35,6 +36,9 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
         cast(list[dict[str, object]], state["transactions"])
     )
     excluded: list[str] = list(cast(list[str], state["excluded_hashes"]))
+    reasons: dict[str, str] = dict(
+        cast(dict[str, str], state["exclusion_reasons"])
+    )
 
     if event.event_type == "TransactionIngested":
         p = event.payload
@@ -50,20 +54,28 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
         )
     elif event.event_type == "MarkedInternalTransfer":
         p = event.payload
-        excluded.append(str(p["debit_hash"]))
-        excluded.append(str(p["credit_hash"]))
+        h1, h2 = str(p["debit_hash"]), str(p["credit_hash"])
+        excluded.extend([h1, h2])
+        reasons[h1] = "internal_transfer"
+        reasons[h2] = "internal_transfer"
     elif event.event_type == "MarkedCCPayment":
         p = event.payload
-        excluded.append(str(p["savings_debit_hash"]))
-        excluded.append(str(p["cc_credit_hash"]))
+        h1, h2 = str(p["savings_debit_hash"]), str(p["cc_credit_hash"])
+        excluded.extend([h1, h2])
+        reasons[h1] = "cc_payment"
+        reasons[h2] = "cc_payment"
     elif event.event_type == "MarkedFDBooking":
         p = event.payload
-        excluded.append(str(p["savings_debit_hash"]))
-        excluded.append(str(p["fd_credit_hash"]))
+        h1, h2 = str(p["savings_debit_hash"]), str(p["fd_credit_hash"])
+        excluded.extend([h1, h2])
+        reasons[h1] = "fd_booking"
+        reasons[h2] = "fd_booking"
     elif event.event_type == "MarkedReversal":
         p = event.payload
-        excluded.append(str(p["original_hash"]))
-        excluded.append(str(p["reversal_hash"]))
+        h1, h2 = str(p["original_hash"]), str(p["reversal_hash"])
+        excluded.extend([h1, h2])
+        reasons[h1] = "reversal"
+        reasons[h2] = "reversal"
     # Unknown event types are silently ignored (forward compatibility).
 
     excluded_set = set(excluded)
@@ -84,6 +96,7 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
     return {
         "transactions": transactions,
         "excluded_hashes": excluded,
+        "exclusion_reasons": reasons,
         "totals": {
             "income_paise": income_paise,
             "expense_paise": expense_paise,
