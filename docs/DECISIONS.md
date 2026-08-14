@@ -66,6 +66,17 @@ KMS upgrade deferred to Phase 5 per H3.
 For correctness-critical modules, tests are authored in a separate session from implementation (spec-only, no implementation file access). At each wave boundary, a fresh-context adversarial review checks deliverables against the spec. Tax constants carry `# UNVERIFIED — CA review pending` until Phase 4.
 **Why:** the correctness harness checks code against tests but cannot check tests against spec. When the same agent writes both from the same reading, a misreading produces a passing test that enforces wrong behaviour — green CI, confidently wrong. Running a parallel agent does not fix this: correlated training → correlated blind spots. The fix is structural independence: tests authored without seeing the implementation, and wave-end review by a context that has not absorbed the build session's assumptions. See TRD §11 for the full specification.
 
+## ADR-013: reverses_transaction_id column deferred to Wave 2
+
+**Date:** 2026-08-14
+**Status:** Decided
+
+TRD §9.5 M4 specifies a `reverses_transaction_id` FK column on `transaction_events`
+for reversals. Wave 1 defers this column to Wave 2 (reversal matcher implementation),
+when the exact FK semantics (UUID vs idempotency hash, nullable vs required) can be
+decided with the matcher code in hand. The `MarkedReversalPayload` stores
+`original_hash` and `reversal_hash` in the encrypted payload column in the interim.
+
 ---
 
 ## Template
