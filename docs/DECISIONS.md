@@ -79,6 +79,23 @@ decided with the matcher code in hand. The `MarkedReversalPayload` stores
 
 ---
 
+## ADR-014: Wave 2 matchers share a common matching primitive
+
+**Date:** 2026-08-14
+**Status:** Decided
+
+The four Wave 2 matchers (transfer, CC payment, FD booking, reversal) share a single
+`score_candidate_pair` primitive in `processing/resolver/matching.py` rather than each
+implementing independent proximity/confidence logic.
+**Why:** All four matchers perform the same core operations — amount equality check,
+date-proximity check within a configured window, and basis-point confidence scoring.
+Duplicating this logic across four callers creates calibration risk: a fix to the
+proximity window check must be applied in four places, and drift is silent. A shared
+primitive means calibration is a one-line change in one place, and a bug in the
+primitive is immediately visible across all four matchers' tests.
+
+---
+
 ## Template
 
 ```markdown
