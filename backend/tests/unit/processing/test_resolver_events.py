@@ -102,7 +102,7 @@ def test_payloads_are_frozen() -> None:
         matched_by="v1",
         confidence=9000,
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         p.confidence = 5000  # type: ignore[misc]
 
 
