@@ -938,7 +938,373 @@ import processing.resolver.reducer  # noqa: F401, E402
 
 ### Task 4: Wave 4 — Integration tests + audit view
 
-*To be detailed before Wave 4 begins.*
+**What this does:**
+1. Extends the reducer state with `exclusion_reasons` (hash → why excluded) to power the audit view.
+2. Adds `processing/resolver/audit.py` — `build_audit_view(state) → dict` for the Level B seen/counted ledger.
+3. Adds unit tests for the audit view.
+4. Adds integration tests verifying the full resolver pipeline against a real Postgres DB.
+
+Not a CRITICAL module — no independent test authoring required.
+
+**Files:**
+- Modify: `backend/processing/resolver/reducer.py` — add `exclusion_reasons` dict to state
+- Create: `backend/processing/resolver/audit.py`
+- Create: `backend/tests/unit/processing/test_audit_view.py`
+- Create: `backend/tests/integration/test_resolver_pipeline.py`
+
+**Interfaces:**
+- Consumes: `transactions_view` state dict (from reducer)
+- Produces: `build_audit_view(state: dict) -> dict` with structure below
+
+**Reducer state extension — add `exclusion_reasons` to initial state and reducer:**
+
+In `_initial_state()`, add:
+```python
+"exclusion_reasons": {},   # dict[str, str]: hash → "internal_transfer" | "cc_payment" | "fd_booking" | "reversal"
+```
+
+In `_reducer()`, when processing resolver events, populate `exclusion_reasons`:
+```python
+elif event.event_type == "MarkedInternalTransfer":
+    p = event.payload
+    h1, h2 = str(p["debit_hash"]), str(p["credit_hash"])
+    excluded.extend([h1, h2])
+    reasons[h1] = "internal_transfer"
+    reasons[h2] = "internal_transfer"
+elif event.event_type == "MarkedCCPayment":
+    p = event.payload
+    h1, h2 = str(p["savings_debit_hash"]), str(p["cc_credit_hash"])
+    excluded.extend([h1, h2])
+    reasons[h1] = "cc_payment"
+    reasons[h2] = "cc_payment"
+elif event.event_type == "MarkedFDBooking":
+    p = event.payload
+    h1, h2 = str(p["savings_debit_hash"]), str(p["fd_credit_hash"])
+    excluded.extend([h1, h2])
+    reasons[h1] = "fd_booking"
+    reasons[h2] = "fd_booking"
+elif event.event_type == "MarkedReversal":
+    p = event.payload
+    h1, h2 = str(p["original_hash"]), str(p["reversal_hash"])
+    excluded.extend([h1, h2])
+    reasons[h1] = "reversal"
+    reasons[h2] = "reversal"
+```
+
+The `reasons` variable is `dict[str, str]` initialized from `state["exclusion_reasons"]`.
+Return `"exclusion_reasons": reasons` in the new state dict.
+
+**`processing/resolver/audit.py` — exact content:**
+
+```python
+"""Audit view builder: Level B seen-vs-counted ledger (PRD §15).
+
+Consumes the 'transactions_view' projection state and returns a structured
+audit view proving zero double-counting — every excluded transaction hash
+has a recorded reason from a resolver decision event.
+"""
+
+from __future__ import annotations
+
+
+def build_audit_view(state: dict[str, object]) -> dict[str, object]:
+    """Build the audit view from a transactions_view projection state.
+
+    Returns a dict with:
+      total_seen    — count of all TransactionIngested events
+      total_counted — count of transactions included in totals
+      total_excluded — count of transactions excluded by resolver decisions
+      entries       — list of audit entries, one per transaction, sorted by value_date
+
+    Each entry:
+      idempotency_hash   — str
+      amount_paise       — int (signed)
+      value_date         — str (ISO date)
+      account_ref        — str
+      transaction_type   — str
+      is_counted         — bool
+      exclusion_reason   — str | None  ("internal_transfer" | "cc_payment" | "fd_booking" | "reversal")
+    """
+    transactions: list[dict[str, object]] = list(
+        state.get("transactions", [])  # type: ignore[arg-type]
+    )
+    exclusion_reasons: dict[str, str] = dict(
+        state.get("exclusion_reasons", {})  # type: ignore[arg-type]
+    )
+    excluded_set: set[str] = set(state.get("excluded_hashes", []))  # type: ignore[arg-type]
+
+    entries = []
+    for txn in transactions:
+        h = str(txn["idempotency_hash"])
+        is_counted = h not in excluded_set
+        entries.append(
+            {
+                "idempotency_hash": h,
+                "amount_paise": txn["amount_paise"],
+                "value_date": txn["value_date"],
+                "account_ref": txn.get("account_ref", ""),
+                "transaction_type": txn.get("transaction_type", ""),
+                "is_counted": is_counted,
+                "exclusion_reason": exclusion_reasons.get(h),
+            }
+        )
+
+    entries.sort(key=lambda e: str(e["value_date"]))
+    total_seen = len(entries)
+    total_counted = sum(1 for e in entries if e["is_counted"])
+    total_excluded = total_seen - total_counted
+
+    return {
+        "total_seen": total_seen,
+        "total_counted": total_counted,
+        "total_excluded": total_excluded,
+        "entries": entries,
+    }
+```
+
+**`backend/tests/unit/processing/test_audit_view.py` unit tests — write these:**
+
+```python
+"""Unit tests for build_audit_view (PRD §15 Level B seen/counted ledger)."""
+
+import pytest
+from processing.resolver.audit import build_audit_view
+
+def _state(transactions=None, excluded_hashes=None, exclusion_reasons=None):
+    return {
+        "transactions": transactions or [],
+        "excluded_hashes": excluded_hashes or [],
+        "exclusion_reasons": exclusion_reasons or {},
+        "totals": {"income_paise": 0, "expense_paise": 0, "excluded_count": 0},
+    }
+```
+
+Tests required:
+- Empty state → `total_seen == 0, total_counted == 0, total_excluded == 0, entries == []`
+- One counted transaction → `total_seen == 1, total_counted == 1, total_excluded == 0, entry.is_counted == True, entry.exclusion_reason is None`
+- One excluded transaction (internal_transfer) → `entry.is_counted == False, entry.exclusion_reason == "internal_transfer"`
+- One excluded (cc_payment), one counted → `total_counted == 1, total_excluded == 1`
+- entries sorted by `value_date` ascending
+- `exclusion_reason` values: test all four ("internal_transfer", "cc_payment", "fd_booking", "reversal")
+- Audit view survives state with no `exclusion_reasons` key (backwards compat — use `.get()`)
+
+**`backend/tests/integration/test_resolver_pipeline.py` — exact content:**
+
+```python
+"""Integration: resolver events correctly exclude transactions from totals (Invariant 4).
+
+Uses ephemeral Postgres via testcontainers (same harness as Phase 1 integration tests).
+Verifies the full pipeline: append TransactionIngested + resolver events → build
+transactions_view projection → assert excluded_count and zero totals for matched pairs.
+"""
+
+import uuid
+from datetime import date, datetime, timezone
+
+import pytest
+
+from core.events.store import append_event, read_since_seq
+from core.projections.builder import build_projection_from_events
+from processing.resolver.audit import build_audit_view
+
+
+@pytest.mark.integration
+def test_transfer_pair_excluded_from_totals(pg_session, test_ingestion_event_id):
+    """Two savings transfers → excluded from expense/income totals via MarkedInternalTransfer."""
+    user_id = uuid.uuid4()
+    debit_hash = "d" * 64
+    credit_hash = "c" * 64
+
+    # Ingest debit leg
+    append_event(
+        pg_session, user_id,
+        event_type="TransactionIngested",
+        aggregate_id="HDFC_SAVINGS",
+        payload={
+            "idempotency_hash": debit_hash,
+            "amount_paise": -50000,
+            "value_date": "2026-01-10",
+            "account_ref": "HDFC_SAVINGS",
+            "canonical_narration": "TRANSFER TO SBI",
+            "transaction_type": "expense",
+        },
+        value_date=date(2026, 1, 10),
+        amount_paise=-50000,
+        idempotency_hash=debit_hash,
+        transaction_type="expense",
+        narration="TRANSFER TO SBI",
+        ingestion_event_id=test_ingestion_event_id,
+    )
+
+    # Ingest credit leg
+    append_event(
+        pg_session, user_id,
+        event_type="TransactionIngested",
+        aggregate_id="SBI_SAVINGS",
+        payload={
+            "idempotency_hash": credit_hash,
+            "amount_paise": 50000,
+            "value_date": "2026-01-10",
+            "account_ref": "SBI_SAVINGS",
+            "canonical_narration": "TRANSFER FROM HDFC",
+            "transaction_type": "income",
+        },
+        value_date=date(2026, 1, 10),
+        amount_paise=50000,
+        idempotency_hash=credit_hash,
+        transaction_type="income",
+        narration="TRANSFER FROM HDFC",
+        ingestion_event_id=test_ingestion_event_id,
+    )
+
+    # Resolver decision
+    resolver_hash = "r" * 64  # unique idempotency_hash for this resolver event
+    append_event(
+        pg_session, user_id,
+        event_type="MarkedInternalTransfer",
+        aggregate_id="RESOLVER",
+        payload={
+            "debit_hash": debit_hash,
+            "credit_hash": credit_hash,
+            "matched_by": "transfer_v1",
+            "confidence": 9500,
+        },
+        value_date=date(2026, 1, 10),
+        amount_paise=0,
+        idempotency_hash=resolver_hash,
+        transaction_type="transfer",
+        narration="",
+        ingestion_event_id=test_ingestion_event_id,
+    )
+
+    pg_session.commit()
+
+    events = read_since_seq(pg_session, user_id, since_seq=0)
+    state = build_projection_from_events(events, "transactions_view")
+
+    assert state["totals"]["expense_paise"] == 0, "Transfer debit must not appear in expense totals"
+    assert state["totals"]["income_paise"] == 0, "Transfer credit must not appear in income totals"
+    assert state["totals"]["excluded_count"] == 2
+
+    audit = build_audit_view(state)
+    assert audit["total_seen"] == 2
+    assert audit["total_counted"] == 0
+    assert audit["total_excluded"] == 2
+    for entry in audit["entries"]:
+        assert entry["exclusion_reason"] == "internal_transfer"
+        assert entry["is_counted"] is False
+
+
+@pytest.mark.integration
+def test_non_transfer_transaction_still_counted(pg_session, test_ingestion_event_id):
+    """Unrelated transaction is not excluded when a transfer pair is marked."""
+    user_id = uuid.uuid4()
+    transfer_debit = "t" * 64
+    transfer_credit = "u" * 64
+    expense_hash = "e" * 64
+
+    for h, amt, acct, txn_type, narr in [
+        (transfer_debit, -50000, "HDFC_SAVINGS", "expense", "TRANSFER"),
+        (transfer_credit, 50000, "SBI_SAVINGS", "income", "TRANSFER RECV"),
+        (expense_hash, -12000, "HDFC_SAVINGS", "expense", "SWIGGY"),
+    ]:
+        append_event(
+            pg_session, user_id,
+            event_type="TransactionIngested",
+            aggregate_id=acct,
+            payload={
+                "idempotency_hash": h,
+                "amount_paise": amt,
+                "value_date": "2026-01-15",
+                "account_ref": acct,
+                "canonical_narration": narr,
+                "transaction_type": txn_type,
+            },
+            value_date=date(2026, 1, 15),
+            amount_paise=amt,
+            idempotency_hash=h,
+            transaction_type=txn_type,
+            narration=narr,
+            ingestion_event_id=test_ingestion_event_id,
+        )
+
+    append_event(
+        pg_session, user_id,
+        event_type="MarkedInternalTransfer",
+        aggregate_id="RESOLVER",
+        payload={
+            "debit_hash": transfer_debit,
+            "credit_hash": transfer_credit,
+            "matched_by": "transfer_v1",
+            "confidence": 9500,
+        },
+        value_date=date(2026, 1, 15),
+        amount_paise=0,
+        idempotency_hash="rr" * 32,
+        transaction_type="transfer",
+        narration="",
+        ingestion_event_id=test_ingestion_event_id,
+    )
+
+    pg_session.commit()
+    events = read_since_seq(pg_session, user_id, since_seq=0)
+    state = build_projection_from_events(events, "transactions_view")
+
+    assert state["totals"]["expense_paise"] == 12000, "Swiggy expense must still be counted"
+    assert state["totals"]["income_paise"] == 0
+    assert state["totals"]["excluded_count"] == 2
+```
+
+**Steps:**
+
+- [ ] **Step 1:** Extend `reducer.py` with `exclusion_reasons` dict (state + reducer logic above). Update existing Wave 3 unit tests if any break (they shouldn't — new key is additive).
+
+- [ ] **Step 2:** Create `processing/resolver/audit.py` with exact content above.
+
+- [ ] **Step 3:** Create `backend/tests/unit/processing/test_audit_view.py` with tests listed above.
+
+- [ ] **Step 4:** Create `backend/tests/integration/test_resolver_pipeline.py` with exact content above.
+
+- [ ] **Step 5:** Check if `test_ingestion_event_id` fixture exists in the integration conftest. If not, add it:
+  ```python
+  # In backend/tests/integration/conftest.py — check existing fixtures first
+  # test_ingestion_event_id: a UUID for a pre-created IngestionEvent row
+  ```
+  Look at how existing integration tests create IngestionEvent rows and follow the same pattern.
+
+- [ ] **Step 6:** Run unit tests:
+  ```bash
+  cd backend && PYTHONPATH=. python3 -m pytest tests/unit/processing/ -v
+  ```
+  Expected: all PASS (including new audit view tests).
+
+- [ ] **Step 7:** Run integration tests (requires Docker):
+  ```bash
+  cd backend && PYTHONPATH=. python3 -m pytest tests/integration/test_resolver_pipeline.py -v -m integration
+  ```
+  Expected: 2 tests PASS.
+
+- [ ] **Step 8:** Run mypy:
+  ```bash
+  cd backend && python3 -m mypy --config-file pyproject.toml --explicit-package-bases processing/resolver/ -v
+  ```
+
+- [ ] **Step 9:** Commit:
+  ```bash
+  git commit -m "Wave 4: audit view + resolver integration tests
+
+  processing/resolver/reducer.py: extend state with exclusion_reasons dict
+  (maps idempotency_hash → 'internal_transfer'|'cc_payment'|'fd_booking'|'reversal').
+
+  processing/resolver/audit.py: build_audit_view(state) → Level B seen/counted
+  ledger (PRD §15). Entries sorted by value_date. is_counted + exclusion_reason
+  per transaction.
+
+  Integration tests: transfer pair excluded from expense/income totals end-to-end
+  against real Postgres. Audit view verified from real projection state.
+
+  All tests pass. mypy clean."
+  ```
 
 ---
 
