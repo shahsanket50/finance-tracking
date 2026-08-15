@@ -17,6 +17,6 @@ RESOLVER_CONFIDENCE_THRESHOLD: int = 8500
 
 # Confidence formula constants (basis points). Calibration risk — not validated against real data.
 # See PROJECT_STATE.md §Standing risks.
-CONFIDENCE_BASE_BP: int = 9000       # base confidence when amounts match within window
-CONFIDENCE_SAME_DAY_BONUS_BP: int = 500    # bonus for same-day match
+CONFIDENCE_BASE_BP: int = 9000  # base confidence when amounts match within window
+CONFIDENCE_SAME_DAY_BONUS_BP: int = 500  # bonus for same-day match
 CONFIDENCE_PER_DAY_PENALTY_BP: int = 200  # penalty per day of separation

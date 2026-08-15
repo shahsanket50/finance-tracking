@@ -42,7 +42,7 @@ def test_deactivated_key_still_decrypts_existing_ciphertext(
     test_user: User,
 ) -> None:
     """Deactivated keys remain usable for decryption (cold storage — audit requirement)."""
-    original_payload = {"narration": "Swiggy", "amount": "-50000"}
+    original_payload: dict[str, object] = {"narration": "Swiggy", "amount": "-50000"}
 
     ciphertext, key_id = encrypt_payload(pg_session, test_user.id, original_payload)
 

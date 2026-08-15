@@ -103,7 +103,7 @@ def test_payloads_are_frozen() -> None:
         confidence=9000,
     )
     with pytest.raises(ValidationError):
-        p.confidence = 5000  # type: ignore[misc]
+        p.confidence = 5000
 
 
 def test_match_window_constants_are_positive_ints() -> None:

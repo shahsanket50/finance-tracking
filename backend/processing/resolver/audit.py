@@ -26,7 +26,7 @@ def build_audit_view(state: dict[str, object]) -> dict[str, object]:
       account_ref        — str
       transaction_type   — str
       is_counted         — bool
-      exclusion_reason   — str | None  ("internal_transfer" | "cc_payment" | "fd_booking" | "reversal")
+      exclusion_reason   — str | None  (one of the four RESOLVER_EVENT_TYPES values)
     """
     transactions: list[dict[str, object]] = list(
         cast(list[dict[str, object]], state.get("transactions", []))
@@ -34,9 +34,7 @@ def build_audit_view(state: dict[str, object]) -> dict[str, object]:
     exclusion_reasons: dict[str, str] = dict(
         cast(dict[str, str], state.get("exclusion_reasons", {}))
     )
-    excluded_set: set[str] = set(
-        cast(list[str], state.get("excluded_hashes", []))
-    )
+    excluded_set: set[str] = set(cast(list[str], state.get("excluded_hashes", [])))
 
     entries = []
     for txn in transactions:

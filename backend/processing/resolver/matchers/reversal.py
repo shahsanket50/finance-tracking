@@ -31,17 +31,21 @@ def find_matches(candidates: list[CandidateTxn]) -> list[MarkedReversalPayload]:
             if credit.account_type != debit.account_type:
                 continue
             confidence = score_candidate_pair(
-                debit.amount_paise, debit.value_date,
-                credit.amount_paise, credit.value_date,
+                debit.amount_paise,
+                debit.value_date,
+                credit.amount_paise,
+                credit.value_date,
                 REVERSAL_MATCH_WINDOW_DAYS,
             )
             if confidence >= RESOLVER_CONFIDENCE_THRESHOLD:
-                results.append(MarkedReversalPayload(
-                    original_hash=debit.idempotency_hash,
-                    reversal_hash=credit.idempotency_hash,
-                    matched_by="reversal_v1",
-                    confidence=confidence,
-                ))
+                results.append(
+                    MarkedReversalPayload(
+                        original_hash=debit.idempotency_hash,
+                        reversal_hash=credit.idempotency_hash,
+                        matched_by="reversal_v1",
+                        confidence=confidence,
+                    )
+                )
                 matched_hashes.add(debit.idempotency_hash)
                 matched_hashes.add(credit.idempotency_hash)
                 break

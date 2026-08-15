@@ -22,7 +22,7 @@ def _initial_state() -> dict[str, object]:
     return {
         "transactions": [],
         "excluded_hashes": [],
-        "exclusion_reasons": {},   # dict[str, str]: hash → "internal_transfer" | "cc_payment" | "fd_booking" | "reversal"
+        "exclusion_reasons": {},  # hash → exclusion reason (one of RESOLVER_EVENT_TYPES)
         "totals": {
             "income_paise": 0,
             "expense_paise": 0,
@@ -36,9 +36,7 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
         cast(list[dict[str, object]], state["transactions"])
     )
     excluded: list[str] = list(cast(list[str], state["excluded_hashes"]))
-    reasons: dict[str, str] = dict(
-        cast(dict[str, str], state["exclusion_reasons"])
-    )
+    reasons: dict[str, str] = dict(cast(dict[str, str], state["exclusion_reasons"]))
 
     if event.event_type == "TransactionIngested":
         p = event.payload
@@ -82,14 +80,10 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
     active = [t for t in transactions if t["idempotency_hash"] not in excluded_set]
 
     income_paise = sum(
-        cast(int, t["amount_paise"])
-        for t in active
-        if t.get("transaction_type") == "income"
+        cast(int, t["amount_paise"]) for t in active if t.get("transaction_type") == "income"
     )
     expense_paise = sum(
-        abs(cast(int, t["amount_paise"]))
-        for t in active
-        if t.get("transaction_type") == "expense"
+        abs(cast(int, t["amount_paise"])) for t in active if t.get("transaction_type") == "expense"
     )
     excluded_count = len(transactions) - len(active)
 

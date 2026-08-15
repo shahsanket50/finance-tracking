@@ -29,18 +29,22 @@ def find_matches(candidates: list[CandidateTxn]) -> list[MarkedCCPaymentPayload]
             if credit.idempotency_hash in matched_hashes:
                 continue
             confidence = score_candidate_pair(
-                debit.amount_paise, debit.value_date,
-                credit.amount_paise, credit.value_date,
+                debit.amount_paise,
+                debit.value_date,
+                credit.amount_paise,
+                credit.value_date,
                 CC_PAYMENT_MATCH_WINDOW_DAYS,
             )
             if confidence >= RESOLVER_CONFIDENCE_THRESHOLD:
-                results.append(MarkedCCPaymentPayload(
-                    savings_debit_hash=debit.idempotency_hash,
-                    cc_credit_hash=credit.idempotency_hash,
-                    matched_by="cc_payment_v1",
-                    confidence=confidence,
-                    match_window_days=CC_PAYMENT_MATCH_WINDOW_DAYS,
-                ))
+                results.append(
+                    MarkedCCPaymentPayload(
+                        savings_debit_hash=debit.idempotency_hash,
+                        cc_credit_hash=credit.idempotency_hash,
+                        matched_by="cc_payment_v1",
+                        confidence=confidence,
+                        match_window_days=CC_PAYMENT_MATCH_WINDOW_DAYS,
+                    )
+                )
                 matched_hashes.add(debit.idempotency_hash)
                 matched_hashes.add(credit.idempotency_hash)
                 break

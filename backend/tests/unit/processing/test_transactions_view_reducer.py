@@ -12,14 +12,13 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
+from typing import cast
 
 from core.events.store import Event
 from core.projections.builder import build_projection_from_events
 
-_UTC = timezone.utc
+_UTC = UTC
 _USER = uuid.uuid4()
 _NOW = datetime(2026, 1, 1, tzinfo=_UTC)
 
@@ -63,6 +62,38 @@ def _resolver_event(event_type: str, payload: dict[str, object]) -> Event:
     )
 
 
+# ── E2: import boundary ────────────────────────────────────────────────────────
+
+
+def test_reducer_does_not_import_matcher_modules() -> None:
+    """E2 hardening: reducer reads recorded decisions — it never calls matcher logic.
+
+    Calling matchers at projection time would violate TRD §9.2 (decisions vs
+    derivations) and break Invariant 3 (replay determinism). This test parses
+    reducer.py with ast and asserts no forbidden imports exist, enforcing the
+    boundary in CI rather than relying on code-structure inference.
+    """
+    import ast
+    import pathlib
+
+    reducer_path = pathlib.Path(__file__).parents[3] / "processing" / "resolver" / "reducer.py"
+    tree = ast.parse(reducer_path.read_text())
+    forbidden = ("processing.resolver.matching", "processing.resolver.matchers")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            for prefix in forbidden:
+                assert not node.module.startswith(prefix), (
+                    f"reducer.py must not import from {node.module!r} — "
+                    "reducer reads events, not matcher logic"
+                )
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                for prefix in forbidden:
+                    assert not alias.name.startswith(prefix), (
+                        f"reducer.py must not import {alias.name!r}"
+                    )
+
+
 # ── Registration ───────────────────────────────────────────────────────────────
 
 
@@ -79,10 +110,10 @@ def test_empty_events_produces_zero_state() -> None:
     result = build_projection_from_events([], "transactions_view")
     assert result["transactions"] == []
     assert result["excluded_hashes"] == []
-    totals = result["totals"]
-    assert totals["income_paise"] == 0  # type: ignore[index]
-    assert totals["expense_paise"] == 0  # type: ignore[index]
-    assert totals["excluded_count"] == 0  # type: ignore[index]
+    totals = cast(dict[str, int], result["totals"])
+    assert totals["income_paise"] == 0
+    assert totals["expense_paise"] == 0
+    assert totals["excluded_count"] == 0
 
 
 # ── Single transaction ─────────────────────────────────────────────────────────
@@ -91,19 +122,19 @@ def test_empty_events_produces_zero_state() -> None:
 def test_single_expense_transaction() -> None:
     events = [_txn("a" * 64, -50000, "expense")]
     result = build_projection_from_events(events, "transactions_view")
-    assert len(result["transactions"]) == 1  # type: ignore[arg-type]
-    totals = result["totals"]
-    assert totals["expense_paise"] == 50000  # type: ignore[index]
-    assert totals["income_paise"] == 0  # type: ignore[index]
-    assert totals["excluded_count"] == 0  # type: ignore[index]
+    assert len(cast(list[dict[str, object]], result["transactions"])) == 1
+    totals = cast(dict[str, int], result["totals"])
+    assert totals["expense_paise"] == 50000
+    assert totals["income_paise"] == 0
+    assert totals["excluded_count"] == 0
 
 
 def test_single_income_transaction() -> None:
     events = [_txn("b" * 64, 100000, "income")]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
-    assert totals["income_paise"] == 100000  # type: ignore[index]
-    assert totals["expense_paise"] == 0  # type: ignore[index]
+    totals = cast(dict[str, int], result["totals"])
+    assert totals["income_paise"] == 100000
+    assert totals["expense_paise"] == 0
 
 
 def test_two_transactions_totals_accumulate() -> None:
@@ -112,8 +143,8 @@ def test_two_transactions_totals_accumulate() -> None:
         _txn("b" * 64, -20000, "expense"),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    assert len(result["transactions"]) == 2  # type: ignore[arg-type]
-    assert result["totals"]["expense_paise"] == 50000  # type: ignore[index]
+    assert len(cast(list[dict[str, object]], result["transactions"])) == 2
+    assert cast(dict[str, int], result["totals"])["expense_paise"] == 50000
 
 
 def test_income_and_expense_accounted_separately() -> None:
@@ -122,9 +153,9 @@ def test_income_and_expense_accounted_separately() -> None:
         _txn("b" * 64, -30000, "expense"),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
-    assert totals["income_paise"] == 80000  # type: ignore[index]
-    assert totals["expense_paise"] == 30000  # type: ignore[index]
+    totals = cast(dict[str, int], result["totals"])
+    assert totals["income_paise"] == 80000
+    assert totals["expense_paise"] == 30000
 
 
 # ── Invariant 4 — exclusion via resolver events ────────────────────────────────
@@ -148,10 +179,10 @@ def test_marked_internal_transfer_excludes_both_legs() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 0, "Transfer debit must not count as expense"
     assert totals["income_paise"] == 0, "Transfer credit must not count as income"
-    assert totals["excluded_count"] == 2  # type: ignore[index]
+    assert totals["excluded_count"] == 2
 
 
 def test_marked_cc_payment_excludes_both_legs() -> None:
@@ -172,10 +203,10 @@ def test_marked_cc_payment_excludes_both_legs() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 0
     assert totals["income_paise"] == 0
-    assert totals["excluded_count"] == 2  # type: ignore[index]
+    assert totals["excluded_count"] == 2
 
 
 def test_marked_fd_booking_excludes_both_legs() -> None:
@@ -196,10 +227,10 @@ def test_marked_fd_booking_excludes_both_legs() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 0
     assert totals["income_paise"] == 0
-    assert totals["excluded_count"] == 2  # type: ignore[index]
+    assert totals["excluded_count"] == 2
 
 
 def test_two_transfer_pairs_both_excluded() -> None:
@@ -221,10 +252,10 @@ def test_two_transfer_pairs_both_excluded() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 0, "Both transfer debits must be excluded from expense totals"
     assert totals["income_paise"] == 0, "Both transfer credits must be excluded from income totals"
-    assert totals["excluded_count"] == 4  # type: ignore[index]
+    assert totals["excluded_count"] == 4
 
 
 def test_marked_reversal_excludes_both_legs() -> None:
@@ -244,10 +275,10 @@ def test_marked_reversal_excludes_both_legs() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 0
     assert totals["income_paise"] == 0
-    assert totals["excluded_count"] == 2  # type: ignore[index]
+    assert totals["excluded_count"] == 2
 
 
 def test_non_excluded_transaction_still_counts() -> None:
@@ -270,11 +301,11 @@ def test_non_excluded_transaction_still_counts() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 12000
     assert totals["income_paise"] == 0
-    assert totals["excluded_count"] == 2  # type: ignore[index]
-    assert len(result["transactions"]) == 3  # type: ignore[arg-type]
+    assert totals["excluded_count"] == 2
+    assert len(cast(list[dict[str, object]], result["transactions"])) == 3
 
 
 # ── Out-of-order resolver events ───────────────────────────────────────────────
@@ -296,9 +327,9 @@ def test_resolver_event_before_transaction_still_excludes() -> None:
         _txn(hash_val, -50000, "expense"),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    totals = result["totals"]
+    totals = cast(dict[str, int], result["totals"])
     assert totals["expense_paise"] == 0, "Pre-declared exclusion must apply retroactively"
-    assert totals["excluded_count"] == 1  # type: ignore[index]
+    assert totals["excluded_count"] == 1
 
 
 # ── Unknown event type ─────────────────────────────────────────────────────────
@@ -319,8 +350,8 @@ def test_unknown_event_type_is_silently_ignored() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    assert len(result["transactions"]) == 1  # type: ignore[arg-type]
-    assert result["totals"]["expense_paise"] == 10000  # type: ignore[index]
+    assert len(cast(list[dict[str, object]], result["transactions"])) == 1
+    assert cast(dict[str, int], result["totals"])["expense_paise"] == 10000
 
 
 # ── Determinism (Invariant 3) ──────────────────────────────────────────────────
@@ -352,10 +383,10 @@ def test_projection_is_deterministic() -> None:
 def test_transactions_list_contains_expected_fields() -> None:
     events = [_txn("a" * 64, -50000, "expense")]
     result = build_projection_from_events(events, "transactions_view")
-    txns = result["transactions"]
-    assert isinstance(txns, list)  # type: ignore[arg-type]
-    assert len(txns) == 1  # type: ignore[arg-type]
-    txn = txns[0]  # type: ignore[index]
+    txns = cast(list[dict[str, object]], result["transactions"])
+    assert isinstance(txns, list)
+    assert len(txns) == 1
+    txn = txns[0]
     assert "idempotency_hash" in txn
     assert "amount_paise" in txn
     assert "value_date" in txn
@@ -378,9 +409,9 @@ def test_excluded_hashes_populated_after_resolver_event() -> None:
         )
     ]
     result = build_projection_from_events(events, "transactions_view")
-    excluded = result["excluded_hashes"]
-    assert h1 in excluded  # type: ignore[operator]
-    assert h2 in excluded  # type: ignore[operator]
+    excluded = cast(list[str], result["excluded_hashes"])
+    assert h1 in excluded
+    assert h2 in excluded
 
 
 def test_transactions_list_preserves_all_events_including_excluded() -> None:
@@ -394,5 +425,5 @@ def test_transactions_list_preserves_all_events_including_excluded() -> None:
         ),
     ]
     result = build_projection_from_events(events, "transactions_view")
-    assert len(result["transactions"]) == 1  # type: ignore[arg-type]
-    assert result["totals"]["excluded_count"] == 1  # type: ignore[index]
+    assert len(cast(list[dict[str, object]], result["transactions"])) == 1
+    assert cast(dict[str, int], result["totals"])["excluded_count"] == 1

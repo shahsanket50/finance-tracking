@@ -125,7 +125,7 @@ def test_build_projection_from_events_is_pure() -> None:
 
 
 def test_load_snapshot_corrupt_returns_none() -> None:
-    """Corrupt snapshot must return None so callers trigger a full rebuild, not silently use empty state.
+    """Corrupt snapshot must return None so callers trigger a full rebuild, not use empty state.
 
     Current load_snapshot returns ({}, last_seq) for unexpected data types — a bug.
     A caller receiving ({}, 500) treats it as a valid snapshot, skipping events 0–500
@@ -178,4 +178,4 @@ def test_resolver_decisions_read_from_events_not_recomputed() -> None:
     events_out = result["events"]
     assert isinstance(events_out, list)
     assert len(events_out) == 1
-    assert events_out[0]["event_type"] == "MarkedInternalTransfer"  # type: ignore[index]
+    assert events_out[0]["event_type"] == "MarkedInternalTransfer"

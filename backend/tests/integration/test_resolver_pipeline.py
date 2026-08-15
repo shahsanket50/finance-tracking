@@ -7,8 +7,10 @@ transactions_view projection → assert excluded_count and zero totals for match
 
 import uuid
 from datetime import date
+from typing import cast
 
 import pytest
+from sqlalchemy.orm import Session
 
 from core.events.models import User
 from core.events.store import append_event, read_since_seq
@@ -17,7 +19,9 @@ from processing.resolver.audit import build_audit_view
 
 
 @pytest.mark.integration
-def test_transfer_pair_excluded_from_totals(pg_session, test_user, test_ingestion_event_id):
+def test_transfer_pair_excluded_from_totals(
+    pg_session: Session, test_user: User, test_ingestion_event_id: uuid.UUID
+) -> None:
     """Two savings transfers → excluded from expense/income totals via MarkedInternalTransfer."""
     assert isinstance(test_user, User)
     user_id = test_user.id
@@ -26,7 +30,8 @@ def test_transfer_pair_excluded_from_totals(pg_session, test_user, test_ingestio
 
     # Ingest debit leg
     append_event(
-        pg_session, user_id,
+        pg_session,
+        user_id,
         event_type="TransactionIngested",
         aggregate_id="HDFC_SAVINGS",
         payload={
@@ -47,7 +52,8 @@ def test_transfer_pair_excluded_from_totals(pg_session, test_user, test_ingestio
 
     # Ingest credit leg
     append_event(
-        pg_session, user_id,
+        pg_session,
+        user_id,
         event_type="TransactionIngested",
         aggregate_id="SBI_SAVINGS",
         payload={
@@ -69,7 +75,8 @@ def test_transfer_pair_excluded_from_totals(pg_session, test_user, test_ingestio
     # Resolver decision
     resolver_hash = "r" * 64  # unique idempotency_hash for this resolver event
     append_event(
-        pg_session, user_id,
+        pg_session,
+        user_id,
         event_type="MarkedInternalTransfer",
         aggregate_id="RESOLVER",
         payload={
@@ -91,21 +98,24 @@ def test_transfer_pair_excluded_from_totals(pg_session, test_user, test_ingestio
     events = read_since_seq(pg_session, user_id, since_seq=0)
     state = build_projection_from_events(events, "transactions_view")
 
-    assert state["totals"]["expense_paise"] == 0, "Transfer debit must not appear in expense totals"
-    assert state["totals"]["income_paise"] == 0, "Transfer credit must not appear in income totals"
-    assert state["totals"]["excluded_count"] == 2
+    totals = cast(dict[str, int], state["totals"])
+    assert totals["expense_paise"] == 0, "Transfer debit must not appear in expense totals"
+    assert totals["income_paise"] == 0, "Transfer credit must not appear in income totals"
+    assert totals["excluded_count"] == 2
 
     audit = build_audit_view(state)
     assert audit["total_seen"] == 2
     assert audit["total_counted"] == 0
     assert audit["total_excluded"] == 2
-    for entry in audit["entries"]:
+    for entry in cast(list[dict[str, object]], audit["entries"]):
         assert entry["exclusion_reason"] == "internal_transfer"
         assert entry["is_counted"] is False
 
 
 @pytest.mark.integration
-def test_non_transfer_transaction_still_counted(pg_session, test_user, test_ingestion_event_id):
+def test_non_transfer_transaction_still_counted(
+    pg_session: Session, test_user: User, test_ingestion_event_id: uuid.UUID
+) -> None:
     """Unrelated transaction is not excluded when a transfer pair is marked."""
     assert isinstance(test_user, User)
     user_id = test_user.id
@@ -119,7 +129,8 @@ def test_non_transfer_transaction_still_counted(pg_session, test_user, test_inge
         (expense_hash, -12000, "HDFC_SAVINGS", "expense", "SWIGGY"),
     ]:
         append_event(
-            pg_session, user_id,
+            pg_session,
+            user_id,
             event_type="TransactionIngested",
             aggregate_id=acct,
             payload={
@@ -139,7 +150,8 @@ def test_non_transfer_transaction_still_counted(pg_session, test_user, test_inge
         )
 
     append_event(
-        pg_session, user_id,
+        pg_session,
+        user_id,
         event_type="MarkedInternalTransfer",
         aggregate_id="RESOLVER",
         payload={
@@ -160,6 +172,7 @@ def test_non_transfer_transaction_still_counted(pg_session, test_user, test_inge
     events = read_since_seq(pg_session, user_id, since_seq=0)
     state = build_projection_from_events(events, "transactions_view")
 
-    assert state["totals"]["expense_paise"] == 12000, "Swiggy expense must still be counted"
-    assert state["totals"]["income_paise"] == 0
-    assert state["totals"]["excluded_count"] == 2
+    totals = cast(dict[str, int], state["totals"])
+    assert totals["expense_paise"] == 12000, "Swiggy expense must still be counted"
+    assert totals["income_paise"] == 0
+    assert totals["excluded_count"] == 2

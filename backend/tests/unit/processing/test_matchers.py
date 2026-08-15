@@ -7,11 +7,11 @@ INDEPENDENT AUTHORING: this file was written from the spec without opening
 any file under processing/resolver/matchers/ or processing/resolver/matching.py.
 
 Modules under test (not yet implemented — imports will fail until Wave 2 implementation):
-  processing.resolver.matchers.transfer   → find_matches(candidates) -> list[MarkedInternalTransferPayload]
-  processing.resolver.matchers.cc_payment → find_matches(candidates) -> list[MarkedCCPaymentPayload]
-  processing.resolver.matchers.fd_booking → find_matches(candidates) -> list[MarkedFDBookingPayload]
-  processing.resolver.matchers.reversal   → find_matches(candidates) -> list[MarkedReversalPayload]
-  processing.resolver.candidate           → CandidateTxn(idempotency_hash, amount_paise, value_date, account_type)
+  matchers.transfer   → find_matches(list[CandidateTxn]) -> list[MarkedInternalTransferPayload]
+  matchers.cc_payment → find_matches(list[CandidateTxn]) -> list[MarkedCCPaymentPayload]
+  matchers.fd_booking → find_matches(list[CandidateTxn]) -> list[MarkedFDBookingPayload]
+  matchers.reversal   → find_matches(list[CandidateTxn]) -> list[MarkedReversalPayload]
+  CandidateTxn(idempotency_hash, amount_paise, value_date, account_type)
 
 All matchers:
 - Accept list[CandidateTxn]
@@ -21,8 +21,6 @@ All matchers:
 """
 
 from datetime import date
-
-import pytest
 
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.config import RESOLVER_CONFIDENCE_THRESHOLD
@@ -34,10 +32,10 @@ from processing.resolver.events import (
 )
 from processing.resolver.matchers import cc_payment, fd_booking, reversal, transfer
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _txn(
     hash_suffix: str,
