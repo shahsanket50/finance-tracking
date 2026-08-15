@@ -12,9 +12,10 @@ Every session, in this order:
 
 1. Read this file.
 2. Read `docs/PROJECT_STATE.md` — what phase we're in, what's in progress, what's blocked.
-3. Read the relevant spec section in `docs/PRD.md` / `docs/TRD.md` before implementing anything.
-4. Check `docs/CODE_GRAPH.md` to understand where new code belongs.
-5. At end of session, append to `docs/SESSION_LOG.md` and update `docs/PROJECT_STATE.md`.
+3. If starting, continuing, or closing a phase or wave, read `docs/PHASE_PROTOCOL.md` and follow it — this is the standing procedure for phase execution and does not need to be re-specified each time.
+4. Read the relevant spec section in `docs/PRD.md` / `docs/TRD.md` before implementing anything.
+5. Check `docs/CODE_GRAPH.md` to understand where new code belongs.
+6. At end of session, append to `docs/SESSION_LOG.md` and update `docs/PROJECT_STATE.md`.
 
 If a task is not traceable to a PRD/TRD section, **stop and ask** rather than inventing scope.
 
@@ -160,7 +161,7 @@ Store all timestamps in UTC. Perform **all** financial-year, statement-period, a
 - **Property-based tests for invariants** (§2), not just example-based tests.
 - **A change that touches parsing, the resolver, or tax logic must run the full golden dataset.** A diff is a failure, not a discussion.
 - **All quality gates must pass before merge.** See `docs/QUALITY.md` for the full gate list, tiered coverage thresholds, and per-run reporting. Key rules: coverage may never decrease (ratchet); an invariant test failure is P0 and stops feature work; migrations that `UPDATE`/`DELETE` on immutable tables fail the build; the real-data guard is never bypassed.
-- **For critical modules (`core/`, `processing/resolver`, `processing/deductions`, `domain/ca_view`, tax rule-set evaluation), tests must be authored in a separate session from the implementation.** The test-authoring session reads the PRD/TRD spec and acceptance criteria; it must not open the implementation file. Tests derived from the same code they test only re-assert whatever the code happens to do — independence is what gives a test the ability to disagree with the implementation. See `docs/QUALITY.md` §9 and TRD §11.
+- **Independent test authoring for critical modules.** For `core/`, `processing/resolver`, `processing/deductions`, `domain/ca_view`, and tax rule-set evaluation, tests must be authored in a **separate session from the implementation, working from the spec (PRD/TRD + journeys), without opening the implementation file.** Tests derived from the code they test only re-assert what the code happens to do; tests derived independently from the spec can disagree with the code, and that disagreement is the signal. See TRD §11.
 - **Tax constants carry `# UNVERIFIED — CA review pending`** until the Phase 4 CA review clears them. Never treat an AI-generated tax threshold, rate, or limit as validated.
 
 ---
@@ -187,6 +188,7 @@ Stop and ask the owner rather than proceeding if:
 | `docs/PRD.md` | Product requirements. What the product *is*. |
 | `docs/TRD.md` | Technical requirements. How it's built. |
 | `docs/PROJECT_STATE.md` | Current phase, in-progress work, blockers. **Update every session.** |
+| `docs/PHASE_PROTOCOL.md` | Standing procedure for starting, running, and closing any phase or wave. Read whenever a phase/wave is in motion. |
 | `docs/SESSION_LOG.md` | Append-only history of what each session did. |
 | `docs/CODE_GRAPH.md` | Module map and dependency graph. Update when structure changes. |
 | `docs/DECISIONS.md` | Architecture decision records (ADRs). |

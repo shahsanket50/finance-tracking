@@ -44,6 +44,8 @@ def compute_idempotency_hash(
     running_balance is NOT part of the hash — it is validation-only.
     canonical_narration must already be canonicalized via canonicalize_narration().
     """
+    if not isinstance(amount_paise, int):
+        raise TypeError(f"amount_paise must be int, got {type(amount_paise).__name__}")
     raw = (
         f"{account_ref}"
         f"|{value_date.isoformat()}"

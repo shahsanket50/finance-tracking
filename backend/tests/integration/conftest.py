@@ -107,6 +107,12 @@ def test_ingestion_event(pg_session: Session, test_user: User) -> IngestionEvent
     return ingestion
 
 
+@pytest.fixture
+def test_ingestion_event_id(test_ingestion_event: IngestionEvent) -> uuid.UUID:
+    """Return the UUID of a pre-created IngestionEvent (required FK for transaction_events)."""
+    return test_ingestion_event.id
+
+
 @pytest.fixture(scope="session")
 def redis_container() -> Generator[RedisContainer, None, None]:
     """Session-scoped ephemeral Redis 7 container for integration tests."""

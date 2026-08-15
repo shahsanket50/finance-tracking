@@ -185,3 +185,76 @@ def test_append_event_raises_without_value_date() -> None:
             ingestion_event_id=uuid.uuid4(),
             # value_date intentionally omitted
         )
+
+
+# ── Replay determinism + upcaster chain (B-3, B-6) ────────────────────────────
+
+
+def test_build_projection_from_same_events_is_deterministic() -> None:
+    """build_projection_from_events is a pure function: same input → identical output (I3)."""
+    import json
+
+    from core.events.store import Event as EventCls
+    from core.projections.builder import build_projection_from_events
+
+    user_id = uuid.uuid4()
+    events = [
+        EventCls(
+            id=uuid.uuid4(),
+            seq=1,
+            event_version=1,
+            event_type="TransactionIngested",
+            user_id=user_id,
+            aggregate_id="ACC",
+            payload={"narration": "coffee", "amount": "-500"},
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    ]
+
+    result_a = build_projection_from_events(events)
+    result_b = build_projection_from_events(events)
+
+    assert json.dumps(result_a, sort_keys=True) == json.dumps(result_b, sort_keys=True)
+
+
+def test_upcaster_applied_automatically_on_read() -> None:
+    """read_stream upcasts event payloads to the current version automatically (TRD §C4)."""
+    import core.events.upcasters as upcasters_mod
+    from core.events.encryption import encrypt_payload
+    from core.events.upcasters import _UPCASTERS
+
+    user_id = uuid.uuid4()
+    key = _make_key(user_id)
+
+    enc_session = MagicMock()
+    with patch("core.events.encryption._get_active_key", return_value=key):
+        payload_bytes, _ = encrypt_payload(enc_session, user_id, {"original": True})
+
+    original_version = upcasters_mod.CURRENT_VERSION
+    try:
+        upcasters_mod.CURRENT_VERSION = 2
+        _UPCASTERS[("TransactionIngested", 1)] = lambda p: {**p, "v2_field": "added"}
+
+        row = SimpleNamespace(
+            id=uuid.uuid4(),
+            seq=1,
+            event_version=1,
+            event_type="TransactionIngested",
+            account_ref="ACC",
+            user_id=user_id,
+            encryption_key_id=key.id,
+            payload=payload_bytes,
+            created_at=datetime.now(tz=UTC),
+        )
+
+        session = MagicMock()
+        session.scalars.return_value.all.return_value = [row]
+        session.get.return_value = key
+
+        events = read_stream(session, user_id, "ACC")
+
+        assert len(events) == 1
+        assert events[0].payload == {"original": True, "v2_field": "added"}
+    finally:
+        upcasters_mod.CURRENT_VERSION = original_version
+        _UPCASTERS.pop(("TransactionIngested", 1), None)

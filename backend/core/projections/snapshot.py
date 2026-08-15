@@ -45,13 +45,14 @@ def load_snapshot(
     if row is None:
         return None
     raw = row[0]
-    # snapshot_data may come back as a dict (JSON column) or a string
+    # snapshot_data may come back as a dict (JSONB column) or a string
     if isinstance(raw, str):
         data: dict[str, object] = json.loads(raw)
     elif isinstance(raw, dict):
         data = raw
     else:
-        data = {}
+        # Unexpected type — corrupt or migrated row; signal caller to do full rebuild
+        return None
     return data, int(row[1])
 
 

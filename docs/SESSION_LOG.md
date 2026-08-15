@@ -6,6 +6,39 @@
 
 ---
 
+## 2026-08-14 — Session 011: Wave 5 — Phase 2 closure gate
+
+**Phase:** 2 — Ledger & Correctness → CLOSED
+**Participants:** Sanket + Claude
+
+### Done
+
+- **Fixed `test_payloads_are_frozen`** in `backend/tests/unit/processing/test_resolver_events.py`: narrowed `pytest.raises(Exception)` to `pytest.raises(ValidationError)` — minor finding from Wave 1 task review; `ValidationError` was already imported.
+- **Ran full unit test suite**: 317 tests, all pass (0 failures).
+- **Ran full integration test suite**: 27/28 pass. 1 pre-existing failure (`test_pitr.py::test_wal_level_is_replica`) requires Docker `db` host — not a regression; this test has never passed without `docker compose up`. All 27 testcontainer-based integration tests pass.
+- **mypy**: clean — 0 issues in 18 source files (`processing/` + `core/projections/`).
+- **Updated `docs/PROJECT_STATE.md`**: Phase 2 marked CLOSED; all 7 exit criteria checked off (with note that Level A overlap-map UI is partial — deferred to Phase 3); Phase 2 blockers A-3 + C-2 marked FIXED; standing risk for F-9 marked CLOSED; phase roadmap table updated.
+
+### Decisions made
+
+- Level A audit view (overlap-map UI) deferred to Phase 3. The UniqueConstraint on `idempotency_hash` provides the correctness guarantee; a queryable overlap view is UX, not correctness.
+- PITR integration test (`test_pitr.py`) is gated on a live Docker `db` host. It is an infra-readiness check, not a unit/functional gate. Excluded from the Wave 5 pass/fail threshold.
+
+### Phase 2 exit gate summary
+
+| Gate | Result |
+|---|---|
+| Unit tests | 317/317 pass |
+| Integration tests | 27/28 pass (1 PITR Docker-only, pre-existing) |
+| mypy | Clean — 0 issues, 18 source files |
+| Exit criterion checklist | 7/7 checked (Level A partial — noted and deferred) |
+
+### Next
+
+- Phase 3: Day-to-Day Layer — budget tracking, monthly totals, surplus reconciliation.
+
+---
+
 ## 2026-08-13 — Session 010: Phase 1 hard close — integration tests run for real + gate hardening
 
 **Phase:** 1 — Ingestion & Trust → CLOSED

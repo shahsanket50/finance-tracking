@@ -64,6 +64,8 @@ def _events_list_reducer(state: dict[str, object], event: Event) -> dict[str, ob
 
 register_reducer("events_list", _events_list_initial, _events_list_reducer)
 
+# Register transactions_view reducer (side-effect import — must stay at module level)
+import processing.resolver.reducer  # noqa: F401, E402
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
