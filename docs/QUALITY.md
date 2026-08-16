@@ -56,9 +56,9 @@ The six invariants from `CLAUDE.md` §2, expressed as properties over generated 
 | Invariant | Property test |
 |---|---|
 | 1. No double-counting | For any set of overlapping statements, each hash appears exactly once in `transactions_current` ✅ Phase 0 |
-| 2. Balance check | For any statement, either it validates or it is rejected — never partially ingested ⧗ Phase 1 — requires validator module |
+| 2. Balance check | For any statement, either it validates or it is rejected — never partially ingested ✅ Phase 1 (`tests/property/ingestion/test_balance_check_invariant.py`) |
 | 3. Replay determinism | For any event stream, `replay(s) == replay(s)` byte-identical ✅ Phase 0 |
-| 4. Transfer exclusion | For any matched transfer pair, neither leg appears in expense totals ⧗ Phase 2 — requires resolver module |
+| 4. Transfer exclusion | For any matched transfer pair, neither leg appears in expense totals ✅ Phase 2 (`tests/property/processing/test_invariant4_property.py`, 200 examples, all 4 resolver event types) |
 | 5. FY immutability | For any closed FY, changing the active rule-set does not change its projection ⧗ Phase 4 — requires versioned rule-set |
 | 6. Confidence gate | For any parse below threshold, no ledger write occurs without a confirm event ⧗ Phase 1 — requires dry-run harness |
 

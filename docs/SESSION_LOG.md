@@ -6,6 +6,111 @@
 
 ---
 
+## 2026-08-16 — Session 014: Repo doc sync — UI phases, two-context IA, wireframe reference
+
+**Phase:** Pre-Phase 2.5/3 — documentation only; no code changes
+**Participants:** Sanket + Claude
+
+### Done
+
+- **Structural confirmation:** PRD/TRD now describe two-context IA (Expense ⇄ CA + shared utilities), Home as pure visualization (KPI strip + 7 dashboards, one shared selector, no nav tiles, no notification preview), and paired UI phases (2.5/3.5/4.5). §12A is the single Home spec; §12 supersede note in place.
+- **PROJECT_STATE.md:** Phase roadmap updated with UI phases 2.5/3.5/4.5 (each with exit criterion); parallelism note (2.5 can run alongside Phase 3); Open UI items table added (Audit API endpoints, empty states, comparable-period rule, charting library selection). "Last updated" and current-phase line updated.
+- **CODE_GRAPH.md:** Full `web/` tree added (app shell, Expense/CA/shared screens, components, tokens, wireframe reference path); two new dependency rules added (rule 7: widgets pure functions of (data, window); rule 8: CSS-variable tokens only, no hardcoded colors).
+- **DECISIONS.md:** ADR-015 (two-context IA), ADR-016 (shadcn/ui), ADR-017 (theme as token set), ADR-018 (Home pure visualization), ADR-019 (paired N.5 UI phases).
+- **CLAUDE.md:** Start-of-session protocol updated with web/ reading note (wireframe-reference.html + TRD §15); document map row added for wireframe.
+- **docs/design/wireframe-reference.html:** Confirmed present (51KB, updated Home with KPI strip + 7 dashboards matching §12A). Not committed yet — included in next commit with other doc changes.
+
+### Consistency checks completed
+
+- No reference to §21 anywhere in the repo (§12A is the single Home spec).
+- No flat-nav pattern remains — all nav references use the two-context model.
+- No "Home with tiles" or "Home with notification preview" in updated docs.
+- Wireframe file confirmed to match §12A (pure dashboard layout, no nav tiles).
+
+### Next
+
+- Phase 2.5 kickoff: design system, app shell, Audit view screen.
+- Audit API endpoints (U7, deferred) built as part of Phase 2.5 wiring.
+
+---
+
+## 2026-08-15 — Session 013: PRD & TRD sync from Notion exports
+
+**Phase:** Pre-Phase 3 — documentation sync; no code changes
+**Participants:** Sanket + Claude
+
+### Done
+
+- **PRD sync from Notion export:** identified three new sections (§19 Settings & Preferences, §20 Navigation & IA, §12A Home Dashboards) not present in `docs/PRD.md`. Added all three. Added supersede note to §12 header pointing to §12A as the authoritative Home spec.
+- **TRD sync from Notion export:** identified three new sections (§13 Phase 1 Gate — Closed, §14 UI Phases, §15 UI Technical Notes) not present in `docs/TRD.md`. Added all three.
+- **Documentation follow-up sync (carry from Session 012 close):** SESSION_LOG.md (Session 012 entry), PROJECT_STATE.md (date, status, Phase 0 task board, Phase 2 follow-ups), CODE_GRAPH.md (header, heading, §2/§4 full rewrite), QUALITY.md (invariants 2 and 4 marked ✅), DECISIONS.md (ADR-013 Wave 2 follow-up note).
+
+### Key content added
+
+- **PRD §19:** light/dark theme toggle, density toggle, default account selector; settings stored as mutable user preferences (ADR-003).
+- **PRD §20:** two-context IA (Expense ⇄ CA switch), screen inventory table, shared screen list, account deactivation copy rule ("Deactivate account" never "Delete" — crypto-shredding, key in cold storage).
+- **PRD §12A:** authoritative Home spec — KPI strip, 7 dashboards, one shared time selector, corrections to §20.3/20.4.
+- **TRD §13:** Phase 1 gate record — G18 parser registration enforcement origin, integration test confirmations, NULL≠0 coverage, open items to Phase 2.
+- **TRD §14:** UI phases pattern — 2.5/3.5/4.5 paired-not-appended, Phase 2.5 scope (design system + audit view screen).
+- **TRD §15:** UI technical notes — shadcn/ui decision, dark-first token system, IBM Plex Mono for numbers, shared time selector architectural constraint.
+
+### Next
+
+- Phase 2.5 — Frontend Foundation kickoff (design system, app shell, audit view screen).
+
+---
+
+## 2026-08-15 — Session 012: Phase 2 follow-ups — E2 hardening, Invariant 4 property test, CI green
+
+**Phase:** 2 — Ledger & Correctness → follow-ups complete; Phase 3 ready
+**Participants:** Sanket + Claude
+
+### Done
+
+- **E2 import boundary** (`test_reducer_does_not_import_matcher_modules`): added to
+  `tests/unit/processing/test_transactions_view_reducer.py`. Uses `ast.parse` to walk
+  `reducer.py` AST and assert no import from `processing.resolver.matching` or
+  `processing.resolver.matchers` exists. Enforces TRD §9.2 decisions-vs-derivations in CI.
+
+- **U2 — Invariant 4 property test** (`tests/property/processing/test_invariant4_property.py`):
+  Hypothesis `@given` test with `@settings(max_examples=200)`. Strategy draws 2-8 unique
+  hashes, mixes income/expense, optionally marks a pair via any of the 4 resolver event
+  types. Asserts income/expense totals equal only non-excluded transactions. All 200
+  examples pass. Closes U2 gap from Phase 2 adversarial review.
+
+- **Item 3 — audit view duplicate-event proof**: confirmed `build_audit_view` is bug-free.
+  `total_excluded` derives from `len(set(excluded_hashes))` via per-transaction `is_counted`
+  lookup — not from `len(excluded_hashes)`. Duplicate resolver events do not inflate count.
+  Test `test_duplicate_resolver_event_does_not_inflate_total_excluded` added to
+  `tests/unit/processing/test_audit_view.py`.
+
+- **CI G1/G2/G3 fully green**: fixed 30 pre-existing mypy errors across
+  `test_transactions_view_reducer.py` (16), `test_resolver_pipeline.py` (9), and
+  `test_key_lifecycle.py` (1). Added `cast()` for all `dict[str, object]` nested access.
+  Added `-> None` + typed parameters to integration test fixtures. ruff format + ruff check
+  both pass against `backend/` with exact CI commands. mypy `MYPYPATH=backend --explicit-package-bases backend/` clean.
+
+- **Commit:** `e361c0e` pushed to `origin/feature/phase2`.
+
+### Decisions made
+
+- E2 enforcement is a pytest test (not a CI grep step) so it runs automatically in the
+  standard test suite without extra CI job configuration.
+- U7 (audit API endpoints) explicitly deferred — decision pending on whether Phase 3 UI
+  work drives them or they're pre-built. Not a Phase 2 item.
+
+### Test counts (approximate)
+
+- Unit + property: ~320 (317 from Phase 2 close + 3 new tests)
+- Integration: 27/28 (unchanged; PITR Docker-only pre-existing gap)
+
+### Next
+
+- Phase 3 Wave 1 kickoff (Day-to-Day Layer).
+- Update PRD and TRD once owner shares revised versions.
+
+---
+
 ## 2026-08-14 — Session 011: Wave 5 — Phase 2 closure gate
 
 **Phase:** 2 — Ledger & Correctness → CLOSED

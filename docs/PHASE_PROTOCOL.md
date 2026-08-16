@@ -140,7 +140,11 @@ Findings get a severity:
    `docs/DECISIONS.md` — what the bug was, how it was caught, the fix. This is
    deliberately preserved (not just fixed and forgotten) as evidence for why the
    independent-authoring discipline exists.
-6. Only after 1–5: cut the next phase's branch and begin its kickoff (§1).
+5a. **Merge the phase branch into main; confirm the merge commit before cutting
+    the next phase's branch.** A phase is not closed until the merge is on main —
+    cutting from a feature branch that hasn't landed produces a next phase that
+    will diverge from main when the PR eventually merges.
+6. Only after 1–5a: cut the next phase's branch and begin its kickoff (§1).
 
 ## 8. What NOT to do
 

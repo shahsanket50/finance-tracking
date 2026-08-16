@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Tracker — Full Wireframe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E14; --surface-1:#12161F; --surface-2:#1A202C; --surface-3:#212936;
+    --border:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.16);
+    --text-primary:#E8EAED; --text-secondary:#9AA3B2; --text-muted:#5C6577;
+    --accent:#6EA8FE; --accent-bg:rgba(110,168,254,0.12);
+    --success:#3ED68C; --success-bg:rgba(62,214,140,0.12);
+    --warning:#F5A623; --warning-bg:rgba(245,166,35,0.12);
+    --danger:#FF5C5C; --danger-bg:rgba(255,92,92,0.12);
+    --font-display:'Space Grotesk',sans-serif; --font-body:'IBM Plex Sans',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text-primary);font-family:var(--font-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,h4{font-family:var(--font-display);font-weight:500;margin:0;}
+  .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+  button{font-family:var(--font-body);cursor:pointer;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+
+  .review-banner{background:var(--surface-2);border-bottom:1px solid var(--border);padding:9px 20px;font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  .review-banner strong{color:var(--text-primary);font-weight:500;}
+  .ptag{font-size:10px;letter-spacing:0.04em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:var(--surface-3);color:var(--text-muted);border:1px solid var(--border);}
+
+  .shell{display:flex;min-height:calc(100vh - 40px);}
+  .sidebar{width:212px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;}
+  .side-top{padding:16px 12px 8px;}
+  .logo{font-family:var(--font-display);font-size:15px;font-weight:600;padding:0 10px 14px;}
+
+  /* context switch */
+  .ctx-switch{display:flex;background:var(--surface-2);border-radius:8px;padding:3px;gap:2px;margin:0 2px 14px;}
+  .ctx-btn{flex:1;border:none;background:none;color:var(--text-secondary);font-size:12px;font-weight:500;padding:7px 0;border-radius:6px;}
+  .ctx-btn.active{background:var(--accent);color:#0B0E14;}
+
+  .bell{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--warning-bg);color:var(--warning);font-size:12px;margin:0 2px 8px;cursor:pointer;position:relative;}
+
+  .nav-list{padding:0 12px;display:flex;flex-direction:column;gap:1px;flex:1;overflow-y:auto;}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;font-size:13px;color:var(--text-secondary);cursor:pointer;border:none;background:none;width:100%;text-align:left;}
+  .nav-item:hover{background:var(--surface-2);}
+  .nav-item.active{background:var(--accent-bg);color:var(--accent);font-weight:500;}
+  .nav-glyph{width:16px;text-align:center;font-size:14px;flex-shrink:0;}
+  .nav-sep{font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);padding:14px 10px 4px;}
+
+  .side-bottom{border-top:1px solid var(--border);padding:8px 12px 12px;display:flex;flex-direction:column;gap:1px;}
+
+  .main{flex:1;min-width:0;}
+  .ctx-group{display:none;}
+  .ctx-group.active{display:block;}
+  .screen{display:none;padding:26px 30px;max-width:1000px;}
+  .screen.active{display:block;}
+
+  .page-head{margin-bottom:22px;}
+  .page-head h2{font-size:21px;margin-bottom:4px;}
+  .page-head p{font-size:13px;color:var(--text-secondary);margin:0;}
+
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
+  .card-title{font-size:14px;font-weight:500;margin-bottom:2px;}
+  .card-sub{font-size:12px;color:var(--text-muted);margin-bottom:16px;}
+
+  .row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .row:last-child{border-bottom:none;}
+  .meta{color:var(--text-muted);font-size:12px;}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  .dot.green{background:var(--success);} .dot.amber{background:var(--warning);} .dot.red{background:var(--danger);}
+
+  .btn{font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--border-strong);background:none;color:var(--text-primary);}
+  .btn:hover{background:var(--surface-2);}
+  .btn.primary{background:var(--accent);color:#0B0E14;border-color:var(--accent);font-weight:500;}
+  .btn.small{font-size:11px;padding:4px 10px;}
+  .btn.danger{border-color:var(--danger);color:var(--danger);}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;}
+  .chip{font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--border-strong);background:none;color:var(--text-secondary);}
+  .chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);}
+
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+  .tile{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;}
+  .tile:hover{border-color:var(--border-strong);}
+  .tile .g{font-size:18px;} .tile .l{font-size:12px;color:var(--text-secondary);margin-top:6px;}
+
+  .headline{font-size:38px;font-weight:600;font-family:var(--font-mono);line-height:1;}
+  .hl-label{font-size:13px;color:var(--text-secondary);margin-bottom:8px;}
+  .hl-break{font-size:12px;color:var(--text-muted);margin-top:8px;}
+
+  .bar-track{flex:1;height:6px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin:0 12px;}
+  .bar-fill{height:100%;border-radius:4px;}
+
+  .split{display:flex;gap:4px;height:26px;border-radius:6px;overflow:hidden;margin-bottom:12px;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);}
+  .legend span{display:flex;align-items:center;gap:6px;} .legend .sw{width:10px;height:10px;border-radius:2px;}
+
+  .schip{font-size:11px;padding:2px 7px;border-radius:20px;}
+  .schip.ok{background:var(--success-bg);color:var(--success);}
+  .schip.rev{background:var(--warning-bg);color:var(--warning);}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:11px;color:var(--text-secondary);font-weight:400;padding:6px 0;border-bottom:1px solid var(--border);}
+  td{padding:10px 0;border-bottom:1px solid var(--border);vertical-align:top;}
+  .src{font-size:11px;color:var(--accent);margin-top:2px;}
+
+  .switch{width:32px;height:18px;border-radius:10px;background:var(--surface-3);position:relative;cursor:pointer;flex-shrink:0;}
+  .switch.on{background:var(--accent);}
+  .switch::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:2px;transition:left .15s;}
+  .switch.on::after{left:16px;}
+  .locked{color:var(--text-muted);font-size:11px;}
+
+  .accordion{border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;}
+  .acc-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;background:var(--surface-1);}
+  .acc-head:hover{background:var(--surface-2);}
+  .acc-title{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;}
+  .acc-body{padding:0 16px 16px;display:none;font-size:13px;}
+  .accordion.open .acc-body{display:block;} .accordion.open .chev{transform:rotate(180deg);}
+  .chev{transition:transform .15s;color:var(--text-muted);}
+  .why{font-size:12px;color:var(--text-muted);margin-top:3px;}
+  .gap{background:var(--danger-bg);border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-top:10px;}
+  .gap .amt{color:var(--danger);font-family:var(--font-mono);font-weight:600;}
+
+  .estimate{font-size:10px;letter-spacing:0.06em;color:var(--text-muted);border:1px solid var(--border-strong);padding:4px 9px;border-radius:4px;}
+  .ring{display:flex;gap:6px;} .ring .seg{width:26px;height:8px;border-radius:4px;}
+
+  .checklist-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);}
+  .checklist-item:last-child{border-bottom:none;}
+  .progress-track{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin:10px 0 4px;}
+  .progress-fill{height:100%;background:var(--success);border-radius:4px;}
+
+  .due-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .due-row:last-child{border-bottom:none;}
+
+  .notif-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+  .notif-item:last-child{border-bottom:none;}
+  .notif-item:hover{background:var(--surface-1);}
+  .notif-glyph{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
+
+  .sub-index{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .sub-card{background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;}
+  .sub-card:hover{border-color:var(--border-strong);}
+  .sub-card .st{font-size:13px;font-weight:500;margin-bottom:4px;}
+  .sub-card .sd{font-size:12px;color:var(--text-muted);}
+
+  .breadcrumb{font-size:12px;color:var(--text-muted);margin-bottom:12px;cursor:pointer;}
+  .breadcrumb:hover{color:var(--text-secondary);}
+</style>
+</head>
+<body>
+
+<div class="review-banner">
+  <span><strong>Full IA wireframe</strong> — Expense ⇄ CA contexts + shared utilities, per PRD §19/§20. Structure for review; each screen builds in its phase (2.5 / 3.5 / 4.5).</span>
+  <span class="ptag">Not final visual polish</span>
+</div>
+
+<div class="shell">
+  <div class="sidebar">
+    <div class="side-top">
+      <div class="logo">Finance tracker</div>
+      <div class="ctx-switch">
+        <button class="ctx-btn active" id="ctxExpBtn" onclick="setContext('exp')">Expense</button>
+        <button class="ctx-btn" id="ctxCaBtn" onclick="setContext('ca')">CA</button>
+      </div>
+      <div class="bell" onclick="showShared('notifications')">🔔 1 alert — SBI sync failed</div>
+    </div>
+
+    <!-- EXPENSE NAV -->
+    <div class="nav-list" id="nav-exp">
+      <button class="nav-item active" onclick="go('exp','home')" data-s="home"><span class="nav-glyph">⌂</span>Home</button>
+      <button class="nav-item" onclick="go('exp','txns')" data-s="txns"><span class="nav-glyph">≡</span>Transactions</button>
+      <button class="nav-item" onclick="go('exp','budgets')" data-s="budgets"><span class="nav-glyph">◐</span>Budgets</button>
+      <button class="nav-item" onclick="go('exp','cats')" data-s="cats"><span class="nav-glyph">⊞</span>Categories</button>
+      <button class="nav-item" onclick="go('exp','audit')" data-s="audit"><span class="nav-glyph">⊙</span>Audit</button>
+    </div>
+
+    <!-- CA NAV -->
+    <div class="nav-list" id="nav-ca" style="display:none;">
+      <button class="nav-item active" onclick="go('ca','taxhealth')" data-s="taxhealth"><span class="nav-glyph">♥</span>Tax health</button>
+      <button class="nav-item" onclick="go('ca','checklist')" data-s="checklist"><span class="nav-glyph">☑</span>FY checklist</button>
+      <button class="nav-item" onclick="go('ca','advtax')" data-s="advtax"><span class="nav-glyph">◷</span>Advance tax</button>
+      <button class="nav-item" onclick="go('ca','deductions')" data-s="deductions"><span class="nav-glyph">−</span>Deductions</button>
+      <button class="nav-item" onclick="go('ca','capgains')" data-s="capgains"><span class="nav-glyph">↗</span>Capital gains</button>
+      <button class="nav-item" onclick="go('ca','income')" data-s="income"><span class="nav-glyph">+</span>Income &amp; TDS</button>
+      <button class="nav-item" onclick="go('ca','docs')" data-s="docs"><span class="nav-glyph">▤</span>Documents</button>
+    </div>
+
+    <div class="side-bottom">
+      <div class="nav-sep">Shared</div>
+      <button class="nav-item" onclick="showShared('accounts')" data-shared="accounts"><span class="nav-glyph">▦</span>Accounts</button>
+      <button class="nav-item" onclick="showShared('notifications')" data-shared="notifications"><span class="nav-glyph">🔔</span>Notifications</button>
+      <button class="nav-item" onclick="showShared('settings')" data-shared="settings"><span class="nav-glyph">⚙</span>Settings</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ══════ EXPENSE CONTEXT ══════ -->
+    <div class="ctx-group active" id="group-exp">
+
+      <!-- HOME (pure dashboards) -->
+      <section class="screen active" id="s-home">
+        <div class="page-head"><h2>Home</h2><p>Your money, visualised. Everything below responds to the selector.</p></div>
+        <div class="chips">
+          <button class="chip active">This month</button>
+          <button class="chip">This month till now</button>
+          <button class="chip">Last month</button>
+          <button class="chip">Custom range</button>
+          <button class="chip">Current FY</button>
+        </div>
+
+        <!-- KPI strip -->
+        <div class="tiles" style="grid-template-columns:repeat(5,1fr);">
+          <div class="tile" style="cursor:default;"><div class="l">Available to invest</div><div class="num" style="font-size:18px;margin-top:4px;">₹42,800</div><div class="meta" style="font-size:11px;">▲ vs last mo</div></div>
+          <div class="tile" style="cursor:default;"><div class="l">Total income</div><div class="num" style="font-size:18px;margin-top:4px;">₹1,52,000</div><div class="meta" style="font-size:11px;">— flat</div></div>
+          <div class="tile" style="cursor:default;"><div class="l">Total expense</div><div class="num" style="font-size:18px;margin-top:4px;">₹94,200</div><div class="meta" style="font-size:11px;color:var(--danger);">▲ 8%</div></div>
+          <div class="tile" style="cursor:default;"><div class="l">Savings rate</div><div class="num" style="font-size:18px;margin-top:4px;">28%</div><div class="meta" style="font-size:11px;color:var(--success);">▲ 3pt</div></div>
+          <div class="tile" style="cursor:default;"><div class="l">Net cashflow</div><div class="num" style="font-size:18px;margin-top:4px;">+₹57,800</div><div class="meta" style="font-size:11px;">▲ vs last mo</div></div>
+        </div>
+
+        <!-- charts grid -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+          <div class="card" style="margin:0;">
+            <div class="card-title">Income vs Expense trend</div><div class="card-sub">Trailing 6 months</div>
+            <svg viewBox="0 0 300 110" style="width:100%;height:110px;">
+              <polyline points="10,30 60,25 110,35 160,20 210,28 260,18" fill="none" stroke="var(--success)" stroke-width="2"/>
+              <polyline points="10,70 60,65 110,72 160,60 210,68 260,74" fill="none" stroke="var(--danger)" stroke-width="2"/>
+            </svg>
+            <div class="legend" style="font-size:11px;"><span><span class="sw" style="background:var(--success);"></span>Income</span><span><span class="sw" style="background:var(--danger);"></span>Expense</span></div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-title">Category-wise spend</div><div class="card-sub">This month</div>
+            <div style="display:flex;gap:16px;align-items:center;">
+              <svg viewBox="0 0 42 42" style="width:90px;height:90px;">
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--surface-2)" stroke-width="6"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--text-muted)" stroke-width="6" stroke-dasharray="37 63" stroke-dashoffset="25"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--accent)" stroke-width="6" stroke-dasharray="25 75" stroke-dashoffset="-12"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="var(--warning)" stroke-width="6" stroke-dasharray="12 88" stroke-dashoffset="-37"/>
+              </svg>
+              <div class="legend" style="flex-direction:column;gap:6px;font-size:11px;"><span><span class="sw" style="background:var(--text-muted);"></span>Rent 37%</span><span><span class="sw" style="background:var(--accent);"></span>Dining 25%</span><span><span class="sw" style="background:var(--warning);"></span>Shopping 12%</span></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-title">Category trend over time</div><div class="card-sub">Which categories are growing</div>
+            <svg viewBox="0 0 300 110" style="width:100%;height:110px;">
+              <polyline points="10,60 60,55 110,45 160,40 210,30 260,22" fill="none" stroke="var(--danger)" stroke-width="2"/>
+              <polyline points="10,50 60,52 110,50 160,53 210,51 260,50" fill="none" stroke="var(--text-secondary)" stroke-width="2"/>
+              <polyline points="10,80 60,78 110,82 160,75 210,79 260,77" fill="none" stroke="var(--success)" stroke-width="2"/>
+            </svg>
+            <div class="legend" style="font-size:11px;"><span><span class="sw" style="background:var(--danger);"></span>Dining ↑</span><span><span class="sw" style="background:var(--text-secondary);"></span>Groceries →</span><span><span class="sw" style="background:var(--success);"></span>Utilities ↓</span></div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-title">Running-cost split</div><div class="card-sub">How elastic your spending is</div>
+            <div class="split" style="margin-top:8px;"><div style="width:61.6%;background:var(--text-muted);"></div><div style="width:19.5%;background:var(--text-secondary);"></div><div style="width:15.1%;background:var(--accent);"></div><div style="width:3.8%;background:var(--warning);"></div></div>
+            <div class="legend" style="font-size:11px;"><span><span class="sw" style="background:var(--text-muted);"></span>Ess. fixed</span><span><span class="sw" style="background:var(--text-secondary);"></span>Ess. variable</span><span><span class="sw" style="background:var(--accent);"></span>Discretionary</span><span><span class="sw" style="background:var(--warning);"></span>Luxury</span></div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-title">Surplus trend</div><div class="card-sub">Trajectory of "available to invest"</div>
+            <svg viewBox="0 0 300 110" style="width:100%;height:110px;">
+              <polyline points="10,70 60,55 110,60 160,45 210,40 260,32" fill="none" stroke="var(--accent)" stroke-width="2"/>
+            </svg>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <div class="card-title">Top merchants</div><div class="card-sub">This month</div>
+            <div class="row" style="padding:6px 0;"><span>Swiggy</span><span class="num">₹6,400</span></div>
+            <div class="row" style="padding:6px 0;"><span>Amazon</span><span class="num">₹4,240</span></div>
+            <div class="row" style="padding:6px 0;border:none;"><span>BigBasket</span><span class="num">₹3,100</span></div>
+          </div>
+
+          <div class="card" style="margin:0;grid-column:span 2;">
+            <div class="card-title">Savings-rate trend</div><div class="card-sub">The single most useful health metric</div>
+            <svg viewBox="0 0 620 90" style="width:100%;height:90px;">
+              <polyline points="10,60 110,55 210,48 310,50 410,40 510,35 610,30" fill="none" stroke="var(--success)" stroke-width="2"/>
+            </svg>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- TRANSACTIONS -->
+      <section class="screen" id="s-txns">
+        <div class="page-head"><h2>Transactions</h2><p>Every transaction — filter, review, and correct categories.</p></div>
+        <div class="chips">
+          <button class="chip active">All accounts ▾</button>
+          <button class="chip">All categories ▾</button>
+          <button class="chip">This month ▾</button>
+          <button class="chip">Status: all ▾</button>
+          <button class="chip" style="margin-left:auto;">⌕ Search</button>
+        </div>
+        <div class="card">
+          <table>
+            <tr><th>Date</th><th>Merchant</th><th>Category</th><th>Account</th><th style="text-align:right;">Amount</th><th style="text-align:right;">Status</th></tr>
+            <tr><td>2 Aug</td><td>Swiggy</td><td>Dining</td><td>HDFC ••4521</td><td style="text-align:right;" class="num">−₹450</td><td style="text-align:right;"><span class="schip ok">Confirmed</span></td></tr>
+            <tr><td>1 Aug</td><td>Salary — Razorpay</td><td>Income</td><td>HDFC ••4521</td><td style="text-align:right;" class="num">+₹1,52,000</td><td style="text-align:right;"><span class="schip ok">Confirmed</span></td></tr>
+            <tr><td>31 Jul</td><td>Amazon</td><td>Shopping <span class="meta">▾</span></td><td>HDFC ••8832</td><td style="text-align:right;" class="num">−₹1,240</td><td style="text-align:right;"><span class="schip rev">Low conf.</span></td></tr>
+            <tr><td>28 Jul</td><td>HDFC Ergo</td><td style="color:var(--warning);">Uncategorised ▾</td><td>HDFC ••4521</td><td style="text-align:right;" class="num">−₹18,000</td><td style="text-align:right;"><span class="schip ok">Confirmed</span></td></tr>
+            <tr><td>28 Jul</td><td>CC payment</td><td class="meta">Transfer (excluded)</td><td>HDFC ••4521</td><td style="text-align:right;" class="num" style="color:var(--text-muted);">−₹52,300</td><td style="text-align:right;"><span class="meta">not counted</span></td></tr>
+          </table>
+        </div>
+        <p class="meta">Tap a category to recategorise · bulk-apply to all transactions from that merchant (Journey 6).</p>
+      </section>
+
+      <!-- BUDGETS -->
+      <section class="screen" id="s-budgets">
+        <div class="page-head"><h2>Budgets</h2><p>Set monthly targets per category. Track against them.</p></div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><div class="card-title" style="margin:0;">This month's budgets</div><button class="btn primary small">+ Add budget</button></div>
+          <div class="row"><div style="flex:1;"><div>Dining</div><div class="bar-track" style="margin:6px 0 0;max-width:280px;"><div class="bar-fill" style="width:100%;background:var(--danger);"></div></div></div><div style="text-align:right;"><span class="num">₹11,800 / ₹10,000</span><div><button class="btn small">Edit</button></div></div></div>
+          <div class="row"><div style="flex:1;"><div>Shopping</div><div class="bar-track" style="margin:6px 0 0;max-width:280px;"><div class="bar-fill" style="width:87%;background:var(--warning);"></div></div></div><div style="text-align:right;"><span class="num">₹8,700 / ₹10,000</span><div><button class="btn small">Edit</button></div></div></div>
+          <div class="row"><div style="flex:1;"><div>Groceries</div><div class="bar-track" style="margin:6px 0 0;max-width:280px;"><div class="bar-fill" style="width:62%;background:var(--success);"></div></div></div><div style="text-align:right;"><span class="num">₹6,200 / ₹10,000</span><div><button class="btn small">Edit</button></div></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Committed outflows</div><div class="card-sub">Feeds "Available to invest" — rent, EMI, SIP, insurance. V1: defined here manually.</div>
+          <div class="row"><span>Home loan EMI</span><span class="num">₹15,000 · 28th</span></div>
+          <div class="row"><span>SIP — index fund</span><span class="num">₹10,000 · 5th</span></div>
+          <button class="btn small" style="margin-top:10px;">+ Add commitment</button>
+        </div>
+      </section>
+
+      <!-- CATEGORIES (browse) -->
+      <section class="screen" id="s-cats">
+        <div class="page-head"><h2>Categories</h2><p>Browse your spending by category. To rename or set rules, go to Settings → Categories.</p></div>
+        <div class="split"><div style="width:61.6%;background:var(--text-muted);"></div><div style="width:19.5%;background:var(--text-secondary);"></div><div style="width:15.1%;background:var(--accent);"></div><div style="width:3.8%;background:var(--warning);"></div></div>
+        <div class="legend" style="margin-bottom:20px;"><span><span class="sw" style="background:var(--text-muted);"></span>Essential fixed</span><span><span class="sw" style="background:var(--text-secondary);"></span>Essential variable</span><span><span class="sw" style="background:var(--accent);"></span>Discretionary</span><span><span class="sw" style="background:var(--warning);"></span>Luxury</span></div>
+        <div class="card">
+          <div class="row"><div>Dining <span class="meta">· discretionary</span></div><span class="num">₹11,800</span></div>
+          <div class="row"><div>Rent <span class="meta">· essential fixed</span></div><span class="num">₹35,000</span></div>
+          <div class="row"><div>Groceries <span class="meta">· essential variable</span></div><span class="num">₹6,200</span></div>
+          <div class="row"><div>Shopping <span class="meta">· discretionary</span></div><span class="num">₹8,700</span></div>
+          <div class="row"><div>Travel <span class="meta">· luxury</span></div><span class="num">₹3,600</span></div>
+        </div>
+      </section>
+
+      <!-- AUDIT (index) -->
+      <section class="screen" id="s-audit">
+        <div class="page-head"><h2>Audit &amp; duplication</h2><p>See what was ingested, matched, and excluded — verify nothing was counted twice.</p></div>
+        <div class="sub-index">
+          <div class="sub-card" onclick="go('exp','audit-overlap')"><div class="st">Overlap map</div><div class="sd">Statement periods per account · 1 overlap flagged</div></div>
+          <div class="sub-card" onclick="go('exp','audit-ledger')"><div class="st">Dedup ledger</div><div class="sd">Every transaction, seen vs counted · 1 needs review</div></div>
+          <div class="sub-card" onclick="go('exp','audit-pairings')"><div class="st">Resolver pairings</div><div class="sd">What was matched and why · 2 pairings</div></div>
+          <div class="sub-card" onclick="go('exp','audit-sync')"><div class="st">Sync history</div><div class="sd">How far ingestion has progressed per account</div></div>
+        </div>
+      </section>
+
+      <!-- AUDIT: overlap -->
+      <section class="screen" id="s-audit-overlap">
+        <div class="breadcrumb" onclick="go('exp','audit')">← Audit</div>
+        <div class="page-head"><h2>Overlap map</h2><p>Level A — statement periods per account, overlaps highlighted.</p></div>
+        <div class="card">
+          <p style="font-size:13px;margin:0 0 4px;">HDFC savings <span class="num" style="color:var(--text-muted);">••4521</span></p>
+          <div style="position:relative;height:22px;background:var(--surface-2);border-radius:4px;">
+            <div style="position:absolute;left:0;width:55%;height:100%;background:var(--accent-bg);border-radius:4px 0 0 4px;"></div>
+            <div style="position:absolute;left:38%;width:30%;height:100%;background:var(--accent-bg);border-radius:0 4px 4px 0;"></div>
+            <div style="position:absolute;left:38%;width:17%;height:100%;background:var(--warning-bg);border:1px solid var(--warning);border-radius:3px;cursor:pointer;" onclick="go('exp','audit-ledger')"></div>
+          </div>
+          <button class="chip" style="color:var(--warning);border-color:var(--warning);margin-top:8px;" onclick="go('exp','audit-ledger')">Overlap: 23 transactions, 15–31 Mar →</button>
+          <p style="font-size:13px;margin:16px 0 4px;">SBI savings <span class="num" style="color:var(--text-muted);">••8890</span></p>
+          <div style="position:relative;height:22px;background:var(--surface-2);border-radius:4px;"><div style="position:absolute;left:5%;width:60%;height:100%;background:var(--accent-bg);border-radius:4px;"></div></div>
+          <p class="meta" style="margin-top:6px;">No overlap</p>
+        </div>
+      </section>
+
+      <!-- AUDIT: ledger -->
+      <section class="screen" id="s-audit-ledger">
+        <div class="breadcrumb" onclick="go('exp','audit')">← Audit</div>
+        <div class="page-head"><h2>Dedup ledger</h2><p>Level B — every transaction, seen vs counted, traced to source.</p></div>
+        <div class="card">
+          <table>
+            <tr><th>Transaction</th><th style="text-align:center;">Seen</th><th style="text-align:center;">Counted</th><th style="text-align:right;">Status</th></tr>
+            <tr><td>Swiggy · ₹450<div class="src">Mar 1–31 · Mar 15–Apr 14</div></td><td style="text-align:center;">2</td><td style="text-align:center;">1</td><td style="text-align:right;color:var(--success);">✓ Resolved</td></tr>
+            <tr><td>Zomato · ₹380<div class="src">Mar 1–31 · Mar 15–Apr 14</div></td><td style="text-align:center;">2</td><td style="text-align:center;">1</td><td style="text-align:right;color:var(--success);">✓ Resolved</td></tr>
+            <tr><td>Amazon · ₹1,240<div class="src">Mar 1–31</div></td><td style="text-align:center;">1</td><td style="text-align:center;">1</td><td style="text-align:right;color:var(--success);">✓ Resolved</td></tr>
+            <tr><td>CC payment · ₹52,300<div class="src" style="color:var(--danger);">HDFC bank stmt · HDFC card stmt</div></td><td style="text-align:center;">2</td><td style="text-align:center;">2</td><td style="text-align:right;color:var(--danger);">⚠ Review</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- AUDIT: pairings -->
+      <section class="screen" id="s-audit-pairings">
+        <div class="breadcrumb" onclick="go('exp','audit')">← Audit</div>
+        <div class="page-head"><h2>Resolver pairings</h2><p>What the resolver matched, and why.</p></div>
+        <div class="card">
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;"><span class="schip" style="background:var(--surface-2);color:var(--text-secondary);">CC payment</span><span class="meta">95% match</span></div>
+            <p style="margin:8px 0 2px;">HDFC savings → HDFC card statement, ₹52,300</p><p class="meta" style="margin:0 0 8px;">28 Mar</p>
+            <button class="btn small">View all 47 matched purchases →</button>
+          </div>
+          <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <div><span class="schip" style="background:var(--surface-2);color:var(--text-secondary);">Transfer</span><p style="margin:8px 0 2px;">HDFC savings → ICICI savings, ₹50,000</p><p class="meta" style="margin:0;">12 Mar · same-day match</p></div>
+            <span class="meta">95% match</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- AUDIT: sync history -->
+      <section class="screen" id="s-audit-sync">
+        <div class="breadcrumb" onclick="go('exp','audit')">← Audit</div>
+        <div class="page-head"><h2>Sync history</h2><p>How far ingestion has progressed for each account.</p></div>
+        <div class="card">
+          <div class="row"><div><div>HDFC Savings ••4521</div><div class="meta">Ingested through 31 Jul · 142 statements</div></div><span><span class="dot green"></span></span></div>
+          <div class="row"><div><div>HDFC Credit Card ••8832</div><div class="meta">Ingested through 28 Jul · 24 statements</div></div><span><span class="dot green"></span></span></div>
+          <div class="row"><div><div>SBI Savings ••8890</div><div class="meta" style="color:var(--danger);">Stalled at 10 Jul · sync failing 21 days</div></div><span><span class="dot red"></span></span></div>
+          <div class="row"><div><div>ICICI Savings ••1102</div><div class="meta" style="color:var(--warning);">Ingested through 25 Jul · 3 statements awaiting review</div></div><span><span class="dot amber"></span></span></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ══════ CA CONTEXT ══════ -->
+    <div class="ctx-group" id="group-ca">
+
+      <!-- TAX HEALTH -->
+      <section class="screen active" id="s-taxhealth">
+        <div class="page-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div><h2>Tax health — FY 2026-27</h2><p>Sanket Shah · planning estimate, not a filed return</p></div>
+          <div style="text-align:right;">
+            <div style="margin-bottom:8px;"><button class="chip active">FY 2026-27 ▾</button></div>
+            <div class="estimate">ESTIMATE · NOT FILED</div>
+            <div class="ring" style="margin-top:8px;"><div class="seg" style="background:var(--success);"></div><div class="seg" style="background:var(--success);"></div><div class="seg" style="background:var(--success);"></div><div class="seg" style="background:var(--warning);"></div><div class="seg" style="background:var(--warning);"></div><div class="seg" style="background:var(--danger);"></div></div>
+          </div>
+        </div>
+        <div class="tiles" style="grid-template-columns:repeat(3,1fr);">
+          <div class="tile" onclick="go('ca','checklist')"><div class="g">☑</div><div class="l">FY checklist · 4 of 9 done</div></div>
+          <div class="tile" onclick="go('ca','advtax')"><div class="g">◷</div><div class="l">Advance tax · ₹32,175 due 15 Sep</div></div>
+          <div class="tile" onclick="go('ca','docs')"><div class="g">▤</div><div class="l">Documents · 2 pending</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Summary</div><div class="card-sub">Tap any section to open it</div>
+          <div class="row" onclick="go('ca','deductions')" style="cursor:pointer;"><div><span class="dot red"></span> Deductions</div><span class="meta">₹18,000 unclaimed →</span></div>
+          <div class="row" onclick="go('ca','capgains')" style="cursor:pointer;"><div><span class="dot red"></span> Capital gains</div><span class="meta">1 instrument missing data →</span></div>
+          <div class="row" onclick="go('ca','income')" style="cursor:pointer;"><div><span class="dot amber"></span> Income &amp; TDS</div><span class="meta">₹22,500 expected refund →</span></div>
+        </div>
+      </section>
+
+      <!-- FY CHECKLIST -->
+      <section class="screen" id="s-checklist">
+        <div class="page-head"><h2>FY completeness checklist</h2><p>What's needed for a tax-ready view of FY 2026-27 — what's done, what's left.</p></div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;"><span class="card-title" style="margin:0;">Progress</span><span class="num">4 of 9 complete</span></div>
+          <div class="progress-track"><div class="progress-fill" style="width:44%;"></div></div>
+          <p class="meta">Filing window opens 1 Apr 2027 · ITR due 31 Jul 2027</p>
+        </div>
+        <div class="card">
+          <div class="checklist-item"><div><span class="dot green"></span> Form 16 — Razorpay</div><span class="meta">Received · reconciled</span></div>
+          <div class="checklist-item"><div><span class="dot green"></span> Bank statements (2 FY)</div><span class="meta">Complete</span></div>
+          <div class="checklist-item"><div><span class="dot amber"></span> CAS — broker holdings</div><span class="btn small">Upload</span></div>
+          <div class="checklist-item"><div><span class="dot red"></span> ESOP exercise statement</div><span class="btn small" style="border-color:var(--danger);color:var(--danger);">Required — upload</span></div>
+          <div class="checklist-item"><div><span class="dot red"></span> 80D insurance proof</div><span class="btn small">Upload</span></div>
+          <div class="checklist-item"><div><span class="dot green"></span> Rent receipts (HRA)</div><span class="meta">Complete</span></div>
+        </div>
+      </section>
+
+      <!-- ADVANCE TAX -->
+      <section class="screen" id="s-advtax">
+        <div class="page-head"><h2>Advance-tax planner</h2><p>Your projected liability, split across the four quarterly due dates.</p></div>
+        <div class="card">
+          <div class="row"><span>Projected annual liability</span><span class="num">₹2,61,500</span></div>
+          <div class="row"><span>TDS already deducted</span><span class="num">₹1,90,000</span></div>
+          <div class="row"><span>Payable via advance tax</span><span class="num">₹71,500</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Installments</div><div class="card-sub">Status reflects the nearest due/overdue installment</div>
+          <div class="due-row"><div><span class="dot green"></span> 15 Jun · 15%</div><span class="num">₹10,725 · paid</span></div>
+          <div class="due-row"><div><span class="dot amber"></span> 15 Sep · 45%</div><span class="num" style="color:var(--warning);">₹32,175 · due in 12d</span></div>
+          <div class="due-row"><div><span class="dot" style="background:var(--text-muted);"></span> 15 Dec · 75%</div><span class="num meta">₹53,625 · upcoming</span></div>
+          <div class="due-row"><div><span class="dot" style="background:var(--text-muted);"></span> 15 Mar · 100%</div><span class="num meta">₹71,500 · upcoming</span></div>
+          <div class="gap" style="margin-top:12px;background:var(--warning-bg);border-color:var(--warning);"><span style="color:var(--warning);">⚠ Miss 15 Sep → ~₹640 interest under Section 234C.</span></div>
+        </div>
+      </section>
+
+      <!-- DEDUCTIONS -->
+      <section class="screen" id="s-deductions">
+        <div class="page-head"><h2>Deductions &amp; exemptions</h2><p>What you've claimed, what you're eligible for, what you're missing.</p></div>
+        <div class="card">
+          <div class="row"><div>80C — ELSS, PPF, insurance, loan principal</div><span class="num">₹1,10,000 / ₹1,50,000</span></div>
+          <div class="gap">
+            <div style="display:flex;justify-content:space-between;"><span>80D — Health insurance</span><span class="amt">₹0 / ₹25,000 · MISSED</span></div>
+            <p class="why" style="margin-top:6px;">HDFC Ergo premium of ₹18,000 paid in June was never tagged as deductible.</p>
+            <button class="btn small danger" style="margin-top:8px;">Claim ₹18,000</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- CAPITAL GAINS -->
+      <section class="screen" id="s-capgains">
+        <div class="page-head"><h2>Capital gains</h2><p>Realised gains this FY. Missing cost basis is flagged, never guessed.</p></div>
+        <div class="card">
+          <div class="row"><span>Equity mutual funds (LTCG)</span><span class="num">₹18,400</span></div>
+          <div class="gap">
+            <div style="display:flex;justify-content:space-between;"><span>ESOP sale — TechCorp</span><span class="amt">Unknown</span></div>
+            <p class="why" style="margin-top:6px;">No exercise-date fair market value on file. ESOPs are taxed at exercise and at sale — without the exercise FMV, this gain can't be computed.</p>
+            <button class="btn small" style="margin-top:8px;">Upload exercise statement</button>
+          </div>
+          <p class="why" style="margin-top:10px;">Capital gains total excludes 1 instrument pending data.</p>
+        </div>
+      </section>
+
+      <!-- INCOME & TDS -->
+      <section class="screen" id="s-income">
+        <div class="page-head"><h2>Income &amp; TDS</h2><p>All income sources and employer tax deducted, reconciled against your actual liability.</p></div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span class="card-title" style="margin:0;">Income sources</span><button class="btn primary small">+ Add income</button></div>
+          <div class="row"><div>Salary — Razorpay <span class="meta">· from Form 16</span></div><span class="num">₹18,24,000</span></div>
+          <div class="row"><div>Freelance income <span class="meta">· self-reported</span></div><span class="num">₹1,40,000</span></div>
+          <div class="row"><div>Interest income <span class="meta">· from bank</span></div><span class="num">₹32,000</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Form 16 / TDS reconciliation</div>
+          <div class="row"><span>Employer deducted</span><span class="num">₹2,84,000</span></div>
+          <div class="row"><span>Actual liability (computed)</span><span class="num">₹2,61,500</span></div>
+          <div class="row"><span>Expected refund</span><span class="num" style="color:var(--success);">₹22,500</span></div>
+          <p class="why" style="margin-top:10px;">Employer didn't account for your ELSS purchase or full rent. Claim these while filing.</p>
+        </div>
+      </section>
+
+      <!-- DOCUMENTS -->
+      <section class="screen" id="s-docs">
+        <div class="page-head"><h2>Documents</h2><p>Upload and manage the source documents behind your tax view.</p></div>
+        <div class="card" style="border-style:dashed;text-align:center;padding:28px;">
+          <p style="margin:0 0 10px;">Drop a document, or choose a type to upload</p>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button class="btn small">Salary slip</button><button class="btn small">Form 16</button><button class="btn small">CAS / holdings</button>
+            <button class="btn small">Investment proof</button><button class="btn small">TDS certificate</button><button class="btn small">Other income</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Uploaded</div>
+          <div class="row"><div><span class="dot green"></span> Form 16 — Razorpay <span class="meta">· FY 2026-27</span></div><span class="meta">Reconciled</span></div>
+          <div class="row"><div><span class="dot green"></span> Rent receipts <span class="meta">· 12 months</span></div><span class="meta">Complete</span></div>
+          <div class="row"><div><span class="dot red"></span> ESOP exercise statement</div><span class="meta" style="color:var(--danger);">Required</span></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ══════ SHARED ══════ -->
+    <div class="ctx-group" id="group-shared">
+
+      <!-- ACCOUNTS -->
+      <section class="screen" id="s-accounts">
+        <div class="page-head"><h2>Accounts</h2><p>Connected sources and their sync health. Feeds both Expense and CA views.</p></div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span class="card-title" style="margin:0;">Connected accounts</span><button class="btn primary small">+ Add account</button></div>
+          <div class="row"><div><div>HDFC Savings <span class="num meta">••4521</span></div><div class="meta"><span class="dot green"></span> Synced 2h ago</div></div><button class="btn small">Re-sync</button></div>
+          <div class="row"><div><div>HDFC Credit Card <span class="num meta">••8832</span></div><div class="meta"><span class="dot green"></span> Synced yesterday</div></div><button class="btn small">Re-sync</button></div>
+          <div class="row"><div style="flex:1;"><div>SBI Savings <span class="num meta">••8890</span></div><div class="meta" style="color:var(--danger);"><span class="dot red"></span> Statement password rejected · 21 days ago</div><div style="margin-top:8px;display:flex;gap:8px;"><button class="btn small">Update password</button><button class="btn small" style="border-color:var(--accent);color:var(--accent);">Backfill 3 statements</button></div></div></div>
+          <div class="row"><div><div>ICICI Savings <span class="num meta">••1102</span></div><div class="meta" style="color:var(--warning);"><span class="dot amber"></span> Awaiting review — low parse confidence</div></div><button class="btn small">Review</button></div>
+        </div>
+        <div class="card" style="border-style:dashed;">
+          <div class="card-title">Add an account not on the list</div>
+          <div class="card-sub">Upload a sample statement — we'll build a parser for it and validate it against the balance check before trusting it (TRD §14).</div>
+          <button class="btn small">Upload sample statement</button>
+        </div>
+      </section>
+
+      <!-- NOTIFICATIONS -->
+      <section class="screen" id="s-notifications">
+        <div class="page-head"><h2>Notifications</h2><p>Alerts (always on) and milestones (opt-in). Each one links to where you can act.</p></div>
+        <div class="chips"><button class="chip active">All</button><button class="chip">Alerts</button><button class="chip">Milestones</button></div>
+        <div class="card">
+          <div class="notif-item" onclick="showShared('accounts')"><div class="notif-glyph" style="background:var(--danger-bg);color:var(--danger);">!</div><div style="flex:1;"><div>SBI savings sync failed</div><div class="meta">Statement password rejected. Update it to resume → Accounts</div></div><span class="meta">2h</span></div>
+          <div class="notif-item" onclick="setContext('ca');go('ca','docs')"><div class="notif-glyph" style="background:var(--warning-bg);color:var(--warning);">▤</div><div style="flex:1;"><div>Form 16 expected soon</div><div class="meta">Razorpay usually issues in June → CA · Documents</div></div><span class="meta">1d</span></div>
+          <div class="notif-item" onclick="setContext('ca');go('ca','advtax')"><div class="notif-glyph" style="background:var(--warning-bg);color:var(--warning);">◷</div><div style="flex:1;"><div>Advance-tax installment due 15 Sep</div><div class="meta">₹32,175 · 45% cumulative → CA · Advance tax</div></div><span class="meta">3d</span></div>
+          <div class="notif-item" onclick="setContext('ca');go('ca','deductions')"><div class="notif-glyph" style="background:var(--success-bg);color:var(--success);">✓</div><div style="flex:1;"><div>80C nearly maxed</div><div class="meta">₹1,10,000 of ₹1,50,000 → CA · Deductions</div></div><span class="meta">5d</span></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="screen" id="s-settings">
+        <div class="page-head"><h2>Settings</h2><p>Global preferences and configuration.</p></div>
+        <div class="card">
+          <div class="card-title">Categories</div><div class="card-sub">Rename, merge, and set merchant → category rules (the manage view)</div>
+          <button class="btn small">Manage categories</button>
+        </div>
+        <div class="card">
+          <div class="card-title">Connections</div>
+          <div class="row"><div>Gmail <span class="meta">· statement ingestion + sign-in</span></div><span class="meta"><span class="dot green"></span> Connected · Reconnect</span></div>
+          <div class="row"><div>Slack <span class="meta">· cash entries + notifications</span></div><span class="meta"><span class="dot green"></span> #cash-ledger · Reconnect</span></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Preferences</div>
+          <div class="row"><span>Theme</span><button class="btn small">Ink navy (dark) ▾</button></div>
+          <div class="row"><span>Default home window</span><button class="btn small">This month ▾</button></div>
+          <div class="row"><span>Sync look-back window</span><button class="btn small">6 months ▾</button></div>
+          <div class="row"><span>AI categorisation</span><button class="btn small">Suggest, then confirm ▾</button></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Notifications</div><div class="card-sub">Channel and per-event preferences</div>
+          <div class="row"><span>Channel</span><button class="btn small">Slack + email ▾</button></div>
+          <div class="row"><span style="color:var(--text-secondary);">Sync failures, credential issues</span><span class="locked">🔒 always on</span></div>
+          <div class="row"><span>Form 16 date reached</span><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="row"><span>Advance-tax due</span><div class="switch on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="row"><span>Sync completed successfully</span><div class="switch" onclick="this.classList.toggle('on')"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Account</div>
+          <div class="row"><div><span>Deactivate account</span><div class="meta">Deactivates and stops all syncing. Your data becomes unrecoverable to us; reactivating starts fresh.</div></div><button class="btn small danger">Deactivate</button></div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let ctx='exp';
+  const caScreens=['taxhealth','checklist','advtax','deductions','capgains','income','docs'];
+  const expScreens=['home','txns','budgets','cats','audit','audit-overlap','audit-ledger','audit-pairings','audit-sync'];
+
+  function setContext(c){
+    ctx=c;
+    document.getElementById('ctxExpBtn').classList.toggle('active',c==='exp');
+    document.getElementById('ctxCaBtn').classList.toggle('active',c==='ca');
+    document.getElementById('nav-exp').style.display=c==='exp'?'flex':'none';
+    document.getElementById('nav-ca').style.display=c==='ca'?'flex':'none';
+    if(c==='exp'){go('exp','home');} else {go('ca','taxhealth');}
+  }
+
+  function go(context,screen){
+    if(context!==ctx) setContext(context);
+    document.getElementById('group-exp').classList.toggle('active',context==='exp');
+    document.getElementById('group-ca').classList.toggle('active',context==='ca');
+    document.getElementById('group-shared').classList.remove('active');
+    document.querySelectorAll('#group-'+context+' .screen').forEach(s=>s.classList.remove('active'));
+    const el=document.getElementById('s-'+screen); if(el) el.classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    const nav=document.querySelector('[data-s="'+screen+'"]'); if(nav) nav.classList.add('active');
+  }
+
+  function showShared(screen){
+    document.getElementById('group-exp').classList.remove('active');
+    document.getElementById('group-ca').classList.remove('active');
+    document.getElementById('group-shared').classList.add('active');
+    document.querySelectorAll('#group-shared .screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('s-'+screen).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    const nav=document.querySelector('[data-shared="'+screen+'"]'); if(nav) nav.classList.add('active');
+  }
+</script>
+</body>
+</html>

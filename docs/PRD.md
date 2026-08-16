@@ -350,6 +350,8 @@ A checklist view showing what documents/data are needed for a tax-ready view:
 
 ## 12. Dashboard & Analytics
 
+> **⚠ Superseded by §12A below (formerly §21). §12A is the current, authoritative Home spec.** The bullets in this original §12 describing a top summary band, surplus headline, budget strip, and recent-transactions list on Home are replaced by §12A's KPI strip + seven dashboards. Home is a pure visualization surface — no navigation tiles, no notification preview. This block is retained for history only.
+
 ### 12.1 Dashboard (Day-to-Day, Month Basis)
 
 Home screen. Month view by default.
@@ -578,3 +580,165 @@ All decisions taken in the user-journey walkthrough. See "User Stories & Journey
 ## Journey Gaps — All Resolved
 
 All 6 blocking gaps identified in the journey walkthrough are now resolved. See "User Stories & Journeys" §16–18 for full decisions and rationale.
+
+---
+
+## 19. Settings & Preferences
+
+Previously unspecified — surfaced during UI review. This is the home for everything configurable that isn't a per-account or per-transaction action. Settings is a **shared utility**, reachable from both contexts (§20).
+
+### 19.1 Sections
+
+**Categories** — management view (distinct from the Expense-context Categories *browsing* view). Rename, merge, create, and set rules mapping merchants/narration patterns to categories. This is where per-user category overrides (§4) are edited. Same underlying data as the browse view; different verb (manage vs. view).
+
+**Gmail connection** — the Google OAuth connection state (identity + statement access). Reconnect, revoke, and see current scope. Distinct from Accounts: this is the *source-of-ingestion* auth, not an individual bank account.
+
+**Slack** — bot connection state, which channel/DM cash entries post to, reconnect/revoke.
+
+**Theme** — theme selector. The app ships dark-first (ink/navy), but theme is a configurable token set, so this is a real selector, not a toggle. Additional themes are added over time without code changes to screens.
+
+**Default window** — the default date range the Expense dashboard opens to (This month / Last month / Custom / current-FY). Sets what "Home" shows on load.
+
+**Refresh / sync window** — how far back automated Gmail scanning looks on a routine sync, within the 2-FY cap (§2.3). Not the one-time backfill (that's per-account in Accounts).
+
+**LLM** — model/behaviour preferences for in-product AI where user-exposed (e.g. categorization aggressiveness, whether low-confidence items auto-queue vs. prompt). Bounded by the server-side adapter (no BYO-key, per D3). Most routing stays internal; only user-meaningful choices surface here.
+
+**Notifications** — channel selection (Slack / email / both) and the per-event Tier 2 toggles (§18.5). Tier 1 alerts shown as always-on, non-editable. Moved here from Accounts — Accounts is about connections, Settings is about preferences.
+
+**Account deactivation** — the "delete my data" control. Per TRD §9.3 (crypto-shredding with recoverable keys), this **must be labelled "Deactivate account," never "Delete,"** because the encryption key is retained in cold storage and the data is recoverable. Copy must not claim permanent deletion. Deactivation destroys the active key; reactivation issues a new one.
+
+### 19.2 What is NOT in Settings
+
+- Per-account actions (re-sync, backfill, update statement password, remove one account) live in **Accounts** (§13), not here.
+- Per-transaction actions (recategorize, mark reviewed) live in the transaction list / detail, not here.
+
+The dividing line: Settings holds *global preferences and configuration*; Accounts holds *per-connection state*; the transaction views hold *per-record actions*.
+
+---
+
+## 20. Navigation & Information Architecture
+
+Previously unspecified — the product was built backend-first and never had its screen structure defined. The product has **two distinct usage modes** (day-to-day money management vs. tax planning) that share a common data ledger but almost no screens. The correct pattern is **two top-level contexts plus shared utilities**.
+
+### 20.1 Structure
+
+```
+┌─ Expense ⇄ CA ─────────────────  top-level context switch, always visible
+
+EXPENSE VIEW (context)              CA VIEW (context)
+  Home / Dashboard        §12.1       Tax health (FY dashboard)    §1
+  Transactions            §4          FY completeness checklist    §10
+  Budgets                 §4.2        Advance-tax planner          §1.7
+  Categories (browse)     §4          Deductions                   §1.2
+  Audit                   §15         Capital gains                §1.3
+                                      Income & TDS                 §1.1/§1.6
+                                      Documents (upload/manage)
+
+SHARED (context-independent)
+  Accounts        §13   — feeds both contexts; sync health, add-account, per-account actions
+  Notifications   §18   — full browsable view; Home shows a preview slice
+  Settings        §19   — global preferences and configuration
+```
+
+### 20.2 Design principles
+
+- **The context switch changes the entire sidebar beneath it.** Expense and CA share almost no screens; keeping them as separate contexts keeps each sidebar short and mode-appropriate.
+- **Shared utilities live outside the switch** (pinned below it, or in a top bar). Settings, Accounts, and Notifications serve both modes — a user in CA mode who needs to fix a broken sync must not have to switch to Expense to do it.
+- **Home is the landing screen** (Expense context, opened by default).
+- **"Categories" intentionally appears twice** — once under Expense (browse: see spend by category) and once under Settings (manage: rename, merge, create rules). Same noun, different verb. Deliberate, not accidental duplication.
+
+### 20.3 Home screen composition
+
+Home is the entry point (see §12A for the authoritative spec):
+
+- Date-range selector: **This month / Last month / Custom range / current FY**.
+- "Available to invest" headline, budget snapshot, running-cost split, recent transactions.
+- *(Per §12A: Home carries no quick-nav tiles and no notification preview. Navigation is the sidebar's job; Notifications is its own shared screen. Home is a pure visualization surface — KPI strip + seven dashboards driven by the shared selector.)*
+
+### 20.4 Notifications view
+
+- The bell affordance opens a **preview panel**; the full **Notifications screen** (shared utility) is the browsable history.
+- Each notification is actionable and **redirects to its source**: "SBI sync failed" → Accounts; "Form 16 expected" → CA view Documents; "80C limit reached" → CA view Deductions.
+- Shows both Tier 1 (alerts) and Tier 2 (milestones), visually distinguished. Tier 1 cannot be dismissed until its underlying condition is resolved.
+
+### 20.5 Audit as a section index (not one scroll)
+
+Audit is an index of sub-views, each opening its own page:
+
+- **Overlap map** (Level A, §15.2) — statement-period overlaps per account.
+- **Dedup ledger** (Level B, §15.2) — every transaction, seen vs counted, traced to source.
+- **Resolver pairings** (§15.2) — what was matched and why.
+- **Sync history** (new) — per account, how far ingestion has progressed ("HDFC ingested through 31 Jul; SBI through 10 Jul"). Often the first thing a user opens Audit to check.
+
+### 20.6 Add-account flow
+
+Adding an account includes the **sample-file parser path** (TRD §12, Dynamic Parser Builder): if the bank isn't on the curated list, the user uploads a sample statement, which the LLM-assisted builder turns into a validated parser (balance-check gated). Surfaced as part of add-account, not a separate feature.
+
+### 20.7 Screen inventory (build phases)
+
+| Screen | Context | PRD | UI phase |
+|---|---|---|---|
+| Home / Dashboard | Expense | §12.1 | 3.5 |
+| Transactions (list + filter + detail) | Expense | §4 | 3.5 |
+| Budgets | Expense | §4.2 | 3.5 |
+| Categories (browse) | Expense | §4 | 3.5 |
+| Audit (index + 4 sub-views) | Expense | §15 | 2.5 |
+| Tax health / FY dashboard | CA | §1 | 4.5 |
+| FY completeness checklist | CA | §10 | 4.5 |
+| Advance-tax planner | CA | §1.7 | 4.5 |
+| Deductions / Capital gains / Income & TDS | CA | §1 | 4.5 |
+| Accounts (+ add-account/sample parser) | Shared | §13, §14 | 3.5 |
+| Notifications (full view) | Shared | §18 | 3.5 |
+| Settings (all sub-sections) | Shared | §19 | 3.5 |
+
+Phase 2.5 builds the app shell + context switch + Audit context (data already exists). 3.5 and 4.5 fill their respective contexts.
+
+---
+
+## 12A. Home Dashboards — CURRENT SPEC (supersedes §12 above)
+
+UI review changed Home substantially. **This is the authoritative Home specification.** Where it conflicts with the original §12 above, this wins. Home is a pure visualization surface: a KPI strip plus seven dashboards, one shared time selector, no navigation tiles, no notification preview.
+
+### 12A.1 Home is a pure visualization surface
+
+Home (Expense context landing screen) carries **no navigation tiles and no notification preview**. The sidebar owns all navigation; Notifications is its own shared screen. Home is numbers + charts only.
+
+### 12A.2 One shared time selector drives the whole screen
+
+A single control at the top drives every KPI and chart: **This month · This month till now · Last month · Custom range · Current FY**. No per-widget date control — changing the selector re-scopes the entire screen at once.
+
+**Trend charts need a span, not a point.** When a single month is selected, trend widgets render the sub-periods within it (daily/weekly buckets) and/or trailing months for context — never a single lonely data point. Build this in from the start.
+
+### 12A.3 KPI strip — the headline numbers
+
+A row of KPI tiles, each a single number for the selected window with a delta vs the previous comparable period:
+
+- **Available to invest** — income − spend − committed outflows.
+- **Total income** — all income in the window.
+- **Total expense** — expense only (transfers/investments excluded per transaction-type, §7).
+- **Savings rate** — surplus ÷ income (%).
+- **Net cashflow** — income − expense.
+
+### 12A.4 The seven dashboards
+
+All obey the shared selector:
+
+1. **Income vs Expense trend** — two lines over the window's time buckets.
+2. **Category-wise spend** — donut/bar of spend by category.
+3. **Category trend over time** — per-category spend across buckets; which categories are growing/shrinking.
+4. **Running-cost split** — essential-fixed / essential-variable / discretionary / luxury (§5).
+5. **Net cashflow / surplus trend** — surplus over time; trajectory of "available to invest."
+6. **Top merchants** — leaderboard by spend; surfaces subscription creep.
+7. **Savings-rate trend** — savings rate over time; the single most useful health metric.
+
+### 12A.5 What Home is NOT
+
+- Not a navigation hub (sidebar's job).
+- Not a notification surface (Notifications screen's job).
+- Not a place for CA/FY visualizations — net worth trend, allocation drift, deduction-utilization live in the **CA context**, not Expense Home.
+- Not the deep-analytics screen — recurring/subscription view, cash-flow runway live on a dedicated Analytics screen in a later phase.
+
+### 12A.6 §20.3 and §20.4 corrections
+
+- **§20.3 (Home composition)** is superseded by §12A: "quick-nav tiles" and "notifications preview slice" bullets are removed. Home's date-range selector is retained and is the §12A.2 shared selector.
+- **§20.4 (Notifications)** stands, with one change: Home no longer shows a notification preview. Redirect-to-source behavior is unchanged.

@@ -2,13 +2,13 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-14
-**Current phase:** Phase 2 — Ledger & Correctness → **CLOSED 2026-08-14** (all exit criteria met; Wave 5 gate passed)
-**Overall status:** Phase 2 complete. 317 unit tests passing, 27/28 integration tests passing (1 PITR test requires Docker — pre-existing, not a regression). mypy clean (18 source files, 0 issues). All 7 Phase 2 exit criteria checked off. Phase 3 (Day-to-Day Layer) is next.
+**Last updated:** 2026-08-16
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started) · Phase 2.5 — Frontend Foundation (UI, not started, runs in parallel with Phase 3)
+**Overall status:** ~320 unit+property tests passing. 27/28 integration tests passing (1 PITR Docker-only, pre-existing). CI G1/G2/G3 green on `feature/phase2`. PRD/TRD synced from Notion (§19 Settings, §20 IA, §12A Home, TRD §13–15 added). UI phases 2.5/3.5/4.5 introduced — Phase 2.5 is next deliverable for `web/`.
 
 ---
 
-## Current phase: Phase 0 — Foundations
+## Phase 0 — Foundations [CLOSED 2026-08-02]
 
 **Goal:** Establish the skeleton that everything else depends on — repo structure, local environment, database schema with the immutable/mutable split, event-log primitives, replay mechanism, and CI running the correctness harness.
 
@@ -22,17 +22,17 @@
 | 0.1 | Repo scaffolding + `CLAUDE.md` + docs structure | Done | This scaffolding |
 | 0.2 | Docker local dev environment (Postgres + API + web) | Done | All 6 services up; wal_level=replica; /health 200 |
 | 0.3 | Postgres schema: immutable event tables | Done | 8 tables, 4 triggers, 3 indexes, 0 float cols, mypy clean |
-| 0.4 | Postgres schema: mutable settings tables | Not started | See TRD §3.2 |
-| 0.5 | Event-log primitives (append, read stream) | Not started | Append-only enforcement at DB level |
-| 0.6 | Projection builder + replay mechanism | Not started | Must be deterministic (invariant 3) |
-| 0.7 | Idempotency hash implementation | Not started | See TRD §3.4 |
-| 0.8 | CI pipeline + correctness harness skeleton | Not started | Golden dataset runner, empty to start |
-| 0.9 | Synthetic fixture generator (basic) | Not started | Realistic-but-fake statements |
-| 0.10 | CI pipeline with gates G1–G8 | Not started | See `docs/QUALITY.md` |
+| 0.4 | Postgres schema: mutable settings tables | Done | migration 002_mutable.py |
+| 0.5 | Event-log primitives (append, read stream) | Done | core/events/store.py |
+| 0.6 | Projection builder + replay mechanism | Done | core/projections/builder.py |
+| 0.7 | Idempotency hash implementation | Done | core/hashing/hash.py |
+| 0.8 | CI pipeline + correctness harness skeleton | Done | .github/workflows/ci.yml |
+| 0.9 | Synthetic fixture generator (basic) | Done | tests/fixtures/generator.py |
+| 0.10 | CI pipeline with gates G1–G8 | Done | all gates active in ci.yml |
 | 0.11 | Custom gates: real-data guard + migration check | Done | G14, G15 active; 13/13 unit tests pass; mypy --strict clean |
 | 0.12 | Coverage tiering config + ratchet | Done | per-zone thresholds; ratchet prevents regression; baseline auto-updated |
-| 0.13 | PR quality-report comment bot | Not started | Per-run visible reporting |
-| 0.14 | Integration test harness (ephemeral Postgres) | Not started | See QUALITY.md §3.4 |
+| 0.13 | PR quality-report comment bot | Not started | Deferred to Phase 5 |
+| 0.14 | Integration test harness (ephemeral Postgres) | Done | tests/integration/conftest.py (testcontainers) |
 | 0.15 | Trend dashboard publishing | Done | publish.py + Chart.js viewer; trend-publish CI job (main-push only) |
 
 ### Blockers
@@ -124,9 +124,26 @@ _None currently blocking Phase 1 tasks._
 | 0 | Foundations | **CLOSED** 2026-08-02 | Event append → projection → deterministic replay; CI green; adversarial review pass; independent test authorship confirmed |
 | 1 | Ingestion & Trust | **CLOSED** 2026-08-13 | Real statement parses via dry-run harness, balance check passes, writes nothing until confirmed |
 | 2 | Ledger & Correctness | **CLOSED** 2026-08-14 | Overlapping statements ingested twice → zero double-counting, provable in audit view |
+| **2.5** | **Frontend Foundation** | **Not started** | Audit view renders real Phase 2 data (overlap map, dedup ledger, resolver pairings, sync history); design-system tokens (Space Grotesk / IBM Plex Mono / CSS-variable color set) are the single source every subsequent UI phase consumes |
 | 3 | Day-to-Day Layer | Not started | A full month tracked, budgeted; surplus reconciles against bank statement manually |
+| **3.5** | **Day-to-Day UI** | **Not started** | All Expense-context screens (Home/7 dashboards, Transactions, Budgets, Categories, Accounts, Notifications, Settings) render real Phase 3 API data; every Journey 1/4 acceptance criterion met on screen |
 | 4 | CA Layer | Not started | Full FY health report from real docs; every number traces to source. **CA review of tax rule-set required.** |
+| **4.5** | **CA View UI** | **Not started** | All CA-context screens (Tax health, FY checklist, Advance-tax, Deductions, Capital gains, Income & TDS, Documents) render real Phase 4 API data; every CA journey acceptance criterion met on screen |
 | 5 | Private Beta | Not started | A second user onboards end-to-end unaided; data isolation verified |
+
+> **Parallelism note:** Phase 2.5 (`web/`) can run alongside Phase 3 (backend) — they touch different layers and have no compile-time dependency on each other. Phase 3.5 cannot start until Phase 3's API surface is real and tested.
+
+---
+
+## Open UI items (tracked here until each phase's kickoff moves them)
+
+| Item | Deferred to | TRD ref |
+|---|---|---|
+| Audit API endpoints (overlap-map query, dedup-ledger, resolver-pairings) | Phase 2.5 wiring | TRD §15.5 |
+| Empty states for every screen | Phase 3.5 | TRD §15.6 |
+| Audit-view empty state (specifically flagged) | Phase 2.5 | TRD §15.6 |
+| "Previous comparable period" rule per selector option (this-month→last-month is obvious; custom-range needs a rule before build) | Phase 3.5 kickoff | TRD §15.4 |
+| Charting library selection (Recharts vs Chart.js; must theme from CSS-variable tokens) | Phase 3.5 kickoff | TRD §15.1 |
 
 ---
 
@@ -142,6 +159,18 @@ _None currently blocking Phase 1 tasks._
 - [x] Audit view: Level B (seen/counted ledger) passes for transfer overlap fixture. Level A (overlap map UI view) is partial — UniqueConstraint on `idempotency_hash` prevents double-ingestion at DB level, but a dedicated overlap-map query/view is not built yet. Deferred to Phase 3.
 - [x] No transfer, CC-payment, FD-booking, or reversal appears in expense totals
 - [x] F-9 closed: Phase 0 bugs A-3 + C-2 fixed; independently-authored tests pass
+
+### Phase 2 follow-ups [2026-08-15]
+
+Three scoped items completed before Phase 3 Wave 1:
+
+| Item | Description | Status |
+|---|---|---|
+| E2 hardening | `test_reducer_does_not_import_matcher_modules` — AST import boundary test | Done |
+| U2 property test | `test_invariant4_property.py` — Hypothesis test, Invariant 4, 200 examples | Done |
+| Item 3 proof | Audit view duplicate-event: confirmed no bug; test added | Done |
+| CI G1/G2/G3 | 30 pre-existing mypy errors fixed; ruff format + lint green | Done |
+| U7 deferred | Audit API endpoints: decision deferred to Phase 3 planning | Deferred |
 
 ### Wave 0 — F-9 re-authoring [COMPLETE 2026-08-14]
 
@@ -199,6 +228,7 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | Phase 0 critical-module tests not independently authored | F-9: Re-authoring complete (2026-08-14). 10 new tests written; 2 Phase 0 bugs confirmed (A-3 float hash, C-2 corrupt snapshot). Both bugs fixed in Phase 2. | **CLOSED** — fixed A-3 + C-2; all independently-authored tests pass |
 | Confidence formula constants not validated against real data | `CONFIDENCE_BASE_BP` (9000), `CONFIDENCE_SAME_DAY_BONUS_BP` (500), `CONFIDENCE_PER_DAY_PENALTY_BP` (200) are working assumptions in `config.py`. The formula produces scores that gate on `RESOLVER_CONFIDENCE_THRESHOLD` (8500), meaning 3-day matches (8400 bp) are rejected. Calibrate before live data ingestion. | Open — Phase 3 |
 | Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
+| `SYNC_STALL_THRESHOLD_DAYS = 35` is uncalibrated | Set to 35 (one monthly cycle + grace window) in `backend/api/audit/config.py`. Works for monthly-statement accounts; accounts with weekly or quarterly cadence need a cadence-aware detection strategy (D7). Calibrate against real usage before Phase 5. | Open — Phase 5 |
 
 ---
 

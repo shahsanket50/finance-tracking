@@ -77,6 +77,13 @@ when the exact FK semantics (UUID vs idempotency hash, nullable vs required) can
 decided with the matcher code in hand. The `MarkedReversalPayload` stores
 `original_hash` and `reversal_hash` in the encrypted payload column in the interim.
 
+**Wave 2 follow-up (2026-08-14):** Reversal matcher is complete. The `reverses_transaction_id`
+FK column was not added in Wave 2. The reversal relationship is fully identified by
+`original_hash` and `reversal_hash` in the encrypted `MarkedReversalPayload` — no FK column
+is required for the matcher or reducer to function. Decision: FK column deferred to Phase 3
+review. If the Phase 3 audit view (`domain/audit`) has no structural need for it, the column
+will be dropped from scope permanently.
+
 ---
 
 ## ADR-014: Wave 2 matchers share a common matching primitive
@@ -93,6 +100,46 @@ Duplicating this logic across four callers creates calibration risk: a fix to th
 proximity window check must be applied in four places, and drift is silent. A shared
 primitive means calibration is a one-line change in one place, and a bug in the
 primitive is immediately visible across all four matchers' tests.
+
+---
+
+## ADR-015: Two-context IA (Expense / CA + shared utilities) over flat nav
+
+**Status:** Accepted · **Date:** 2026-08-16
+Expense and CA are two distinct usage modes with almost no screen overlap. The IA uses a persistent context switch that swaps the entire sidebar, plus shared utilities (Accounts, Notifications, Settings) reachable from both contexts without switching.
+**Why:** A flat nav containing all screens from both modes produces a sidebar too long to be useful in either mode. The shared ledger feeds both contexts, but the user's intent when opening the app is unambiguously one or the other — not both at once. Shared utilities serve both modes equally and should never require a context switch to reach them. See PRD §20.
+
+---
+
+## ADR-016: shadcn/ui as the component library
+
+**Status:** Accepted · **Date:** 2026-08-16
+Use shadcn/ui (copy-into-repo model, Radix + Tailwind, CSS-variable theming) rather than an opaque dependency-style component library.
+**Why:** Components are copied as fully-typed, readable, modifiable code into `web/components/ui/` — zero abstraction penalty, no opaque dependency boundary. Consistent with TRD T3 ("mainstream, best-documented for AI codegen") and directly supports the token-set design system (ADR-017) since theming is already CSS-variable-based. Alternative libraries (Mantine, Chakra) would add an opaque dependency layer that AI codegen agents cannot inspect or modify without risk.
+
+---
+
+## ADR-017: Theme as a CSS-variable token set (configurable, dark-first)
+
+**Status:** Accepted · **Date:** 2026-08-16
+The design system ships as a CSS-variable token file. Dark-first (ink/navy palette). A theme change is a new token file, not a code change. Settings exposes a theme selector (PRD §19).
+**Why:** Hardcoded colors in components are the most common cause of an app that looks themed in one place and unstyled in another. A CSS-variable token set is the smallest unit of discipline that prevents drift — every color reference must go through a token. Building dark-first avoids retrofitting (which typically breaks edge cases invisible in light mode). The token-set model also means user-selectable themes add zero per-screen code.
+
+---
+
+## ADR-018: Home is a pure visualization surface
+
+**Status:** Accepted · **Date:** 2026-08-16
+Home (Expense context landing screen) contains KPI strip + 7 dashboards driven by a shared time selector, and nothing else. No navigation tiles. No notification preview. No CA/FY data.
+**Why:** Navigation is the sidebar's job. Notifications is its own shared screen. CA/FY data belongs in the CA context. A Home that tries to do all three creates a screen with no center of gravity — every element fights for prominence. Making Home a pure visualization surface lets every pixel serve one purpose: telling the user where their money went in the selected window. The original §12 spec included nav tiles and a notification preview; PRD §12A supersedes it after UI review. See PRD §12A.1/§12A.5.
+
+---
+
+## ADR-019: Paired UI phases (N.5) over one appended frontend phase
+
+**Status:** Accepted · **Date:** 2026-08-16
+Insert a UI phase after each backend phase that produces something worth seeing (2.5, 3.5, 4.5) rather than building all frontend work in one phase appended at the end.
+**Why:** Appending UI at the end means backend APIs are designed without a consumer to validate them, and the UI gets built in one stretch with no feedback loop. Pairing each UI phase with the backend phase that produced its data: (a) never builds against a mock — the exit criterion requires wiring to a real, tested endpoint; (b) amortizes the design system correctly — 2.5 builds tokens once, 3.5/4.5 consume them; (c) makes beta-readiness checkable — Phase 5 ships because 2.5/3.5/4.5 have already built the actual product surface. Phase 2.5 can run in parallel with Phase 3 backend since they touch different layers. See TRD §14.
 
 ---
 
