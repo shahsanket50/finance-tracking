@@ -1,0 +1,37 @@
+/* ink-navy: dark-first token set. A theme change = a new token file, not code changes.
+   Values are verbatim from docs/design/wireframe-reference.html. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  /* backgrounds */
+  --bg:           #0B0E14;
+  --surface-1:    #12161F;
+  --surface-2:    #1A202C;
+  --surface-3:    #212936;
+
+  /* borders */
+  --border:        rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.16);
+
+  /* text */
+  --text-primary:   #E8EAED;
+  --text-secondary: #9AA3B2;
+  --text-muted:     #5C6577;
+
+  /* accent */
+  --accent:    #6EA8FE;
+  --accent-bg: rgba(110,168,254,0.12);
+
+  /* semantic */
+  --success:    #3ED68C;
+  --success-bg: rgba(62,214,140,0.12);
+  --warning:    #F5A623;
+  --warning-bg: rgba(245,166,35,0.12);
+  --danger:     #FF5C5C;
+  --danger-bg:  rgba(255,92,92,0.12);
+
+  /* typography */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'IBM Plex Sans', sans-serif;
+  --font-mono:    'IBM Plex Mono', monospace;
+}
