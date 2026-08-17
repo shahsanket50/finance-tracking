@@ -63,6 +63,13 @@ describe('formatPaise — Indian grouping', () => {
   it('formats 12,34,567 rupees 89 paise', () => {
     expect(formatPaise(123456789n)).toBe('₹12,34,567.89');
   });
+
+  it('JSON-bigint round-trip: BigInt(jsonString) produces correct output', () => {
+    // CLAUDE.md §3.5: API serializes money as strings. Frontend converts via BigInt(s).
+    // This confirms the BigInt(string) → formatPaise path is correct — not just bigint literals.
+    const fromJson = BigInt('10000000'); // ₹1,00,000.00 (1 lakh) arriving as JSON string
+    expect(formatPaise(fromJson)).toBe('₹1,00,000.00');
+  });
 });
 
 describe('formatPaise — negative values', () => {
@@ -83,6 +90,12 @@ describe('formatPaise — negative values', () => {
 describe('formatPaise — TypeError for non-bigint inputs', () => {
   it('throws TypeError for a plain number', () => {
     expect(() => formatPaise(100 as unknown as bigint)).toThrow(TypeError);
+  });
+
+  it('throws TypeError for a plain integer the size of an API response value (realistic missed-BigInt-conversion)', () => {
+    // CLAUDE.md §3.5: API sends money as string; frontend must call BigInt(s) before formatPaise.
+    // Passing the raw JSON.parse number is the realistic mistake — it looks like a valid amount.
+    expect(() => formatPaise(10000000 as unknown as bigint)).toThrow(TypeError);
   });
 
   it('throws TypeError for a float', () => {
