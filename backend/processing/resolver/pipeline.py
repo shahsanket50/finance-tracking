@@ -7,6 +7,12 @@ written are skipped via deterministic idempotency_hash check).
 Invariant 3 (replay determinism) is maintained because:
   - Decisions are written exactly once and read back unchanged on replay.
   - Matchers are never called at projection/replay time — only here, at write time.
+
+Matcher priority: transfer → cc_payment → fd_booking → reversal. Each matcher
+receives only candidates not yet claimed by a higher-priority matcher in this run
+OR already covered by an existing DB resolver event. This prevents a candidate pair
+from being claimed by two matchers (e.g. savings↔savings matching both as a
+transfer AND a reversal).
 """
 
 from __future__ import annotations
@@ -31,12 +37,6 @@ from core.events.types import (
     TRANSACTION_INGESTED,
 )
 from processing.resolver.candidate import CandidateTxn
-from processing.resolver.events import (
-    MarkedCCPaymentPayload,
-    MarkedFDBookingPayload,
-    MarkedInternalTransferPayload,
-    MarkedReversalPayload,
-)
 from processing.resolver.matchers import cc_payment, fd_booking, reversal, transfer
 
 
@@ -44,6 +44,53 @@ def _resolver_idempotency_hash(event_type: str, h1: str, h2: str) -> str:
     """Deterministic, order-independent idempotency hash for a resolver event."""
     key = event_type + ":" + ":".join(sorted([h1, h2]))
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _hashes_covered_by_resolver_event(session: Session, row: TransactionEvent) -> frozenset[str]:
+    """Return the transaction hashes that a resolver event claims."""
+    payload = decrypt_payload(session, row.encryption_key_id, row.payload)
+    if row.event_type == MARKED_INTERNAL_TRANSFER:
+        return frozenset([str(payload["debit_hash"]), str(payload["credit_hash"])])
+    if row.event_type == MARKED_CC_PAYMENT:
+        return frozenset([str(payload["savings_debit_hash"]), str(payload["cc_credit_hash"])])
+    if row.event_type == MARKED_FD_BOOKING:
+        return frozenset([str(payload["savings_debit_hash"]), str(payload["fd_credit_hash"])])
+    if row.event_type == MARKED_REVERSAL:
+        return frozenset([str(payload["original_hash"]), str(payload["reversal_hash"])])
+    return frozenset()
+
+
+def _write_if_new(
+    session: Session,
+    user_id: uuid.UUID,
+    event_type: str,
+    payload: dict[str, object],
+    debit_hash: str,
+    credit_hash: str,
+    existing_hashes: set[str],
+    claimed: set[str],
+    hash_to_value_date: dict[str, date],
+    hash_to_ingestion_id: dict[str, uuid.UUID],
+) -> bool:
+    """Write a resolver event if not in DB. Updates claimed in-place; returns True if written."""
+    r_hash = _resolver_idempotency_hash(event_type, debit_hash, credit_hash)
+    if r_hash in existing_hashes:
+        return False
+    append_event(
+        session,
+        user_id,
+        event_type,
+        "RESOLVER",
+        payload,
+        value_date=hash_to_value_date[debit_hash],
+        amount_paise=0,
+        idempotency_hash=r_hash,
+        transaction_type="transfer",
+        narration="",
+        ingestion_event_id=hash_to_ingestion_id[debit_hash],
+    )
+    claimed.update([debit_hash, credit_hash])
+    return True
 
 
 def run_resolver(session: Session, user_id: uuid.UUID) -> int:
@@ -66,7 +113,7 @@ def run_resolver(session: Session, user_id: uuid.UUID) -> int:
     if not txn_rows:
         return 0
 
-    # 2. Build candidates and a lookup map for ingestion_event_id + value_date.
+    # 2. Build candidates and lookup maps for ingestion_event_id + value_date.
     candidates: list[CandidateTxn] = []
     hash_to_ingestion_id: dict[str, uuid.UUID] = {}
     hash_to_value_date: dict[str, date] = {}
@@ -85,101 +132,86 @@ def run_resolver(session: Session, user_id: uuid.UUID) -> int:
         hash_to_ingestion_id[row.idempotency_hash] = row.ingestion_event_id
         hash_to_value_date[row.idempotency_hash] = row.value_date
 
-    # 3. Read existing resolver event hashes so we can skip already-matched pairs.
-    existing_resolver_hashes: set[str] = set(
-        session.scalars(
-            select(TransactionEvent.idempotency_hash).where(
-                TransactionEvent.user_id == user_id,
-                TransactionEvent.event_type.in_(RESOLVER_EVENT_TYPES),
-            )
-        ).all()
-    )
+    # 3. Read existing resolver events — their idempotency hashes (for skip checks)
+    #    and the transaction hashes they cover (for cascade exclusion on re-runs).
+    existing_resolver_rows = session.scalars(
+        select(TransactionEvent).where(
+            TransactionEvent.user_id == user_id,
+            TransactionEvent.event_type.in_(RESOLVER_EVENT_TYPES),
+        )
+    ).all()
 
-    # 4. Run matchers and write new events.
+    existing_resolver_hashes: set[str] = {row.idempotency_hash for row in existing_resolver_rows}
+    claimed: set[str] = set()
+    for row in existing_resolver_rows:
+        claimed.update(_hashes_covered_by_resolver_event(session, row))
+
+    # 4. Run matchers in priority order with cascading exclusion.
+    #    Each matcher only sees candidates not yet claimed. Newly written pairs are
+    #    added to `claimed` so lower-priority matchers can't re-match them.
     new_events_written = 0
 
-    for tm in transfer.find_matches(candidates):
-        r_hash = _resolver_idempotency_hash(
-            MARKED_INTERNAL_TRANSFER, tm.debit_hash, tm.credit_hash
-        )
-        if r_hash in existing_resolver_hashes:
-            continue
-        append_event(
+    def _available() -> list[CandidateTxn]:
+        return [c for c in candidates if c.idempotency_hash not in claimed]
+
+    for tm in transfer.find_matches(_available()):
+        written = _write_if_new(
             session,
             user_id,
             MARKED_INTERNAL_TRANSFER,
-            "RESOLVER",
             tm.model_dump(),
-            value_date=hash_to_value_date[tm.debit_hash],
-            amount_paise=0,
-            idempotency_hash=r_hash,
-            transaction_type="transfer",
-            narration="",
-            ingestion_event_id=hash_to_ingestion_id[tm.debit_hash],
+            tm.debit_hash,
+            tm.credit_hash,
+            existing_resolver_hashes,
+            claimed,
+            hash_to_value_date,
+            hash_to_ingestion_id,
         )
-        new_events_written += 1
+        new_events_written += int(written)
 
-    for cm in cc_payment.find_matches(candidates):
-        r_hash = _resolver_idempotency_hash(
-            MARKED_CC_PAYMENT, cm.savings_debit_hash, cm.cc_credit_hash
-        )
-        if r_hash in existing_resolver_hashes:
-            continue
-        append_event(
+    for cm in cc_payment.find_matches(_available()):
+        written = _write_if_new(
             session,
             user_id,
             MARKED_CC_PAYMENT,
-            "RESOLVER",
             cm.model_dump(),
-            value_date=hash_to_value_date[cm.savings_debit_hash],
-            amount_paise=0,
-            idempotency_hash=r_hash,
-            transaction_type="transfer",
-            narration="",
-            ingestion_event_id=hash_to_ingestion_id[cm.savings_debit_hash],
+            cm.savings_debit_hash,
+            cm.cc_credit_hash,
+            existing_resolver_hashes,
+            claimed,
+            hash_to_value_date,
+            hash_to_ingestion_id,
         )
-        new_events_written += 1
+        new_events_written += int(written)
 
-    for fm in fd_booking.find_matches(candidates):
-        r_hash = _resolver_idempotency_hash(
-            MARKED_FD_BOOKING, fm.savings_debit_hash, fm.fd_credit_hash
-        )
-        if r_hash in existing_resolver_hashes:
-            continue
-        append_event(
+    for fm in fd_booking.find_matches(_available()):
+        written = _write_if_new(
             session,
             user_id,
             MARKED_FD_BOOKING,
-            "RESOLVER",
             fm.model_dump(),
-            value_date=hash_to_value_date[fm.savings_debit_hash],
-            amount_paise=0,
-            idempotency_hash=r_hash,
-            transaction_type="transfer",
-            narration="",
-            ingestion_event_id=hash_to_ingestion_id[fm.savings_debit_hash],
+            fm.savings_debit_hash,
+            fm.fd_credit_hash,
+            existing_resolver_hashes,
+            claimed,
+            hash_to_value_date,
+            hash_to_ingestion_id,
         )
-        new_events_written += 1
+        new_events_written += int(written)
 
-    for rm in reversal.find_matches(candidates):
-        r_hash = _resolver_idempotency_hash(
-            MARKED_REVERSAL, rm.original_hash, rm.reversal_hash
-        )
-        if r_hash in existing_resolver_hashes:
-            continue
-        append_event(
+    for rm in reversal.find_matches(_available()):
+        written = _write_if_new(
             session,
             user_id,
             MARKED_REVERSAL,
-            "RESOLVER",
             rm.model_dump(),
-            value_date=hash_to_value_date[rm.original_hash],
-            amount_paise=0,
-            idempotency_hash=r_hash,
-            transaction_type="transfer",
-            narration="",
-            ingestion_event_id=hash_to_ingestion_id[rm.original_hash],
+            rm.original_hash,
+            rm.reversal_hash,
+            existing_resolver_hashes,
+            claimed,
+            hash_to_value_date,
+            hash_to_ingestion_id,
         )
-        new_events_written += 1
+        new_events_written += int(written)
 
     return new_events_written
