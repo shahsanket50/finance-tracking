@@ -2,8 +2,8 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-16
-**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started) · Phase 2.5 — Frontend Foundation (UI, not started, runs in parallel with Phase 3)
+**Last updated:** 2026-08-22
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started) · Phase 2.5 — Frontend Foundation (UI, Wave 2 partial — see wave-diff deviation below)
 **Overall status:** ~320 unit+property tests passing. 27/28 integration tests passing (1 PITR Docker-only, pre-existing). CI G1/G2/G3 green on `feature/phase2`. PRD/TRD synced from Notion (§19 Settings, §20 IA, §12A Home, TRD §13–15 added). UI phases 2.5/3.5/4.5 introduced — Phase 2.5 is next deliverable for `web/`.
 
 ---
@@ -132,6 +132,45 @@ _None currently blocking Phase 1 tasks._
 | 5 | Private Beta | Not started | A second user onboards end-to-end unaided; data isolation verified |
 
 > **Parallelism note:** Phase 2.5 (`web/`) can run alongside Phase 3 (backend) — they touch different layers and have no compile-time dependency on each other. Phase 3.5 cannot start until Phase 3's API surface is real and tested.
+
+---
+
+## Phase 2.5 — Frontend Foundation [In progress — Wave 2 partial]
+
+### Wave progress
+
+| Wave | Name | Status | Notes |
+|---|---|---|---|
+| 1 | Scaffold — vitest, token CSS, `formatPaise` | Done | commit `1926e11`; 23 formatPaise tests pass |
+| 2 | App shell — layout, two-context sidebar, shadcn/ui primitives, placeholders, behavioral tests | **Done** | commits `a592262` + follow-up; 19 shell tests pass (E1/E2/E3/E4/E5); 42 total |
+| 3 | Audit API wiring — 4 screens hit real backend | Not started | |
+| 4 | E2E verification + Phase 2.5 close | Not started | |
+
+### Wave 2 deviation [logged 2026-08-22, per PHASE_PROTOCOL.md §7]
+
+Wave 2 commit `a592262` ("app shell, two-context sidebar, audit route structure") was
+presented as complete, but it is missing the following items that were part of the Wave 2
+scope:
+
+| Missing item | Impact |
+|---|---|
+| `web/app/(ca)/` route group does not exist | Navigating to any CA-context route would 404 |
+| `web/components/ui/` does not exist | No shadcn/ui base; Wave 3 screens have nothing to build on |
+| No placeholder component ("Coming in Phase X.Y") | Non-Audit expense screens (`/transactions`, `/budgets`, `/categories`, `/home`) all 404 today; shared utility pages (`/accounts`, `/notifications`, `/settings`) all 404 |
+| Zero behavioral tests | No test proves context switch swaps the sidebar without reload; no test proves shared utilities are visible from both contexts; no test proves non-Audit screens return placeholder (not 404) |
+
+The "23/23 tests pass" cited in the Wave 2 commit message refers entirely to `lib/format.test.ts`
+(the `formatPaise` utility written in Wave 1). No shell behavior tests were written or run.
+
+**Resolution required before Wave 4 (UI wiring) can start:**
+
+Four missing items (five implementation steps — item 3 of the table splits into two):
+
+1. Create `web/app/(ca)/` route group with stub pages for all 7 CA-context screens
+2. Create `web/components/ui/` (shadcn/ui: Button, Badge, Separator at minimum)
+3. Create a reusable `<ComingSoon phase="X.Y" />` placeholder component
+4. Add placeholder `page.tsx` for all non-Audit expense routes (`/home`, `/transactions`, `/budgets`, `/categories`) and all shared utilities (`/accounts`, `/notifications`, `/settings`)
+5. Write behavioral tests: context switch swaps sidebar nav, shared utilities visible from both contexts, every unbuilt screen renders placeholder not 404
 
 ---
 

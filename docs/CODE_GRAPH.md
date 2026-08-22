@@ -97,6 +97,7 @@ backend/
 │   │   ├── reducer.py   [x]    # transactions_view reducer (registered with builder)
 │   │   ├── audit.py     [x]    # build_audit_view → seen/counted dedup ledger
 │   │   └── matchers/    [x]    # transfer, cc_payment, fd_booking, reversal
+│   ├── accounts/        [~]    # GET /api/v1/accounts/{ref}/transactions — minimal Wave 4 E12 drill-down only; Phase 3.5 adds search/filters/pagination (PRD §4)
 │   ├── normalizer/      [ ]    # merchant name cleanup — Phase 3
 │   ├── classifier/      [ ]    # category assignment — Phase 3
 │   └── nature/          [ ]    # essential/discretionary/luxury — Phase 3
@@ -125,7 +126,7 @@ web/                                # Next.js + TypeScript (strict). Phase 2.5+.
 │   │
 │   ├── (expense)/       [ ]        # Expense-context screens (sidebar swaps on context switch)
 │   │   ├── page.tsx     [ ]        # Home / Dashboard §12A — pure visualization, 7 dashboards — Phase 3.5
-│   │   ├── transactions/[ ]        # Transaction list + filter + detail §4 — Phase 3.5
+│   │   ├── transactions/[ ]        # Transaction list + filter + detail §4 — Phase 3.5 (backend minimal at GET /api/v1/accounts/{ref}/transactions exists for E12 drill-down; full UI + search/pagination here)
 │   │   ├── budgets/     [ ]        # Budget tracking §4.2 — Phase 3.5
 │   │   ├── categories/  [ ]        # Category browse §4 — Phase 3.5
 │   │   └── audit/       [ ]        # Audit index + 4 sub-views §15/§20.5 — Phase 2.5

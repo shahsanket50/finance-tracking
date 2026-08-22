@@ -28,6 +28,7 @@ from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.session import DryRunSession
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction
 from ingestion.validators.balance_check import BalanceCheckResult
+from processing.accounts.router import get_account_transactions
 from processing.audit.router import (
     get_dedup_ledger,
     get_overlap_map,
@@ -583,3 +584,101 @@ def test_duplicate_resolver_event_raises_integrity_error(
             ingestion_event_id=resolver_row.ingestion_event_id,
         )
         pg_session.flush()
+
+
+# ── accounts — transaction date-range filtering ───────────────────────────────
+
+
+def _make_cc_purchases_dry_session(
+    user_id: uuid.UUID,
+    account_ref: str,
+    purchases: list[tuple[date_type, int]],
+    period_start: date_type,
+    period_end: date_type,
+    raw_artifact_hash: str,
+) -> DryRunSession:
+    """Build a DryRunSession with CC purchase transactions on the given dates."""
+    transactions: list[ParsedTransaction] = []
+    for value_date, amount_paise in purchases:
+        narration = f"PURCHASE {value_date}"
+        canon = canonicalize_narration(narration)
+        h = compute_idempotency_hash(account_ref, value_date, amount_paise, canon, 0)
+        transactions.append(
+            ParsedTransaction(
+                account_ref=account_ref,
+                value_date=value_date,
+                amount_paise=amount_paise,
+                narration=narration,
+                canonical_narration=canon,
+                occurrence_index=0,
+                idempotency_hash=h,
+                running_balance_paise=None,
+            )
+        )
+    total = sum(a for _, a in purchases)
+    statement = ParsedStatement(
+        bank="hdfc_cc",
+        account_ref=account_ref,
+        account_type=ACCOUNT_TYPE_CREDIT_CARD,
+        period_start=period_start,
+        period_end=period_end,
+        opening_balance_paise=0,
+        closing_balance_paise=total,
+        transactions=transactions,
+        confidence=9000,
+        raw_text="synthetic CC purchases for filter test",
+    )
+    return DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        account_ref=account_ref,
+        statement=statement,
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash=raw_artifact_hash,
+        created_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.integration
+def test_account_transactions_date_filter_returns_only_in_range(
+    pg_session: Session, test_user: User
+) -> None:
+    """GET /accounts/{account_ref}/transactions with ?from=&to= returns only in-range rows.
+
+    Scenario: two CC purchases — one inside the billing period [2026-02-15, 2026-03-14]
+    and one outside. Querying each window returns exactly one result.
+    """
+    account_ref = "HDFC_CC_FILTER_TEST"
+    inside_date = date_type(2026, 3, 5)  # inside [2026-02-15, 2026-03-14]
+    outside_date = date_type(2026, 3, 15)  # outside — one day after period_end
+
+    dry_session = _make_cc_purchases_dry_session(
+        user_id=test_user.id,
+        account_ref=account_ref,
+        purchases=[(inside_date, -5000), (outside_date, -3000)],
+        period_start=date_type(2026, 2, 15),
+        period_end=date_type(2026, 3, 31),
+        raw_artifact_hash="f" * 64,
+    )
+    _confirm_dry_session(dry_session, pg_session)
+    pg_session.flush()
+
+    billing_start = date_type(2026, 2, 15)
+    billing_end = date_type(2026, 3, 14)
+
+    in_billing = get_account_transactions(
+        pg_session, test_user.id, account_ref, from_date=billing_start, to_date=billing_end
+    )
+    assert len(in_billing) == 1, f"Expected 1 result in billing period, got {len(in_billing)}"
+    assert in_billing[0].value_date == inside_date
+
+    after_billing = get_account_transactions(
+        pg_session,
+        test_user.id,
+        account_ref,
+        from_date=date_type(2026, 3, 15),
+        to_date=date_type(2026, 3, 31),
+    )
+    n_after = len(after_billing)
+    assert n_after == 1, f"Expected 1 result after billing period, got {n_after}"
+    assert after_billing[0].value_date == outside_date

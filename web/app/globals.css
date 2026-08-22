@@ -1,3 +1,6 @@
+/* Tailwind utilities only — Preflight (reset) is disabled in tailwind.config.ts. */
+@tailwind utilities;
+
 /* Base reset */
 *, *::before, *::after { box-sizing: border-box; }
 

@@ -21,12 +21,14 @@ _cascade_matchers(). There is no separately-ordered call sequence that could dri
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from collections.abc import Callable
 from datetime import date
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core.events.encryption import decrypt_payload
@@ -43,6 +45,8 @@ from core.events.types import (
 )
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.matchers import cc_payment, fd_booking, reversal, transfer
+
+logger = logging.getLogger(__name__)
 
 # Single source of truth for matcher priority, event type constants, and hash extraction.
 # run_resolver() iterates this tuple via _cascade_matchers() — there is no other ordering.
@@ -112,23 +116,46 @@ def _write_if_new(
     hash_to_value_date: dict[str, date],
     hash_to_ingestion_id: dict[str, uuid.UUID],
 ) -> bool:
-    """Write a resolver event to DB if not already present. Returns True if written."""
+    """Write a resolver event to DB if not already present. Returns True if written.
+
+    Uses a savepoint so a concurrent duplicate-key write does not poison the outer
+    transaction. Only the specific constraint uq_transaction_events_user_idempotency_hash
+    is treated as a benign race; all other IntegrityErrors are re-raised.
+    """
     r_hash = _resolver_idempotency_hash(event_type, h1, h2)
     if r_hash in existing_hashes:
         return False
-    append_event(
-        session,
-        user_id,
-        event_type,
-        "RESOLVER",
-        payload,
-        value_date=hash_to_value_date[h1],
-        amount_paise=0,
-        idempotency_hash=r_hash,
-        transaction_type="transfer",
-        narration="",
-        ingestion_event_id=hash_to_ingestion_id[h1],
-    )
+    sp = session.begin_nested()
+    try:
+        append_event(
+            session,
+            user_id,
+            event_type,
+            "RESOLVER",
+            payload,
+            value_date=hash_to_value_date[h1],
+            amount_paise=0,
+            idempotency_hash=r_hash,
+            transaction_type="transfer",
+            narration="",
+            ingestion_event_id=hash_to_ingestion_id[h1],
+        )
+        sp.commit()
+    except IntegrityError as exc:
+        sp.rollback()
+        orig = getattr(exc, "orig", None)
+        pgcode = getattr(orig, "pgcode", None)
+        diag = getattr(orig, "diag", None)
+        constraint = getattr(diag, "constraint_name", None)
+        if pgcode == "23505" and constraint == "uq_transaction_events_user_idempotency_hash":
+            logger.warning(
+                "Resolver concurrent-write race suppressed (event_type=%s h1=%.8s h2=%.8s)",
+                event_type,
+                h1,
+                h2,
+            )
+            return False
+        raise
     return True
 
 
