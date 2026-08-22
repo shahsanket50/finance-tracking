@@ -13,13 +13,18 @@ receives only candidates not yet claimed by a higher-priority matcher in this ru
 OR already covered by an existing DB resolver event. This prevents a candidate pair
 from being claimed by two matchers (e.g. savings↔savings matching both as a
 transfer AND a reversal).
+
+The order is enforced by iterating _MATCHER_PRIORITY directly in run_resolver() via
+_cascade_matchers(). There is no separately-ordered call sequence that could drift.
 """
 
 from __future__ import annotations
 
 import hashlib
 import uuid
+from collections.abc import Callable
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -39,15 +44,15 @@ from core.events.types import (
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.matchers import cc_payment, fd_booking, reversal, transfer
 
-# Explicit priority order. Lower index = higher priority = runs first and claims candidates
-# before later matchers see them. Reversal is last because it matches any same-account-type
-# debit+credit pair — including savings↔savings transfers that the transfer matcher already
-# claimed. Without this ordering, a single pair could be claimed by two matchers.
-_MATCHER_PRIORITY = (
-    ("transfer", transfer),  # savings↔savings: most specific
-    ("cc_payment", cc_payment),  # savings debit + credit_card credit
-    ("fd_booking", fd_booking),  # savings debit + fd credit
-    ("reversal", reversal),  # catch-all: same account_type, opposite sign
+# Single source of truth for matcher priority, event type constants, and hash extraction.
+# run_resolver() iterates this tuple via _cascade_matchers() — there is no other ordering.
+# Reversal is last: its criteria (same account_type, opposite signs) are a superset of
+# transfer's, so it must not claim pairs that transfer has already handled.
+_MATCHER_PRIORITY: tuple[tuple[str, Any, Callable[[Any], tuple[str, str]]], ...] = (
+    (MARKED_INTERNAL_TRANSFER, transfer, lambda m: (m.debit_hash, m.credit_hash)),
+    (MARKED_CC_PAYMENT, cc_payment, lambda m: (m.savings_debit_hash, m.cc_credit_hash)),
+    (MARKED_FD_BOOKING, fd_booking, lambda m: (m.savings_debit_hash, m.fd_credit_hash)),
+    (MARKED_REVERSAL, reversal, lambda m: (m.original_hash, m.reversal_hash)),
 )
 
 
@@ -71,20 +76,44 @@ def _hashes_covered_by_resolver_event(session: Session, row: TransactionEvent) -
     return frozenset()
 
 
+def _cascade_matchers(
+    candidates: list[CandidateTxn],
+    claimed: set[str],
+) -> list[tuple[str, str, str, Any]]:
+    """Run matchers in _MATCHER_PRIORITY order with cascading exclusion.
+
+    Returns (event_type, h1, h2, match_obj) for each match found.
+    `claimed` is mutated in-place — lower-priority matchers only see unclaimed candidates.
+    This is the single function that implements the cascade; run_resolver() calls it and
+    then handles DB persistence. Tests call it directly to verify the cascade invariant.
+    """
+    results: list[tuple[str, str, str, Any]] = []
+
+    def available() -> list[CandidateTxn]:
+        return [c for c in candidates if c.idempotency_hash not in claimed]
+
+    for event_type, matcher, hash_extractor in _MATCHER_PRIORITY:
+        for match in matcher.find_matches(available()):
+            h1, h2 = hash_extractor(match)
+            claimed.update([h1, h2])
+            results.append((event_type, h1, h2, match))
+
+    return results
+
+
 def _write_if_new(
     session: Session,
     user_id: uuid.UUID,
     event_type: str,
     payload: dict[str, object],
-    debit_hash: str,
-    credit_hash: str,
+    h1: str,
+    h2: str,
     existing_hashes: set[str],
-    claimed: set[str],
     hash_to_value_date: dict[str, date],
     hash_to_ingestion_id: dict[str, uuid.UUID],
 ) -> bool:
-    """Write a resolver event if not in DB. Updates claimed in-place; returns True if written."""
-    r_hash = _resolver_idempotency_hash(event_type, debit_hash, credit_hash)
+    """Write a resolver event to DB if not already present. Returns True if written."""
+    r_hash = _resolver_idempotency_hash(event_type, h1, h2)
     if r_hash in existing_hashes:
         return False
     append_event(
@@ -93,14 +122,13 @@ def _write_if_new(
         event_type,
         "RESOLVER",
         payload,
-        value_date=hash_to_value_date[debit_hash],
+        value_date=hash_to_value_date[h1],
         amount_paise=0,
         idempotency_hash=r_hash,
         transaction_type="transfer",
         narration="",
-        ingestion_event_id=hash_to_ingestion_id[debit_hash],
+        ingestion_event_id=hash_to_ingestion_id[h1],
     )
-    claimed.update([debit_hash, credit_hash])
     return True
 
 
@@ -157,69 +185,17 @@ def run_resolver(session: Session, user_id: uuid.UUID) -> int:
     for row in existing_resolver_rows:
         claimed.update(_hashes_covered_by_resolver_event(session, row))
 
-    # 4. Run matchers in priority order with cascading exclusion.
-    #    Each matcher only sees candidates not yet claimed. Newly written pairs are
-    #    added to `claimed` so lower-priority matchers can't re-match them.
+    # 4. Cascade through matchers (order from _MATCHER_PRIORITY) then persist each match.
     new_events_written = 0
-
-    def _available() -> list[CandidateTxn]:
-        return [c for c in candidates if c.idempotency_hash not in claimed]
-
-    for tm in transfer.find_matches(_available()):
+    for event_type, h1, h2, match in _cascade_matchers(candidates, claimed):
         written = _write_if_new(
             session,
             user_id,
-            MARKED_INTERNAL_TRANSFER,
-            tm.model_dump(),
-            tm.debit_hash,
-            tm.credit_hash,
+            event_type,
+            match.model_dump(),
+            h1,
+            h2,
             existing_resolver_hashes,
-            claimed,
-            hash_to_value_date,
-            hash_to_ingestion_id,
-        )
-        new_events_written += int(written)
-
-    for cm in cc_payment.find_matches(_available()):
-        written = _write_if_new(
-            session,
-            user_id,
-            MARKED_CC_PAYMENT,
-            cm.model_dump(),
-            cm.savings_debit_hash,
-            cm.cc_credit_hash,
-            existing_resolver_hashes,
-            claimed,
-            hash_to_value_date,
-            hash_to_ingestion_id,
-        )
-        new_events_written += int(written)
-
-    for fm in fd_booking.find_matches(_available()):
-        written = _write_if_new(
-            session,
-            user_id,
-            MARKED_FD_BOOKING,
-            fm.model_dump(),
-            fm.savings_debit_hash,
-            fm.fd_credit_hash,
-            existing_resolver_hashes,
-            claimed,
-            hash_to_value_date,
-            hash_to_ingestion_id,
-        )
-        new_events_written += int(written)
-
-    for rm in reversal.find_matches(_available()):
-        written = _write_if_new(
-            session,
-            user_id,
-            MARKED_REVERSAL,
-            rm.model_dump(),
-            rm.original_hash,
-            rm.reversal_hash,
-            existing_resolver_hashes,
-            claimed,
             hash_to_value_date,
             hash_to_ingestion_id,
         )

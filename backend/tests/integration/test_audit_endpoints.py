@@ -18,10 +18,11 @@ from datetime import date as date_type
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.events.encryption import encrypt_payload
-from core.events.models import IngestionEvent, User
+from core.events.models import IngestionEvent, TransactionEvent, User
 from core.events.types import ACCOUNT_TYPE_SAVINGS
 from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.session import DryRunSession
@@ -405,3 +406,55 @@ def test_resolver_pairings_legs_match_transaction_hashes(
     assert all_leg_hashes == expected_hashes, (
         "Pairing legs must reference the same hashes as the ingested transactions"
     )
+
+
+# ── resolver event DB constraint ──────────────────────────────────────────────
+
+
+@pytest.mark.integration
+def test_duplicate_resolver_event_raises_integrity_error(
+    pg_session: Session, test_user: User
+) -> None:
+    """DB UNIQUE constraint on (user_id, idempotency_hash) rejects duplicate resolver events.
+
+    Simulates two concurrent run_resolver() calls racing past the in-memory pre-write
+    check: the second attempt to write a row with the same (user_id, idempotency_hash)
+    raises IntegrityError, not a silent duplicate.
+
+    The constraint is uq_transaction_events_user_idempotency_hash on transaction_events.
+    Resolver events are stored there — this test confirms it covers them.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    from core.events.store import append_event
+    from core.events.types import RESOLVER_EVENT_TYPES
+
+    dry_session = _make_transfer_dry_session(test_user.id)
+    _confirm_dry_session(dry_session, pg_session)
+    pg_session.flush()
+
+    # Find the resolver event that run_resolver() wrote during confirm().
+    resolver_row = pg_session.scalars(
+        select(TransactionEvent).where(
+            TransactionEvent.user_id == test_user.id,
+            TransactionEvent.event_type.in_(list(RESOLVER_EVENT_TYPES)),
+        )
+    ).first()
+    assert resolver_row is not None, "Expected a resolver event after confirm()"
+
+    # A second append_event() with the same (user_id, idempotency_hash) must be rejected.
+    with pytest.raises(IntegrityError):
+        append_event(
+            pg_session,
+            test_user.id,
+            resolver_row.event_type,
+            "RESOLVER",
+            {},
+            value_date=resolver_row.value_date,
+            amount_paise=0,
+            idempotency_hash=resolver_row.idempotency_hash,
+            transaction_type="transfer",
+            narration="",
+            ingestion_event_id=resolver_row.ingestion_event_id,
+        )
+        pg_session.flush()
