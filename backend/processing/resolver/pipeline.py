@@ -39,6 +39,17 @@ from core.events.types import (
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.matchers import cc_payment, fd_booking, reversal, transfer
 
+# Explicit priority order. Lower index = higher priority = runs first and claims candidates
+# before later matchers see them. Reversal is last because it matches any same-account-type
+# debit+credit pair — including savings↔savings transfers that the transfer matcher already
+# claimed. Without this ordering, a single pair could be claimed by two matchers.
+_MATCHER_PRIORITY = (
+    ("transfer", transfer),  # savings↔savings: most specific
+    ("cc_payment", cc_payment),  # savings debit + credit_card credit
+    ("fd_booking", fd_booking),  # savings debit + fd credit
+    ("reversal", reversal),  # catch-all: same account_type, opposite sign
+)
+
 
 def _resolver_idempotency_hash(event_type: str, h1: str, h2: str) -> str:
     """Deterministic, order-independent idempotency hash for a resolver event."""

@@ -196,6 +196,33 @@ Integration tests: `tests/integration/test_confirm_resolver_wiring.py` (2 tests)
 
 ---
 
+## Retroactive defect B-3: cross-matcher candidate claiming — savings transfer claimed as reversal
+
+**Caught:** 2026-08-22, Phase 2.5 Wave 3 integration tests
+**Phase introduced:** Phase 2 (matchers written in Waves 2A–2D) / Phase 2.5 (pipeline.py built)
+**Phase missed at close:** Phase 2 adversarial review
+
+**What shipped broken:** The reversal matcher (`reversal.py`) criteria overlap with the transfer matcher (`transfer.py`) criteria. Transfer: both legs `account_type == "savings"`, opposite signs, magnitudes equal. Reversal: both legs `same account_type`, opposite signs, magnitudes equal. A savings↔savings transfer pair satisfies *both* criteria simultaneously. The original `pipeline.py` (built in Phase 2.5 Wave 3) ran all four matchers against the same full candidates list with no cross-matcher coordination. Result: a single savings↔savings pair produced two resolver events — `MarkedInternalTransfer` and `MarkedReversal` — for the same two transaction hashes. The reducer applied both, leaving `exclusion_reason="reversal"` as the final state. The resolver-pairings endpoint returned 2 pairings where 1 was correct. The dedup ledger showed `exclusion_reason="reversal"` instead of `"internal_transfer"`.
+
+**Root cause:** Reversal is intentionally a catch-all (same account_type, opposite sign, any account class). This is correct behavior for reversals — a savings credit reversing a savings debit is valid. But the same criteria are a superset of the transfer criteria. There is no structural fix to the reversal matcher's criteria; the fix must be in the pipeline's execution order.
+
+**Was this in main?** `pipeline.py` did not exist in main before Phase 2.5. The four matchers existed in main with overlapping criteria, but nothing called them together, so the bug was latent (no execution path triggered it). The bug became live the moment `pipeline.py` was first constructed.
+
+**Fix:** Cascading exclusion in `run_resolver()`. A `claimed` set is pre-populated from existing DB resolver event payloads (for idempotent re-run), then updated as each matcher writes events. Lower-priority matchers receive only `_available()` — the candidates not yet in `claimed`. Matcher priority is enforced by `_MATCHER_PRIORITY` tuple in `pipeline.py` (explicit, inspectable):
+
+```python
+_MATCHER_PRIORITY = (
+    ("transfer", transfer),       # savings↔savings: most specific
+    ("cc_payment", cc_payment),   # savings debit + credit_card credit
+    ("fd_booking", fd_booking),   # savings debit + fd credit
+    ("reversal", reversal),       # catch-all: same account_type, opposite sign
+)
+```
+
+**Regression tests:** `tests/integration/test_audit_endpoints.py::test_resolver_pairings_returns_transfer_pair` (asserts exactly 1 pairing), `test_dedup_ledger_shows_transfer_pair_as_excluded` (asserts `exclusion_reason=="internal_transfer"`). Property test: `tests/property/processing/test_cross_matcher_priority.py` — Hypothesis, 200 examples, asserts no hash appears in >1 matcher's output.
+
+---
+
 ## Template
 
 ```markdown

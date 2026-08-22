@@ -160,21 +160,21 @@ _None currently blocking Phase 1 tasks._
 - [x] No transfer, CC-payment, FD-booking, or reversal appears in expense totals
 - [x] F-9 closed: Phase 0 bugs A-3 + C-2 fixed; independently-authored tests pass
 
-### Phase 2.5 retroactive defects [caught 2026-08-17]
+### Phase 2.5 retroactive defects [caught 2026-08-17/22]
 
-Two defects in Phase 1/2 code were missed at Phase 2 close and caught during Phase 2.5
-Wave 3 pre-coding audit. Both are fixed in Phase 2.5 (`feature/phase2.5`). See DECISIONS.md
-B-1 and B-2 for full writeup.
+Three defects in Phase 1/2 code were missed at Phase 2 close and caught during Phase 2.5
+Wave 3. All are fixed in Phase 2.5 (`feature/phase2.5`). See DECISIONS.md B-1, B-2, B-3
+for full writeup.
 
 | ID | Module | What was broken | Fix |
 |---|---|---|---|
 | B-1 | `confirm.py` | `event_type="transaction_ingested"` (snake_case) — reducer expects PascalCase | Shared constants in `core/events/types.py` |
 | B-2 | `confirm.py` + pipeline | Resolver matchers never wired into production path; payload missing reducer-required fields; no `account_type` for matcher routing | `pipeline.py` built; `confirm.py` payload expanded; `ParsedStatement.account_type` added |
+| B-3 | `pipeline.py` | Transfer matcher and reversal matcher share overlapping criteria — savings↔savings pair claimed by both matchers, producing two conflicting resolver events | Cascading `claimed` set + explicit `_MATCHER_PRIORITY` tuple; reversal runs last |
 
-Wave-diff gap that enabled both: Phase 2 integration tests bypassed `confirm.py` and called
-`append_event()` directly with hand-crafted payloads. The confirm→reducer→resolver path was
-never tested end-to-end. The wave-diff check (PHASE_PROTOCOL.md §7 step 4) is intended to
-surface this class of gap at close time.
+Wave-diff gap that enabled B-1/B-2: Phase 2 integration tests bypassed `confirm.py` and
+called `append_event()` directly with hand-crafted payloads. B-3 was latent in the matcher
+design (overlapping criteria) and became live when `pipeline.py` was first built in Wave 3.
 
 ### Phase 2 follow-ups [2026-08-15]
 
