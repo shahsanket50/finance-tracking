@@ -14,6 +14,7 @@ from core.hashing.hash import (
     compute_idempotency_hash,
     compute_occurrence_index,
 )
+from core.events.types import ACCOUNT_TYPE_CREDIT_CARD
 from ingestion.parsers.base import AbstractParser, ParsedStatement, ParsedTransaction
 
 
@@ -43,7 +44,7 @@ class SbiCcParser(AbstractParser):
         return ParsedStatement(
             bank="sbi_cc",
             account_ref=account_ref,
-            account_type="credit_card",
+            account_type=ACCOUNT_TYPE_CREDIT_CARD,
             period_start=period_start,
             period_end=period_end,
             opening_balance_paise=opening_balance_paise,

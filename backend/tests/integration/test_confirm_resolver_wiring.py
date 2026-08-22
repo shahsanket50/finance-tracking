@@ -18,7 +18,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.events.models import TransactionEvent, User
+from core.events.store import read_since_seq
 from core.events.types import MARKED_INTERNAL_TRANSFER, TRANSACTION_INGESTED
+from core.projections.builder import build_projection_from_events
 from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.confirm import confirm
 from ingestion.dryrun.session import DryRunSession
@@ -158,4 +160,39 @@ def test_confirm_resolver_idempotent_on_rerun(
     ).all()
     assert len(resolver_rows_after_rerun) == 1, (
         "Duplicate resolver events must not be written on idempotent re-run"
+    )
+
+
+@pytest.mark.integration
+def test_confirm_event_type_casing_end_to_end(
+    pg_session: Session, test_user: User
+) -> None:
+    """End-to-end B-1 regression: real confirm() → real DB event → reducer recognizes it.
+
+    The unit-level casing test only checks that confirm.py passes the constant to a mock.
+    This test verifies the full chain: correct event_type string written to Postgres,
+    read back via read_since_seq(), processed by the reducer, and recognized as a
+    TransactionIngested event (transactions list non-empty).
+
+    If event_type were "transaction_ingested" (snake_case), the reducer would silently
+    skip every event and return an empty transactions list — wrong-but-confident.
+    """
+    assert isinstance(test_user, User)
+    dry_session = _make_transfer_pair_session(test_user.id)
+
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = pickle.dumps(dry_session)
+
+    with patch("ingestion.dryrun.confirm.get_redis_client", return_value=mock_redis):
+        confirm(dry_session.session_id, pg_session)
+
+    # Read events back from DB and run reducer
+    events = read_since_seq(pg_session, test_user.id, since_seq=0)
+    state = build_projection_from_events(events, "transactions_view")
+
+    import typing
+    transactions = typing.cast(list[dict[str, object]], state["transactions"])
+    assert len(transactions) == 2, (
+        f"Reducer must recognize TransactionIngested events — got {len(transactions)} transactions. "
+        "If 0, the event_type casing is wrong (snake_case stored, PascalCase expected by reducer)."
     )

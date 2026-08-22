@@ -245,6 +245,7 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | Confidence formula constants not validated against real data | `CONFIDENCE_BASE_BP` (9000), `CONFIDENCE_SAME_DAY_BONUS_BP` (500), `CONFIDENCE_PER_DAY_PENALTY_BP` (200) are working assumptions in `config.py`. The formula produces scores that gate on `RESOLVER_CONFIDENCE_THRESHOLD` (8500), meaning 3-day matches (8400 bp) are rejected. Calibrate before live data ingestion. | Open — Phase 3 |
 | Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
 | `SYNC_STALL_THRESHOLD_DAYS = 35` is uncalibrated | Set to 35 (one monthly cycle + grace window) in `backend/api/audit/config.py`. Works for monthly-statement accounts; accounts with weekly or quarterly cadence need a cadence-aware detection strategy (D7). Calibrate against real usage before Phase 5. | Open — Phase 5 |
+| `run_resolver()` re-scans all `TransactionIngested` rows on every call | No watermark — every `confirm()` call decrypts and re-processes every historical transaction for the user. Degrades linearly with statement history. Fix: add a `since_seq` watermark stored per-user (mutable settings table), skip rows already processed. Low-priority until user history is non-trivial. | Open — Phase 3 or 4 |
 
 ---
 

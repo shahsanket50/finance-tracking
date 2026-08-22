@@ -16,6 +16,7 @@ from core.hashing.hash import (
     compute_idempotency_hash,
     compute_occurrence_index,
 )
+from core.events.types import ACCOUNT_TYPE_SAVINGS
 from ingestion.parsers.base import AbstractParser, ParsedStatement, ParsedTransaction
 
 # Matches a DD/MM/YY date (two-digit year, used in transaction rows).
@@ -86,7 +87,7 @@ class HdfcSavingsParser(AbstractParser):
         return ParsedStatement(
             bank="hdfc_savings",
             account_ref=account_ref,
-            account_type="savings",
+            account_type=ACCOUNT_TYPE_SAVINGS,
             period_start=period_start,
             period_end=period_end,
             opening_balance_paise=opening_balance_paise,

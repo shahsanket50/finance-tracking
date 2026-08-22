@@ -46,3 +46,10 @@ RESOLVER_EVENT_TYPES: frozenset[str] = frozenset(
         MARKED_REVERSAL,
     }
 )
+
+# Canonical account_type strings for CandidateTxn.account_type, ParsedStatement.account_type,
+# and matcher gate expressions. Drift between parsers and matchers silently routes
+# transactions through the wrong matcher bucket — same bug class as event_type casing.
+ACCOUNT_TYPE_SAVINGS: str = "savings"
+ACCOUNT_TYPE_CREDIT_CARD: str = "credit_card"
+ACCOUNT_TYPE_FD: str = "fd"

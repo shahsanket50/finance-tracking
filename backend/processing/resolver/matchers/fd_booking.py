@@ -1,5 +1,6 @@
 """FD booking matcher: savings debit + FD credit pair (ADR-014)."""
 
+from core.events.types import ACCOUNT_TYPE_FD, ACCOUNT_TYPE_SAVINGS
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.config import (
     FD_BOOKING_MATCH_WINDOW_DAYS,
@@ -18,8 +19,8 @@ def find_matches(candidates: list[CandidateTxn]) -> list[MarkedFDBookingPayload]
     - Magnitudes equal, within FD_BOOKING_MATCH_WINDOW_DAYS
     - Confidence >= RESOLVER_CONFIDENCE_THRESHOLD
     """
-    debits = [c for c in candidates if c.account_type == "savings" and c.amount_paise < 0]
-    credits = [c for c in candidates if c.account_type == "fd" and c.amount_paise > 0]
+    debits = [c for c in candidates if c.account_type == ACCOUNT_TYPE_SAVINGS and c.amount_paise < 0]
+    credits = [c for c in candidates if c.account_type == ACCOUNT_TYPE_FD and c.amount_paise > 0]
     results: list[MarkedFDBookingPayload] = []
     matched_hashes: set[str] = set()
     for debit in debits:

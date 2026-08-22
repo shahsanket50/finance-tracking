@@ -22,6 +22,7 @@ from core.events.encryption import decrypt_payload
 from core.events.models import TransactionEvent
 from core.events.store import append_event
 from core.events.types import (
+    ACCOUNT_TYPE_SAVINGS,
     MARKED_CC_PAYMENT,
     MARKED_FD_BOOKING,
     MARKED_INTERNAL_TRANSFER,
@@ -72,7 +73,7 @@ def run_resolver(session: Session, user_id: uuid.UUID) -> int:
 
     for row in txn_rows:
         payload = decrypt_payload(session, row.encryption_key_id, row.payload)
-        account_type = str(payload.get("account_type", "savings"))
+        account_type = str(payload.get("account_type", ACCOUNT_TYPE_SAVINGS))
         candidates.append(
             CandidateTxn(
                 idempotency_hash=row.idempotency_hash,
