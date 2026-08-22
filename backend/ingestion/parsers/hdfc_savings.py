@@ -86,6 +86,7 @@ class HdfcSavingsParser(AbstractParser):
         return ParsedStatement(
             bank="hdfc_savings",
             account_ref=account_ref,
+            account_type="savings",
             period_start=period_start,
             period_end=period_end,
             opening_balance_paise=opening_balance_paise,

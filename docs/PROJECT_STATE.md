@@ -160,6 +160,22 @@ _None currently blocking Phase 1 tasks._
 - [x] No transfer, CC-payment, FD-booking, or reversal appears in expense totals
 - [x] F-9 closed: Phase 0 bugs A-3 + C-2 fixed; independently-authored tests pass
 
+### Phase 2.5 retroactive defects [caught 2026-08-17]
+
+Two defects in Phase 1/2 code were missed at Phase 2 close and caught during Phase 2.5
+Wave 3 pre-coding audit. Both are fixed in Phase 2.5 (`feature/phase2.5`). See DECISIONS.md
+B-1 and B-2 for full writeup.
+
+| ID | Module | What was broken | Fix |
+|---|---|---|---|
+| B-1 | `confirm.py` | `event_type="transaction_ingested"` (snake_case) — reducer expects PascalCase | Shared constants in `core/events/types.py` |
+| B-2 | `confirm.py` + pipeline | Resolver matchers never wired into production path; payload missing reducer-required fields; no `account_type` for matcher routing | `pipeline.py` built; `confirm.py` payload expanded; `ParsedStatement.account_type` added |
+
+Wave-diff gap that enabled both: Phase 2 integration tests bypassed `confirm.py` and called
+`append_event()` directly with hand-crafted payloads. The confirm→reducer→resolver path was
+never tested end-to-end. The wave-diff check (PHASE_PROTOCOL.md §7 step 4) is intended to
+surface this class of gap at close time.
+
 ### Phase 2 follow-ups [2026-08-15]
 
 Three scoped items completed before Phase 3 Wave 1:

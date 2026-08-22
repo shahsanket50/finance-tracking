@@ -27,6 +27,7 @@ class ParsedTransaction:
 class ParsedStatement:
     bank: str
     account_ref: str
+    account_type: str  # "savings" | "credit_card" | "fd" — used by resolver pipeline
     period_start: date
     period_end: date
     opening_balance_paise: int

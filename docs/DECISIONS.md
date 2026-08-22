@@ -143,6 +143,59 @@ Insert a UI phase after each backend phase that produces something worth seeing 
 
 ---
 
+---
+
+## Retroactive defect B-1: event_type casing mismatch in confirm.py
+
+**Caught:** 2026-08-17, Phase 2.5 Wave 3 pre-coding audit
+**Phase introduced:** Phase 1 (confirm.py shipped in Wave 4A)
+**Phase missed at close:** Phase 2 adversarial review
+
+**What shipped broken:** `confirm.py` wrote `"transaction_ingested"` (snake_case) as the
+`event_type` for every ingested transaction. The reducer in `reducer.py` branches on
+`"TransactionIngested"` (PascalCase). The two strings never match — in production, replaying
+real ingested data produces an empty `transactions` list. The integration tests for the
+resolver pipeline bypassed `confirm.py` and called `append_event()` directly with the correct
+casing, so the mismatch was invisible to CI.
+
+**Fix:** Created `core/events/types.py` constants (`TRANSACTION_INGESTED`, `MARKED_*` etc.).
+`confirm.py` now imports `TRANSACTION_INGESTED`; `reducer.py` imports all five constants.
+`processing/resolver/events.py` drops its local `RESOLVER_EVENT_TYPES` and re-exports from
+`core.events.types`. Regression test added:
+`tests/unit/ingestion/test_confirm.py::test_confirm_pass_event_type_uses_transaction_ingested_constant`.
+
+---
+
+## Retroactive defect B-2: resolver pipeline was never wired into confirm.py
+
+**Caught:** 2026-08-17, Phase 2.5 Wave 3 pre-coding audit
+**Phase introduced:** Phase 2 (resolver matchers shipped in Waves 2A–2D)
+**Phase missed at close:** Phase 2 adversarial review
+
+**What shipped broken:** `find_matches()` (all four matchers) was never called in production
+code. Phase 2 tests exercised each matcher in isolation, bypassing `confirm.py` entirely.
+No production path existed that read ingested transactions, ran the matchers, and persisted
+resolver events. The audit view endpoints (planned for Phase 2.5 Wave 3) also could not
+return meaningful data since no resolver events would ever exist in the ledger.
+
+**Additional payload gap (same cause):** `confirm.py` wrote only `{narration,
+canonical_narration, occurrence_index}` to the encrypted `TransactionEvent.payload`. The
+reducer reads `idempotency_hash`, `amount_paise`, `value_date`, `account_ref`, and
+`transaction_type` from the payload — these were not written, so replay on real data would
+raise `KeyError`. The integration tests that passed used `append_event()` directly with
+full payloads, masking the gap.
+
+**Fix:** (1) Built `processing/resolver/pipeline.py`: `run_resolver(session, user_id) → int`
+— reads `TransactionIngested` rows, builds `CandidateTxn` list (using `account_type` from
+payload), checks existing resolver event hashes for idempotency, runs all four matchers,
+writes new resolver events with deterministic idempotency_hashes. (2) Added `account_type:
+str` to `ParsedStatement`; all five parsers set it (`"credit_card"` for CC parsers,
+`"savings"` for savings parsers). (3) `confirm.py` now includes all reducer-required fields
+in the payload dict and calls `run_resolver()` after writing transaction events (TRD §2.3).
+Integration tests: `tests/integration/test_confirm_resolver_wiring.py` (2 tests).
+
+---
+
 ## Template
 
 ```markdown

@@ -133,9 +133,15 @@ Findings get a severity:
 2. Adversarial review (§6) run, CRITICALs resolved.
 3. Any retroactive gaps (§4) targeting this phase's close are resolved or
    explicitly re-targeted to the next phase with reasoning.
-4. `PROJECT_STATE.md` updated: phase marked CLOSED with date, commit, and gate
+4. **Wave-diff check:** list every wave that was actually executed and diff it
+   against the approved plan. Any wave that was dropped, merged into another,
+   or renamed must be called out explicitly as a deviation — with the reason —
+   in the close report. A close report that silently omits a planned wave is
+   not a close report; it is an incomplete record that prevents future diagnosis
+   of missing coverage.
+5. `PROJECT_STATE.md` updated: phase marked CLOSED with date, commit, and gate
    evidence. `SESSION_LOG.md` gets a closing entry.
-5. Any bugs found *during* this phase's review process that trace back to a
+6. Any bugs found *during* this phase's review process that trace back to a
    *previous* phase's shipped code get a short retroactive note in
    `docs/DECISIONS.md` — what the bug was, how it was caught, the fix. This is
    deliberately preserved (not just fixed and forgotten) as evidence for why the
@@ -144,7 +150,7 @@ Findings get a severity:
     the next phase's branch.** A phase is not closed until the merge is on main —
     cutting from a feature branch that hasn't landed produces a next phase that
     will diverge from main when the PR eventually merges.
-6. Only after 1–5a: cut the next phase's branch and begin its kickoff (§1).
+7. Only after 1–5a: cut the next phase's branch and begin its kickoff (§1).
 
 ## 8. What NOT to do
 

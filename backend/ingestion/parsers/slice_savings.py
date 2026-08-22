@@ -81,6 +81,7 @@ class SliceSavingsParser(AbstractParser):
         return ParsedStatement(
             bank="slice_savings",
             account_ref=account_ref,
+            account_type="savings",
             period_start=period_start,
             period_end=period_end,
             opening_balance_paise=opening_balance_paise,

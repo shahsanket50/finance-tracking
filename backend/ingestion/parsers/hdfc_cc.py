@@ -48,6 +48,7 @@ class HdfcCcParser(AbstractParser):
         return ParsedStatement(
             bank="hdfc_cc",
             account_ref=account_ref,
+            account_type="credit_card",
             period_start=period_start,
             period_end=period_end,
             opening_balance_paise=opening_balance_paise,

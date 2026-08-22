@@ -13,8 +13,10 @@ from sqlalchemy.orm import Session
 from core.events.encryption import encrypt_payload
 from core.events.models import IngestionEvent, RawArtifact
 from core.events.store import append_event
+from core.events.types import TRANSACTION_INGESTED
 from ingestion.dryrun.session import DryRunSession, _redis_key, load_session  # noqa: F401
 from ingestion.validators.balance_check import BalanceCheckResult
+from processing.resolver.pipeline import run_resolver
 
 
 class SessionExpiredError(Exception):
@@ -91,12 +93,20 @@ def confirm(session_id: str, db_session: Session) -> None:
             append_event(
                 db_session,
                 dry_session.user_id,
-                "transaction_ingested",
+                TRANSACTION_INGESTED,
                 txn.account_ref,
                 {
+                    # Payload fields needed by reducer + pipeline — must stay in sync
+                    # with what reducer.py reads from event.payload.
+                    "idempotency_hash": txn.idempotency_hash,
+                    "amount_paise": txn.amount_paise,
+                    "value_date": str(txn.value_date),
+                    "account_ref": txn.account_ref,
+                    "account_type": statement.account_type,
                     "narration": txn.narration,
                     "canonical_narration": txn.canonical_narration,
                     "occurrence_index": txn.occurrence_index,
+                    "transaction_type": transaction_type,
                 },
                 value_date=txn.value_date,
                 amount_paise=txn.amount_paise,
@@ -110,6 +120,9 @@ def confirm(session_id: str, db_session: Session) -> None:
                 confidence=statement.confidence,
                 running_balance_paise=txn.running_balance_paise,
             )
+
+        # Run resolver immediately after ingestion (TRD §2.3) — idempotent catch-up.
+        run_resolver(db_session, dry_session.user_id)
 
     # Commit all DB writes before touching Redis — if commit fails, session stays in Redis
     db_session.commit()

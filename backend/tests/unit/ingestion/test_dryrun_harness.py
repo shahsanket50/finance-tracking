@@ -57,6 +57,7 @@ def minimal_session() -> DryRunSession:
     stmt = ParsedStatement(
         bank="hdfc_cc",
         account_ref="HDFC_CC_4321",
+        account_type="credit_card",
         period_start=date(2026, 1, 1),
         period_end=date(2026, 1, 31),
         opening_balance_paise=0,

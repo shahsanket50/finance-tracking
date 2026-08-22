@@ -62,6 +62,7 @@ def _build_minimal_dry_run_session(user_id: uuid.UUID) -> DryRunSession:
     statement = ParsedStatement(
         bank="test",
         account_ref=account_ref,
+        account_type="savings",
         period_start=datetime(2026, 1, 1).date(),
         period_end=datetime(2026, 1, 31).date(),
         opening_balance_paise=10000,
