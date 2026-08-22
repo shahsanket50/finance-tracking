@@ -107,6 +107,9 @@ class DedupLedgerResponse(BaseModel):
 class PairingLeg(BaseModel):
     role: str
     idempotency_hash: str
+    account_ref: str
+    period_start: date | None
+    period_end: date | None
 
 
 class ResolverPairing(BaseModel):
@@ -252,32 +255,55 @@ def get_dedup_ledger(
     )
 
 
-def _legs_for_pairing(event_type: str, payload: dict[str, object]) -> list[PairingLeg]:
+def _all_leg_hashes(event_type: str, payload: dict[str, object]) -> frozenset[str]:
+    """Return the transaction hashes referenced by a resolver event payload."""
     if event_type == MARKED_INTERNAL_TRANSFER:
-        return [
-            PairingLeg(role="debit", idempotency_hash=str(payload["debit_hash"])),
-            PairingLeg(role="credit", idempotency_hash=str(payload["credit_hash"])),
-        ]
+        return frozenset([str(payload["debit_hash"]), str(payload["credit_hash"])])
     if event_type == MARKED_CC_PAYMENT:
-        return [
-            PairingLeg(role="savings_debit", idempotency_hash=str(payload["savings_debit_hash"])),
-            PairingLeg(role="cc_credit", idempotency_hash=str(payload["cc_credit_hash"])),
-        ]
+        return frozenset([str(payload["savings_debit_hash"]), str(payload["cc_credit_hash"])])
     if event_type == MARKED_FD_BOOKING:
-        return [
-            PairingLeg(role="savings_debit", idempotency_hash=str(payload["savings_debit_hash"])),
-            PairingLeg(role="fd_credit", idempotency_hash=str(payload["fd_credit_hash"])),
-        ]
+        return frozenset([str(payload["savings_debit_hash"]), str(payload["fd_credit_hash"])])
     if event_type == MARKED_REVERSAL:
-        return [
-            PairingLeg(role="original", idempotency_hash=str(payload["original_hash"])),
-            PairingLeg(role="reversal", idempotency_hash=str(payload["reversal_hash"])),
-        ]
+        return frozenset([str(payload["original_hash"]), str(payload["reversal_hash"])])
+    return frozenset()
+
+
+def _legs_for_pairing(
+    event_type: str,
+    payload: dict[str, object],
+    leg_meta: dict[str, tuple[str, date | None, date | None]],
+) -> list[PairingLeg]:
+    """Build PairingLeg list, enriching each leg with account_ref and statement period."""
+
+    def _leg(role: str, hash_key: str) -> PairingLeg:
+        h = str(payload[hash_key])
+        account_ref, period_start, period_end = leg_meta.get(h, ("", None, None))
+        return PairingLeg(
+            role=role,
+            idempotency_hash=h,
+            account_ref=account_ref,
+            period_start=period_start,
+            period_end=period_end,
+        )
+
+    if event_type == MARKED_INTERNAL_TRANSFER:
+        return [_leg("debit", "debit_hash"), _leg("credit", "credit_hash")]
+    if event_type == MARKED_CC_PAYMENT:
+        return [_leg("savings_debit", "savings_debit_hash"), _leg("cc_credit", "cc_credit_hash")]
+    if event_type == MARKED_FD_BOOKING:
+        return [_leg("savings_debit", "savings_debit_hash"), _leg("fd_credit", "fd_credit_hash")]
+    if event_type == MARKED_REVERSAL:
+        return [_leg("original", "original_hash"), _leg("reversal", "reversal_hash")]
     return []
 
 
 def get_resolver_pairings(session: Session, user_id: uuid.UUID) -> list[ResolverPairing]:
-    """Return all resolver decision events with matched-pair legs, newest first."""
+    """Return all resolver decision events with enriched matched-pair legs, newest first.
+
+    Each leg carries account_ref + period_start/period_end from the IngestionEvent that
+    originally brought in the transaction, so the client can query account transactions
+    without a separate hash-lookup round-trip.
+    """
     rows = session.scalars(
         select(TransactionEvent)
         .where(
@@ -287,9 +313,40 @@ def get_resolver_pairings(session: Session, user_id: uuid.UUID) -> list[Resolver
         .order_by(TransactionEvent.value_date.desc(), TransactionEvent.seq.desc())
     ).all()
 
-    pairings: list[ResolverPairing] = []
+    if not rows:
+        return []
+
+    # Decrypt all payloads first; collect every leg hash for a single batch metadata join.
+    decrypted: list[tuple[TransactionEvent, dict[str, object]]] = []
+    all_hashes: set[str] = set()
     for row in rows:
         payload = decrypt_payload(session, row.encryption_key_id, row.payload)
+        decrypted.append((row, payload))
+        all_hashes.update(_all_leg_hashes(row.event_type, payload))
+
+    # One join to get account_ref + statement period for every leg hash.
+    leg_meta: dict[str, tuple[str, date | None, date | None]] = {}
+    if all_hashes:
+        meta_rows = session.execute(
+            select(
+                TransactionEvent.idempotency_hash,
+                TransactionEvent.account_ref,
+                IngestionEvent.period_start,
+                IngestionEvent.period_end,
+            )
+            .join(IngestionEvent, TransactionEvent.ingestion_event_id == IngestionEvent.id)
+            .where(
+                TransactionEvent.user_id == user_id,
+                TransactionEvent.idempotency_hash.in_(list(all_hashes)),
+            )
+        ).all()
+        leg_meta = {
+            row.idempotency_hash: (row.account_ref, row.period_start, row.period_end)
+            for row in meta_rows
+        }
+
+    pairings: list[ResolverPairing] = []
+    for row, payload in decrypted:
         pairings.append(
             ResolverPairing(
                 event_id=str(row.id),
@@ -297,7 +354,7 @@ def get_resolver_pairings(session: Session, user_id: uuid.UUID) -> list[Resolver
                 matched_by=str(payload.get("matched_by", "")),
                 confidence=int(cast(int, payload.get("confidence", 0))),
                 value_date=row.value_date,
-                legs=_legs_for_pairing(row.event_type, payload),
+                legs=_legs_for_pairing(row.event_type, payload, leg_meta),
             )
         )
     return pairings

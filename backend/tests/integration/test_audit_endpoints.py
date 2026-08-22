@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from core.events.encryption import encrypt_payload
 from core.events.models import IngestionEvent, TransactionEvent, User
-from core.events.types import ACCOUNT_TYPE_SAVINGS
+from core.events.types import ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_SAVINGS
 from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.session import DryRunSession
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction
@@ -405,6 +405,131 @@ def test_resolver_pairings_legs_match_transaction_hashes(
     expected_hashes = {txn.idempotency_hash for txn in dry_session.statement.transactions}
     assert all_leg_hashes == expected_hashes, (
         "Pairing legs must reference the same hashes as the ingested transactions"
+    )
+
+
+# ── resolver-pairings leg enrichment ─────────────────────────────────────────
+
+
+def _make_cc_payment_dry_sessions(
+    user_id: uuid.UUID,
+) -> tuple[DryRunSession, DryRunSession]:
+    """Two DryRunSessions: savings debit + CC credit that the resolver matches as CCPayment."""
+    savings_account = "HDFC_SAVINGS_CC_TEST"
+    cc_account = "HDFC_CC_9876_TEST"
+    payment_date = date_type(2026, 3, 15)
+    amount = 75_000  # paise
+
+    debit_narration = "CC BILL PAYMENT HDFC"
+    debit_canon = canonicalize_narration(debit_narration)
+    debit_hash = compute_idempotency_hash(savings_account, payment_date, -amount, debit_canon, 0)
+    debit_txn = ParsedTransaction(
+        account_ref=savings_account,
+        value_date=payment_date,
+        amount_paise=-amount,
+        narration=debit_narration,
+        canonical_narration=debit_canon,
+        occurrence_index=0,
+        idempotency_hash=debit_hash,
+        running_balance_paise=None,
+    )
+    savings_statement = ParsedStatement(
+        bank="hdfc_savings",
+        account_ref=savings_account,
+        account_type=ACCOUNT_TYPE_SAVINGS,
+        period_start=date_type(2026, 3, 1),
+        period_end=date_type(2026, 3, 31),
+        opening_balance_paise=amount,
+        closing_balance_paise=0,
+        transactions=[debit_txn],
+        confidence=9000,
+        raw_text="synthetic savings statement for CC payment test",
+    )
+    savings_session = DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        account_ref=savings_account,
+        statement=savings_statement,
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash="d" * 64,
+        created_at=datetime.now(UTC),
+    )
+
+    credit_narration = "PAYMENT RECEIVED THANK YOU"
+    credit_canon = canonicalize_narration(credit_narration)
+    credit_hash = compute_idempotency_hash(cc_account, payment_date, amount, credit_canon, 0)
+    credit_txn = ParsedTransaction(
+        account_ref=cc_account,
+        value_date=payment_date,
+        amount_paise=amount,
+        narration=credit_narration,
+        canonical_narration=credit_canon,
+        occurrence_index=0,
+        idempotency_hash=credit_hash,
+        running_balance_paise=None,
+    )
+    # CC statement period: billing cycle the payment covers (distinct from savings period).
+    cc_period_start = date_type(2026, 2, 15)
+    cc_period_end = date_type(2026, 3, 14)
+    cc_statement = ParsedStatement(
+        bank="hdfc_cc",
+        account_ref=cc_account,
+        account_type=ACCOUNT_TYPE_CREDIT_CARD,
+        period_start=cc_period_start,
+        period_end=cc_period_end,
+        opening_balance_paise=-amount,
+        closing_balance_paise=0,
+        transactions=[credit_txn],
+        confidence=9000,
+        raw_text="synthetic CC statement for CC payment test",
+    )
+    cc_session = DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        account_ref=cc_account,
+        statement=cc_statement,
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash="e" * 64,
+        created_at=datetime.now(UTC),
+    )
+
+    return savings_session, cc_session
+
+
+@pytest.mark.integration
+def test_cc_payment_leg_carries_account_ref_and_statement_period(
+    pg_session: Session, test_user: User
+) -> None:
+    """The cc_credit leg of a MarkedCCPayment pairing must carry the CC account's account_ref
+    and the statement period from the IngestionEvent that brought in the CC credit transaction.
+
+    This is the data the client needs to query 'all purchases covered by this bill'
+    without a separate hash-lookup round-trip (Journey 7 / E12 drill-down).
+    """
+    savings_session, cc_session = _make_cc_payment_dry_sessions(test_user.id)
+
+    # Confirming the savings session first: resolver finds no match (only 1 candidate).
+    _confirm_dry_session(savings_session, pg_session)
+    # Confirming the CC session: resolver now sees both legs and writes MarkedCCPayment.
+    _confirm_dry_session(cc_session, pg_session)
+    pg_session.flush()
+
+    pairings = get_resolver_pairings(pg_session, test_user.id)
+    cc_pairings = [p for p in pairings if p.event_type == "MarkedCCPayment"]
+    assert len(cc_pairings) == 1, f"Expected 1 CC payment pairing, got {len(cc_pairings)}"
+
+    legs = {leg.role: leg for leg in cc_pairings[0].legs}
+    assert "cc_credit" in legs, f"Expected 'cc_credit' leg, got roles: {set(legs)}"
+
+    cc_leg = legs["cc_credit"]
+    assert cc_leg.account_ref == "HDFC_CC_9876_TEST", (
+        f"cc_credit leg account_ref {cc_leg.account_ref!r} != expected 'HDFC_CC_9876_TEST'"
+    )
+    assert cc_leg.period_start == date_type(2026, 2, 15), (
+        f"cc_credit leg period_start {cc_leg.period_start} != expected 2026-02-15"
+    )
+    assert cc_leg.period_end == date_type(2026, 3, 14), (
+        f"cc_credit leg period_end {cc_leg.period_end} != expected 2026-03-14"
     )
 
 
