@@ -6,6 +6,85 @@
 
 ---
 
+## 2026-08-23 — Session 015: Phase 2.5 close — Wave 4 (audit screens) + Wave 5 (adversarial review + critical fixes)
+
+**Phase:** 2.5 — Frontend Foundation → CLOSED
+**Participants:** Sanket + Claude
+
+### Done
+
+**Pre-Wave-4 cleanup (completed before Wave 5 started):**
+
+- **`is_stalled` moved to backend**: removed `isStalled()` and `SYNC_STALL_THRESHOLD_DAYS` from
+  `web/lib/audit.ts`; backend now computes `is_stalled: bool` in `get_sync_history()` using
+  `SYNC_STALL_THRESHOLD_DAYS = 35` from `backend/processing/audit/config.py`.
+  Frontend reads the field directly. No client-side threshold recalculation.
+
+- **`covering_ingestion_event_ids` rename + Option B decision**: backend field renamed from
+  `ingestion_event_ids`. After confirming the false-positive scenario (period-matching includes
+  statements that covered the period but didn't parse the hash), Option B accepted:
+  honest labeling as an approximation. Documented in PROJECT_STATE.md §known-limitations.
+  Option A (join table at confirm time) deferred to Phase 3.
+
+**Wave 4 — Audit screen wiring (4 screens, 10 RTL tests):**
+
+- `web/lib/audit.ts`: API types + pure functions (`rowStatus`, `pairingLabel`, `confidencePct`).
+  All 4 resolver exclusion reasons, null/unknown fallback. `isStalled` absent (backend-computed).
+- `web/components/__tests__/audit.test.tsx` (A1–A6): 10 RTL tests. A1: sync history renders
+  account_ref; stalled badge when `is_stalled=true`. A2: overlap map periods + Overlap badge.
+  A3: dedup ledger `<Money>` + counted badge. A4: filter chip from URL params + Clear button.
+  A5: pairings label + confidence %. A6: CC expand fetches billing-period account transactions.
+- `web/testing-library.d.ts`: vitest type reference for jest-dom matchers.
+- `web/tailwind.config.ts`: `success` and `warning` added as real Tailwind tokens (not
+  arbitrary values); removed Tailwind v4-incompatible `Config` type annotation.
+- `web/components/ui/badge.tsx`: uses `bg-success`, `bg-warning`, `bg-destructive` (not
+  `bg-[var(--success)]`).
+- All 4 audit screen pages wired: sync-history, overlap-map, dedup-ledger, pairings.
+- `web/app/(expense)/audit/pairings/page.tsx`: CC drill-down fetches from
+  `/api/v1/accounts/{account_ref}/transactions` with billing period from cc_credit leg.
+
+**Wave 5 — Adversarial review (fresh context, Opus model) + critical fixes:**
+
+Adversarial review found 2 CRITICALs and 6 GAPs. All resolved before merge:
+
+| Finding | Fix | Tests added |
+|---|---|---|
+| CRITICAL: Rejected IngestionEvents in overlap-map / dedup back-refs | `status != 'rejected'` filter in both queries | `test_rejected_ingestion_event_excluded_from_{overlap_map,covering_event_ids}` |
+| CRITICAL: `run_resolver()` silent O(n) growth | `logger.warning` at 5,000-row threshold | Standing risk updated |
+| GAP: `rowStatus`/`pairingLabel` fallback untested | `web/lib/audit.test.ts` created | 17 unit tests (R1/R2/R3) |
+| GAP: A6 CC drill-down malformed URL on empty account_ref | Guard in `pairings/page.tsx` + A6b test | `test_A6b_cc_payment_with_empty_cc_credit_account_ref` |
+| GAP: FDBooking + Reversal not endpoint-tested | Fixture builders + tests | `test_resolver_pairings_returns_fd_booking/reversal` |
+| GAP: Invariant 1 not verified at endpoint layer | Invariant 1 endpoint test | `test_dedup_ledger_no_double_count_after_confirmed_statement` |
+| GAP: Money large-value precision | Deferred — TypeScript BigInt type + runtime guard in place | — |
+| NOTATION: `_STUB_USER_ID` not tracked | Added to PROJECT_STATE.md §standing risks | — |
+
+### Final test counts
+
+- **Backend:** 381 passed (PITR Docker-only excluded, pre-existing)
+- **Frontend:** 70 passed (23 formatPaise, 17 audit.ts unit, 11 audit RTL, 19 shell)
+- **mypy:** clean — 0 issues
+- **ruff lint + format:** clean
+
+### Decisions made
+
+- **Rejected IngestionEvent filter**: CRITICAL because a rejected statement wrote zero
+  transactions — including it in operational audit views misrepresents system state.
+  Fix is a SQL filter (`status != 'rejected'`), not a doc-only note.
+- **`run_resolver()` O(n) warning**: adds observability without changing behavior. The
+  watermark/since_seq fix is a Phase 3/4 item; a log line ensures the problem is visible
+  before beta rather than silent.
+- **Money large-value test deferred**: TypeScript strict BigInt type + runtime guard
+  (`typeof paise !== 'bigint'` check in formatPaise) are two layers of protection.
+  Risk is real but acceptable until Phase 3.5 (full transaction list) where large Indian
+  institution balances will be tested with real-shaped fixtures.
+
+### Next
+
+- Phase 3: Day-to-Day Layer — budget tracking, monthly totals, surplus reconciliation.
+- Phase 3.5: Day-to-Day UI (all Expense-context screens with real Phase 3 API data).
+
+---
+
 ## 2026-08-16 — Session 014: Repo doc sync — UI phases, two-context IA, wireframe reference
 
 **Phase:** Pre-Phase 2.5/3 — documentation only; no code changes

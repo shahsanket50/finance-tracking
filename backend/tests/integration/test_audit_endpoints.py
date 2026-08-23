@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from core.events.encryption import encrypt_payload
 from core.events.models import IngestionEvent, TransactionEvent, User
-from core.events.types import ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_SAVINGS
+from core.events.types import ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_FD, ACCOUNT_TYPE_SAVINGS
 from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.session import DryRunSession
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction
@@ -361,6 +361,89 @@ def test_dedup_ledger_date_filter_includes_matching_entries(
     assert result.total_seen == 2
 
 
+@pytest.mark.integration
+def test_dedup_ledger_overlap_transaction_has_both_covering_ingestion_event_ids(
+    pg_session: Session, test_user: User
+) -> None:
+    """A transaction covered by two overlapping periods returns both covering_ingestion_event_ids.
+
+    Statement A (Jan–Mar) is confirmed — the Feb 15 transaction enters the ledger linked to A.
+    Statement B (Feb–Apr) for the same account is seeded directly (not confirmed) to simulate
+    a second overlapping upload without retrying the duplicate TRANSACTION_INGESTED write.
+    The dedup ledger must report covering_ingestion_event_ids = {A.id, B.id} for the Feb 15 row,
+    because both statement periods cover 2026-02-15 (PRD §15.4 period-covering approximation).
+    """
+    account_ref = "HDFC_SAVINGS_OVERLAP_TEST"
+    txn_date = date_type(2026, 2, 15)
+    amount = 100_000  # paise — one income credit
+
+    narration = "SALARY CREDIT"
+    canon = canonicalize_narration(narration)
+    txn_hash = compute_idempotency_hash(account_ref, txn_date, amount, canon, 0)
+
+    txn = ParsedTransaction(
+        account_ref=account_ref,
+        value_date=txn_date,
+        amount_paise=amount,
+        narration=narration,
+        canonical_narration=canon,
+        occurrence_index=0,
+        idempotency_hash=txn_hash,
+        running_balance_paise=None,
+    )
+    statement_a = ParsedStatement(
+        bank="hdfc_savings",
+        account_ref=account_ref,
+        account_type=ACCOUNT_TYPE_SAVINGS,
+        period_start=date_type(2026, 1, 1),
+        period_end=date_type(2026, 3, 31),
+        opening_balance_paise=0,
+        closing_balance_paise=amount,
+        transactions=[txn],
+        confidence=9000,
+        raw_text="synthetic overlap test — statement A",
+    )
+    dry_session_a = DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=test_user.id,
+        account_ref=account_ref,
+        statement=statement_a,
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash="g" * 64,
+        created_at=datetime.now(UTC),
+    )
+    _confirm_dry_session(dry_session_a, pg_session)
+
+    # Query the IngestionEvent written by confirm() for statement A.
+    ie_a = pg_session.scalars(
+        select(IngestionEvent).where(IngestionEvent.user_id == test_user.id)
+    ).first()
+    assert ie_a is not None
+
+    # Seed IngestionEvent B (Feb–Apr) directly — simulates a second overlapping upload.
+    # Not using confirm() because that would attempt to re-write the same TRANSACTION_INGESTED
+    # event (no savepoint protection in confirm() for ingestion writes).
+    ie_b = _seed_ingestion_event(
+        pg_session,
+        test_user.id,
+        account_ref=account_ref,
+        bank="hdfc_savings",
+        period_start=date_type(2026, 2, 1),
+        period_end=date_type(2026, 4, 30),
+    )
+    pg_session.flush()
+
+    result = get_dedup_ledger(pg_session, test_user.id, None, None)
+
+    assert result.total_seen == 1
+    assert len(result.entries) == 1
+    entry = result.entries[0]
+    assert entry.value_date == "2026-02-15"
+    assert set(entry.covering_ingestion_event_ids) == {str(ie_a.id), str(ie_b.id)}, (
+        f"Expected both covering ingestion event IDs, got {entry.covering_ingestion_event_ids}"
+    )
+
+
 # ── resolver-pairings ─────────────────────────────────────────────────────────
 
 
@@ -682,3 +765,299 @@ def test_account_transactions_date_filter_returns_only_in_range(
     n_after = len(after_billing)
     assert n_after == 1, f"Expected 1 result after billing period, got {n_after}"
     assert after_billing[0].value_date == outside_date
+
+
+# ── CRITICAL 1: rejected IngestionEvents must not pollute audit outputs ────────
+
+
+@pytest.mark.integration
+def test_rejected_ingestion_event_excluded_from_overlap_map(
+    pg_session: Session, test_user: User
+) -> None:
+    """A rejected statement (balance-check failure) must not appear in the overlap-map.
+
+    Invariant 2: a rejected statement ingested zero transactions and is not part of
+    the operational statement surface. Showing it as a bar would produce phantom
+    overlaps against legitimate ingested statements.
+    """
+    _seed_ingestion_event(
+        pg_session,
+        test_user.id,
+        account_ref="HDFC_SAVINGS_OVL",
+        bank="hdfc_savings",
+        period_start=date_type(2026, 1, 1),
+        period_end=date_type(2026, 1, 31),
+        status="ingested",
+    )
+    _seed_ingestion_event(
+        pg_session,
+        test_user.id,
+        account_ref="HDFC_SAVINGS_OVL",
+        bank="hdfc_savings",
+        period_start=date_type(2026, 1, 15),
+        period_end=date_type(2026, 2, 15),
+        status="rejected",  # balance-check failure — zero transactions ingested
+    )
+
+    result = get_overlap_map(pg_session, test_user.id)
+
+    acc = next((a for a in result.accounts if a.account_ref == "HDFC_SAVINGS_OVL"), None)
+    assert acc is not None, "Account should appear in overlap-map (has 1 ingested statement)"
+    assert len(acc.statements) == 1, (
+        f"Rejected statement must be excluded; got {len(acc.statements)} bars"
+    )
+    # The one bar must not be flagged as overlapping (only statement, no partner)
+    assert acc.statements[0].overlaps_with == [], (
+        "Single ingested bar must have no overlaps when the only other statement is rejected"
+    )
+
+
+@pytest.mark.integration
+def test_rejected_ingestion_event_excluded_from_covering_event_ids(
+    pg_session: Session, test_user: User
+) -> None:
+    """A rejected IngestionEvent must not appear in covering_ingestion_event_ids.
+
+    Invariant 1: a rejected statement wrote zero transactions and is not a valid
+    provenance source. Including it inflates the back-reference list with phantom entries
+    and misrepresents the known-limitations scope defined in PROJECT_STATE.md.
+    """
+    # Confirm a real statement with one transaction on 2026-02-15.
+    transfer_session = _make_transfer_dry_session(test_user.id)
+    # Reuse the transfer fixture — we just need any confirmed transaction on a known date.
+    # _make_transfer_dry_session puts transactions on 2026-02-10, period 2026-02-01/28.
+    _confirm_dry_session(transfer_session, pg_session)
+    pg_session.flush()
+
+    # Seed a rejected IngestionEvent whose period covers 2026-02-10.
+    rejected_ie = _seed_ingestion_event(
+        pg_session,
+        test_user.id,
+        account_ref="HDFC_SAVINGS_AUDIT",  # same account as the transfer fixture
+        bank="hdfc_savings",
+        period_start=date_type(2026, 2, 1),
+        period_end=date_type(2026, 2, 28),
+        status="rejected",
+    )
+
+    ledger = get_dedup_ledger(pg_session, test_user.id, None, None)
+
+    # Every entry for the HDFC_SAVINGS_AUDIT account whose date is 2026-02-10 must
+    # not reference the rejected IngestionEvent in covering_ingestion_event_ids.
+    for entry in ledger.entries:
+        if entry.account_ref == "HDFC_SAVINGS_AUDIT":
+            assert str(rejected_ie.id) not in entry.covering_ingestion_event_ids, (
+                "Rejected IngestionEvent must not appear in covering_ingestion_event_ids"
+            )
+
+
+# ── GAP 5: FD booking and reversal endpoint round-trips ───────────────────────
+
+
+def _make_fd_booking_dry_sessions(user_id: uuid.UUID) -> tuple[DryRunSession, DryRunSession]:
+    """Two DryRunSessions: savings debit + FD credit (MarkedFDBooking pattern)."""
+    savings_account = "HDFC_SAVINGS_FD_TEST"
+    fd_account = "HDFC_FD_001"
+    booking_date = date_type(2026, 4, 5)
+    amount = 100_000  # paise
+
+    debit_narration = "FD BOOKING HDFC"
+    debit_canon = canonicalize_narration(debit_narration)
+    debit_hash = compute_idempotency_hash(savings_account, booking_date, -amount, debit_canon, 0)
+    debit_txn = ParsedTransaction(
+        account_ref=savings_account,
+        value_date=booking_date,
+        amount_paise=-amount,
+        narration=debit_narration,
+        canonical_narration=debit_canon,
+        occurrence_index=0,
+        idempotency_hash=debit_hash,
+        running_balance_paise=None,
+    )
+    savings_session = DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        account_ref=savings_account,
+        statement=ParsedStatement(
+            bank="hdfc_savings",
+            account_ref=savings_account,
+            account_type=ACCOUNT_TYPE_SAVINGS,
+            period_start=date_type(2026, 4, 1),
+            period_end=date_type(2026, 4, 30),
+            opening_balance_paise=amount,
+            closing_balance_paise=0,
+            transactions=[debit_txn],
+            confidence=9000,
+            raw_text="synthetic savings for FD booking test",
+        ),
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash="f1" * 32,
+        created_at=datetime.now(UTC),
+    )
+
+    credit_narration = "FD RECEIPT HDFC"
+    credit_canon = canonicalize_narration(credit_narration)
+    credit_hash = compute_idempotency_hash(fd_account, booking_date, amount, credit_canon, 0)
+    credit_txn = ParsedTransaction(
+        account_ref=fd_account,
+        value_date=booking_date,
+        amount_paise=amount,
+        narration=credit_narration,
+        canonical_narration=credit_canon,
+        occurrence_index=0,
+        idempotency_hash=credit_hash,
+        running_balance_paise=None,
+    )
+    fd_session = DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        account_ref=fd_account,
+        statement=ParsedStatement(
+            bank="hdfc_fd",
+            account_ref=fd_account,
+            account_type=ACCOUNT_TYPE_FD,
+            period_start=date_type(2026, 4, 1),
+            period_end=date_type(2026, 4, 30),
+            opening_balance_paise=0,
+            closing_balance_paise=amount,
+            transactions=[credit_txn],
+            confidence=9000,
+            raw_text="synthetic FD statement for FD booking test",
+        ),
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash="f2" * 32,
+        created_at=datetime.now(UTC),
+    )
+    return savings_session, fd_session
+
+
+def _make_reversal_dry_session(user_id: uuid.UUID) -> DryRunSession:
+    """One DryRunSession: CC debit + CC credit (same account) for MarkedReversal pattern.
+
+    Uses CC account_type so the transfer matcher (savings-only) does not claim the pair.
+    The reversal matcher (same account_type, opposite signs) catches it instead.
+    """
+    cc_account = "HDFC_CC_REVERSAL_TEST"
+    value_date = date_type(2026, 5, 10)
+    amount = 30_000  # paise
+
+    original_narration = "PURCHASE MERCHANT X"
+    original_canon = canonicalize_narration(original_narration)
+    original_hash = compute_idempotency_hash(cc_account, value_date, -amount, original_canon, 0)
+    original_txn = ParsedTransaction(
+        account_ref=cc_account,
+        value_date=value_date,
+        amount_paise=-amount,
+        narration=original_narration,
+        canonical_narration=original_canon,
+        occurrence_index=0,
+        idempotency_hash=original_hash,
+        running_balance_paise=None,
+    )
+
+    reversal_narration = "REFUND MERCHANT X"
+    reversal_canon = canonicalize_narration(reversal_narration)
+    reversal_hash = compute_idempotency_hash(cc_account, value_date, amount, reversal_canon, 0)
+    reversal_txn = ParsedTransaction(
+        account_ref=cc_account,
+        value_date=value_date,
+        amount_paise=amount,
+        narration=reversal_narration,
+        canonical_narration=reversal_canon,
+        occurrence_index=0,
+        idempotency_hash=reversal_hash,
+        running_balance_paise=None,
+    )
+
+    return DryRunSession(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        account_ref=cc_account,
+        statement=ParsedStatement(
+            bank="hdfc_cc",
+            account_ref=cc_account,
+            account_type=ACCOUNT_TYPE_CREDIT_CARD,
+            period_start=date_type(2026, 5, 1),
+            period_end=date_type(2026, 5, 31),
+            opening_balance_paise=-amount,
+            closing_balance_paise=0,
+            transactions=[original_txn, reversal_txn],
+            confidence=9000,
+            raw_text="synthetic CC statement with reversal",
+        ),
+        balance_check=BalanceCheckResult.PASS,
+        raw_artifact_content_hash="g1" * 32,
+        created_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.integration
+def test_resolver_pairings_returns_fd_booking(pg_session: Session, test_user: User) -> None:
+    """get_resolver_pairings() serialises a MarkedFDBooking pairing with the correct legs.
+
+    Exercises the fd_booking payload key extraction path in _legs_for_pairing()
+    (savings_debit_hash / fd_credit_hash) — this path had no prior endpoint-layer test.
+    """
+    savings_session, fd_session = _make_fd_booking_dry_sessions(test_user.id)
+    _confirm_dry_session(savings_session, pg_session)
+    _confirm_dry_session(fd_session, pg_session)
+    pg_session.flush()
+
+    pairings = get_resolver_pairings(pg_session, test_user.id)
+    fd_pairings = [p for p in pairings if p.event_type == "MarkedFDBooking"]
+    assert len(fd_pairings) == 1, f"Expected 1 FD booking pairing, got {len(fd_pairings)}"
+
+    legs = {leg.role: leg for leg in fd_pairings[0].legs}
+    assert set(legs) == {"savings_debit", "fd_credit"}, f"Unexpected leg roles: {set(legs)}"
+    assert legs["savings_debit"].account_ref == "HDFC_SAVINGS_FD_TEST"
+    assert legs["fd_credit"].account_ref == "HDFC_FD_001"
+
+
+@pytest.mark.integration
+def test_resolver_pairings_returns_reversal_pair(pg_session: Session, test_user: User) -> None:
+    """get_resolver_pairings() serialises a MarkedReversal pairing with the correct legs.
+
+    Exercises the reversal payload key extraction path in _legs_for_pairing()
+    (original_hash / reversal_hash) — this path had no prior endpoint-layer test.
+    Uses CC account_type to prevent the transfer matcher from claiming the pair.
+    """
+    reversal_session = _make_reversal_dry_session(test_user.id)
+    _confirm_dry_session(reversal_session, pg_session)
+    pg_session.flush()
+
+    pairings = get_resolver_pairings(pg_session, test_user.id)
+    reversal_pairings = [p for p in pairings if p.event_type == "MarkedReversal"]
+    assert len(reversal_pairings) == 1, f"Expected 1 reversal pairing, got {len(reversal_pairings)}"
+
+    legs = {leg.role: leg for leg in reversal_pairings[0].legs}
+    assert set(legs) == {"original", "reversal"}, f"Unexpected leg roles: {set(legs)}"
+    assert legs["original"].account_ref == "HDFC_CC_REVERSAL_TEST"
+    assert legs["reversal"].account_ref == "HDFC_CC_REVERSAL_TEST"
+
+
+# ── GAP 6: Invariant 1 at audit-endpoint layer ────────────────────────────────
+
+
+@pytest.mark.integration
+def test_dedup_ledger_no_double_count_after_confirmed_statement(
+    pg_session: Session, test_user: User
+) -> None:
+    """Invariant 1: get_dedup_ledger() shows each hash exactly once (total_seen == unique hashes).
+
+    Confirms a statement, then asserts that total_seen equals the number of distinct
+    idempotency hashes and that no hash appears twice in the entries list.
+    The transfer pair is excluded (2 entries, total_counted == 0, total_excluded == 2).
+    """
+    dry_session = _make_transfer_dry_session(test_user.id)
+    _confirm_dry_session(dry_session, pg_session)
+    pg_session.flush()
+
+    ledger = get_dedup_ledger(pg_session, test_user.id, None, None)
+
+    hashes_seen = [e.idempotency_hash for e in ledger.entries]
+    assert len(hashes_seen) == len(set(hashes_seen)), (
+        "Invariant 1 violated: duplicate idempotency_hash in dedup ledger entries"
+    )
+    assert ledger.total_seen == len(set(hashes_seen)), (
+        "total_seen must equal the number of distinct hashes"
+    )

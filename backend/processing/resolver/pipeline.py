@@ -179,6 +179,14 @@ def run_resolver(session: Session, user_id: uuid.UUID) -> int:
     if not txn_rows:
         return 0
 
+    if len(txn_rows) > 5_000:
+        logger.warning(
+            "run_resolver() re-scanning %d TransactionIngested rows for user %s — "
+            "performance will degrade linearly; add a since_seq watermark before beta.",
+            len(txn_rows),
+            user_id,
+        )
+
     # 2. Build candidates and lookup maps for ingestion_event_id + value_date.
     candidates: list[CandidateTxn] = []
     hash_to_ingestion_id: dict[str, uuid.UUID] = {}

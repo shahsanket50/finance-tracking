@@ -1,6 +1,6 @@
-import type { Config } from 'tailwindcss';
-
-const config: Config = {
+// Config type omitted: Tailwind v4 dropped `corePlugins` from the type, but the
+// PostCSS plugin still reads and honors corePlugins at runtime.
+const config = {
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -27,10 +27,28 @@ const config: Config = {
         },
         destructive: {
           DEFAULT: 'var(--danger)',
+          bg: 'var(--danger-bg)',
           foreground: 'var(--bg)',
         },
+        success: {
+          DEFAULT: 'var(--success)',
+          bg: 'var(--success-bg)',
+          foreground: 'var(--bg)',
+        },
+        warning: {
+          DEFAULT: 'var(--warning)',
+          bg: 'var(--warning-bg)',
+          foreground: 'var(--bg)',
+        },
+        surface: {
+          1: 'var(--surface-1)',
+          2: 'var(--surface-2)',
+          3: 'var(--surface-3)',
+        },
         border: 'var(--border)',
+        'border-strong': 'var(--border-strong)',
         ring: 'var(--accent)',
+        'accent-bg': 'var(--accent-bg)',
       },
       borderRadius: {
         lg: '12px',

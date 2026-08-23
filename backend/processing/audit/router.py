@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Generator
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import cast
 
 from fastapi import APIRouter, Depends, Query
@@ -27,6 +27,7 @@ from core.events.types import (
     RESOLVER_EVENT_TYPES,
 )
 from core.projections.builder import build_projection
+from processing.audit.config import SYNC_STALL_THRESHOLD_DAYS
 from processing.resolver.audit import build_audit_view
 
 router = APIRouter()
@@ -69,6 +70,7 @@ class SyncHistoryEntry(BaseModel):
     balance_check: str | None
     confidence: int | None
     created_at: datetime
+    is_stalled: bool  # backend-computed; frontend must not recompute from SYNC_STALL_THRESHOLD_DAYS
 
 
 class StatementBar(BaseModel):
@@ -95,6 +97,11 @@ class DedupLedgerEntry(BaseModel):
     transaction_type: str
     is_counted: bool
     exclusion_reason: str | None
+    # IngestionEvents whose statement period *covers* this transaction's value_date.
+    # Approximation: period-matching, not actual parse content. A statement covering
+    # the period but whose parse never emitted this hash will still appear here.
+    # Ground-truth tracking deferred to Phase 3 — see PROJECT_STATE.md §known-limitations.
+    covering_ingestion_event_ids: list[str]
 
 
 class DedupLedgerResponse(BaseModel):
@@ -125,16 +132,25 @@ class ResolverPairing(BaseModel):
 
 
 def get_sync_history(session: Session, user_id: uuid.UUID) -> list[SyncHistoryEntry]:
-    """Return all ingestion events for user_id, newest first."""
+    """Return all ingestion events for user_id, newest first.
+
+    is_stalled is set when created_at is older than SYNC_STALL_THRESHOLD_DAYS.
+    The frontend renders this field directly; it must not recompute staleness.
+    """
     rows = session.scalars(
         select(IngestionEvent)
         .where(IngestionEvent.user_id == user_id)
         .order_by(IngestionEvent.created_at.desc())
     ).all()
 
+    stall_cutoff = datetime.now(UTC) - timedelta(days=SYNC_STALL_THRESHOLD_DAYS)
+
     entries: list[SyncHistoryEntry] = []
     for row in rows:
         payload = decrypt_payload(session, row.encryption_key_id, row.payload)
+        created_at = row.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
         entries.append(
             SyncHistoryEntry(
                 event_id=str(row.id),
@@ -148,6 +164,7 @@ def get_sync_history(session: Session, user_id: uuid.UUID) -> list[SyncHistoryEn
                 balance_check=row.balance_check,
                 confidence=row.confidence,
                 created_at=row.created_at,
+                is_stalled=created_at < stall_cutoff,
             )
         )
     return entries
@@ -166,10 +183,14 @@ def _periods_overlap(
 
 
 def get_overlap_map(session: Session, user_id: uuid.UUID) -> OverlapMapResponse:
-    """Return ingestion events grouped by account_ref with pairwise overlap detection."""
+    """Return ingestion events grouped by account_ref with pairwise overlap detection.
+
+    Only non-rejected events are included. A rejected statement (balance-check failure)
+    wrote zero transactions and must not appear as a real bar or trigger phantom overlaps.
+    """
     rows = session.scalars(
         select(IngestionEvent)
-        .where(IngestionEvent.user_id == user_id)
+        .where(IngestionEvent.user_id == user_id, IngestionEvent.status != "rejected")
         .order_by(IngestionEvent.created_at.asc())
     ).all()
 
@@ -231,18 +252,46 @@ def get_dedup_ledger(
             filtered.append(entry)
         all_entries = filtered
 
-    ledger_entries = [
-        DedupLedgerEntry(
-            idempotency_hash=str(e["idempotency_hash"]),
-            amount_paise=str(e["amount_paise"]),
-            value_date=str(e["value_date"]),
-            account_ref=str(e.get("account_ref", "")),
-            transaction_type=str(e.get("transaction_type", "")),
-            is_counted=bool(e["is_counted"]),
-            exclusion_reason=str(e["exclusion_reason"]) if e.get("exclusion_reason") else None,
+    # Build period map: account_ref → [(ingestion_event_id, period_start, period_end), ...]
+    # Used to compute covering_ingestion_event_ids for each ledger entry (PRD §15.4 back-reference).
+    # Rejected events (balance-check failure, zero transactions) are excluded so they don't appear
+    # as phantom covering events alongside real statements that cover the same date range.
+    ie_rows = session.scalars(
+        select(IngestionEvent).where(
+            IngestionEvent.user_id == user_id, IngestionEvent.status != "rejected"
         )
-        for e in all_entries
-    ]
+    ).all()
+    account_ie_periods: dict[str, list[tuple[str, date | None, date | None]]] = {}
+    for ie in ie_rows:
+        payload = decrypt_payload(session, ie.encryption_key_id, ie.payload)
+        acc = str(payload.get("account_ref", ""))
+        account_ie_periods.setdefault(acc, []).append((str(ie.id), ie.period_start, ie.period_end))
+
+    ledger_entries: list[DedupLedgerEntry] = []
+    for e in all_entries:
+        acc = str(e.get("account_ref", ""))
+        try:
+            vd = date.fromisoformat(str(e.get("value_date", "")))
+            ie_ids = [
+                ie_id
+                for ie_id, ps, pe in account_ie_periods.get(acc, [])
+                if ps is not None and pe is not None and ps <= vd <= pe
+            ]
+        except ValueError:
+            ie_ids = []
+
+        ledger_entries.append(
+            DedupLedgerEntry(
+                idempotency_hash=str(e["idempotency_hash"]),
+                amount_paise=str(e["amount_paise"]),
+                value_date=str(e["value_date"]),
+                account_ref=acc,
+                transaction_type=str(e.get("transaction_type", "")),
+                is_counted=bool(e["is_counted"]),
+                exclusion_reason=str(e["exclusion_reason"]) if e.get("exclusion_reason") else None,
+                covering_ingestion_event_ids=ie_ids,
+            )
+        )
 
     total_seen = len(ledger_entries)
     total_counted = sum(1 for e in ledger_entries if e.is_counted)

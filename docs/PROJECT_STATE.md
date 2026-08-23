@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-22
-**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started) · Phase 2.5 — Frontend Foundation (UI, Wave 2 partial — see wave-diff deviation below)
-**Overall status:** ~320 unit+property tests passing. 27/28 integration tests passing (1 PITR Docker-only, pre-existing). CI G1/G2/G3 green on `feature/phase2`. PRD/TRD synced from Notion (§19 Settings, §20 IA, §12A Home, TRD §13–15 added). UI phases 2.5/3.5/4.5 introduced — Phase 2.5 is next deliverable for `web/`.
+**Last updated:** 2026-08-23
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started)
+**Overall status:** 381 backend tests + 70 frontend tests (451 total). Phase 2.5 CLOSED 2026-08-23. Phase 3 is next.
 
 ---
 
@@ -124,7 +124,7 @@ _None currently blocking Phase 1 tasks._
 | 0 | Foundations | **CLOSED** 2026-08-02 | Event append → projection → deterministic replay; CI green; adversarial review pass; independent test authorship confirmed |
 | 1 | Ingestion & Trust | **CLOSED** 2026-08-13 | Real statement parses via dry-run harness, balance check passes, writes nothing until confirmed |
 | 2 | Ledger & Correctness | **CLOSED** 2026-08-14 | Overlapping statements ingested twice → zero double-counting, provable in audit view |
-| **2.5** | **Frontend Foundation** | **Not started** | Audit view renders real Phase 2 data (overlap map, dedup ledger, resolver pairings, sync history); design-system tokens (Space Grotesk / IBM Plex Mono / CSS-variable color set) are the single source every subsequent UI phase consumes |
+| **2.5** | **Frontend Foundation** | **CLOSED** 2026-08-23 | Audit view renders real Phase 2 data; CSS-variable token system established; 70 frontend + 381 backend tests green |
 | 3 | Day-to-Day Layer | Not started | A full month tracked, budgeted; surplus reconciles against bank statement manually |
 | **3.5** | **Day-to-Day UI** | **Not started** | All Expense-context screens (Home/7 dashboards, Transactions, Budgets, Categories, Accounts, Notifications, Settings) render real Phase 3 API data; every Journey 1/4 acceptance criterion met on screen |
 | 4 | CA Layer | Not started | Full FY health report from real docs; every number traces to source. **CA review of tax rule-set required.** |
@@ -135,42 +135,58 @@ _None currently blocking Phase 1 tasks._
 
 ---
 
-## Phase 2.5 — Frontend Foundation [In progress — Wave 2 partial]
+## Phase 2.5 — Frontend Foundation [CLOSED 2026-08-23]
+
+**Exit criterion met:** Audit view renders real Phase 2 data (overlap map, dedup ledger, resolver pairings, sync history). CSS-variable token system is the single source for all subsequent UI phases.
+
+**Merge commit:** see SESSION_LOG Session 015 for commit SHA.
 
 ### Wave progress
 
 | Wave | Name | Status | Notes |
 |---|---|---|---|
-| 1 | Scaffold — vitest, token CSS, `formatPaise` | Done | commit `1926e11`; 23 formatPaise tests pass |
-| 2 | App shell — layout, two-context sidebar, shadcn/ui primitives, placeholders, behavioral tests | **Done** | commits `a592262` + follow-up; 19 shell tests pass (E1/E2/E3/E4/E5); 42 total |
-| 3 | Audit API wiring — 4 screens hit real backend | Not started | |
-| 4 | E2E verification + Phase 2.5 close | Not started | |
+| 1 | Scaffold — vitest, token CSS, `formatPaise` | Done | `1926e11`; 23 formatPaise tests |
+| 2 | App shell — layout, two-context sidebar, shadcn/ui, placeholders, behavioral tests | Done | `a592262` + `154d1c7`; 19 shell tests (E1–E5) |
+| 3 | Backend audit endpoints + pipeline fixes (B-1/B-2/B-3) | Done | `5f8399f`–`1eb470d`; 17 integration tests |
+| 4 | Audit screen wiring (4 screens, A1–A6) + pre-wave cleanup | Done | `154d1c7`; 10 RTL tests |
+| 5 | Phase 2.5 close: adversarial review + critical fixes | Done | this session; 2 CRITICALs fixed, 3 GAPs closed |
 
-### Wave 2 deviation [logged 2026-08-22, per PHASE_PROTOCOL.md §7]
+### Gate evidence
 
-Wave 2 commit `a592262` ("app shell, two-context sidebar, audit route structure") was
-presented as complete, but it is missing the following items that were part of the Wave 2
-scope:
-
-| Missing item | Impact |
+| Gate | Result |
 |---|---|
-| `web/app/(ca)/` route group does not exist | Navigating to any CA-context route would 404 |
-| `web/components/ui/` does not exist | No shadcn/ui base; Wave 3 screens have nothing to build on |
-| No placeholder component ("Coming in Phase X.Y") | Non-Audit expense screens (`/transactions`, `/budgets`, `/categories`, `/home`) all 404 today; shared utility pages (`/accounts`, `/notifications`, `/settings`) all 404 |
-| Zero behavioral tests | No test proves context switch swaps the sidebar without reload; no test proves shared utilities are visible from both contexts; no test proves non-Audit screens return placeholder (not 404) |
+| E1–E17 acceptance checklist | 17/17 PASS (with E10 gap resolved by Wave 5 critical fixes) |
+| Backend tests | 381/381 pass (PITR Docker-only excluded, pre-existing) |
+| Frontend tests | 70/70 pass |
+| mypy | Clean — 0 issues |
+| ruff lint + format | Clean |
+| Adversarial review | CONDITIONAL PASS → CRITICALs fixed; 3 GAPs closed in Wave 5 |
 
-The "23/23 tests pass" cited in the Wave 2 commit message refers entirely to `lib/format.test.ts`
-(the `formatPaise` utility written in Wave 1). No shell behavior tests were written or run.
+### Adversarial review findings (resolved)
 
-**Resolution required before Wave 4 (UI wiring) can start:**
+| Severity | Finding | Resolution |
+|---|---|---|
+| CRITICAL | Rejected IngestionEvents appeared in overlap-map + dedup back-references | Added `status != 'rejected'` filter to both queries; 2 integration tests added |
+| CRITICAL | `run_resolver()` silent O(n) growth | Added `logger.warning` at 5,000-row threshold; standing risk updated |
+| GAP | `rowStatus()`/`pairingLabel()` fallback untested | `web/lib/audit.test.ts` created (17 tests) |
+| GAP | A6 CC drill-down malformed URL when cc_credit has no account_ref | Guard added in `pairings/page.tsx`; A6b RTL test added |
+| GAP | FD booking + reversal never round-tripped through audit endpoints | `test_resolver_pairings_returns_fd_booking/reversal` added |
+| GAP | Invariant 1 not verified at audit-endpoint layer | `test_dedup_ledger_no_double_count_after_confirmed_statement` added |
+| GAP | Only 2/4 resolver event types tested end-to-end | Resolved by FD/Reversal tests above |
+| GAP | Money large-value precision (> MAX_SAFE_INTEGER) | Deferred — acceptable given TypeScript BigInt types + runtime guard; track in Phase 3.5 |
+| NOTATION | `_STUB_USER_ID` not tracked for Phase 5 migration | Added to standing risks below |
 
-Four missing items (five implementation steps — item 3 of the table splits into two):
+### Deviations from approved plan
 
-1. Create `web/app/(ca)/` route group with stub pages for all 7 CA-context screens
-2. Create `web/components/ui/` (shadcn/ui: Button, Badge, Separator at minimum)
-3. Create a reusable `<ComingSoon phase="X.Y" />` placeholder component
-4. Add placeholder `page.tsx` for all non-Audit expense routes (`/home`, `/transactions`, `/budgets`, `/categories`) and all shared utilities (`/accounts`, `/notifications`, `/settings`)
-5. Write behavioral tests: context switch swaps sidebar nav, shared utilities visible from both contexts, every unbuilt screen renders placeholder not 404
+**D-1** — Wave 2 initial commit `a592262` incomplete (shadcn/ui, CA routes, behavioral tests missing). Detected within-session; remediated in `154d1c7`.
+
+**D-2/D-3** — B-1 (`event_type` casing), B-2 (resolver never wired), B-3 (cross-matcher double-claim): retroactive Phase 1/2 defects found and fixed in Wave 3. All in DECISIONS.md.
+
+**D-4** — Backend endpoints (`processing/audit/`, `processing/accounts/`) were implicit in Phase 2.5 scope but not explicitly planned as Wave 3 deliverables.
+
+**D-5** — `is_stalled` moved from frontend to backend computation (pre-Wave-4 cleanup).
+
+**D-6** — Field renamed `ingestion_event_ids` → `covering_ingestion_event_ids`; Option B accepted; documented in known limitations.
 
 ---
 
@@ -283,8 +299,18 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | Phase 0 critical-module tests not independently authored | F-9: Re-authoring complete (2026-08-14). 10 new tests written; 2 Phase 0 bugs confirmed (A-3 float hash, C-2 corrupt snapshot). Both bugs fixed in Phase 2. | **CLOSED** — fixed A-3 + C-2; all independently-authored tests pass |
 | Confidence formula constants not validated against real data | `CONFIDENCE_BASE_BP` (9000), `CONFIDENCE_SAME_DAY_BONUS_BP` (500), `CONFIDENCE_PER_DAY_PENALTY_BP` (200) are working assumptions in `config.py`. The formula produces scores that gate on `RESOLVER_CONFIDENCE_THRESHOLD` (8500), meaning 3-day matches (8400 bp) are rejected. Calibrate before live data ingestion. | Open — Phase 3 |
 | Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
-| `SYNC_STALL_THRESHOLD_DAYS = 35` is uncalibrated | Set to 35 (one monthly cycle + grace window) in `backend/api/audit/config.py`. Works for monthly-statement accounts; accounts with weekly or quarterly cadence need a cadence-aware detection strategy (D7). Calibrate against real usage before Phase 5. | Open — Phase 5 |
+| `SYNC_STALL_THRESHOLD_DAYS = 35` is uncalibrated | Set to 35 (one monthly cycle + grace window) in `backend/processing/audit/config.py`. Works for monthly-statement accounts; accounts with weekly or quarterly cadence need a cadence-aware detection strategy (D7). Calibrate against real usage before Phase 5. | Open — Phase 5 |
 | `run_resolver()` re-scans all `TransactionIngested` rows on every call | No watermark — every `confirm()` call decrypts and re-processes every historical transaction for the user. Degrades linearly with statement history. Fix: add a `since_seq` watermark stored per-user (mutable settings table), skip rows already processed. Low-priority until user history is non-trivial. | Open — Phase 3 or 4 |
+| `covering_ingestion_event_ids` is a period-covering approximation, not ground truth | **Explicitly accepted limitation (2026-08-23, Option B decision).** `DedupLedgerEntry.covering_ingestion_event_ids` is computed by matching all `IngestionEvent` rows for an account whose `period_start ≤ value_date ≤ period_end`. False-positive case: Statement B covers the period but its parse never emitted hash X — B still appears in the list. This is rare in practice (requires a partial/truncated re-upload, not a standard full-period re-export). Option A (record per-statement hash sets at confirm time via a join table) is the correct fix; deferred to Phase 3 when the full transaction query layer is built and a `statement_transactions` join table serves multiple purposes. Until then, the field is labeled `covering_ingestion_event_ids` (not `seen_by`) in both API and frontend to make the approximation honest. The raw artifacts are deleted on success — backfill is impossible. | Open — Phase 3 |
+| `_STUB_USER_ID` hardwired in all API routers | `uuid("00000000-0000-0000-0000-000000000001")` appears in `processing/audit/router.py`, `processing/accounts/router.py`, and `ingestion/api/router.py`. Phase 5 auth (Google OAuth, TRD §T13) replaces these with a request-derived user_id. Grep `_STUB_USER_ID` for all 5 sites. | Open — Phase 5 |
+
+---
+
+## Known limitations
+
+| Limitation | Details | Resolution |
+|---|---|---|
+| `covering_ingestion_event_ids` false positives | See Standing risks above. Field name is intentionally `covering_` not `seen_by` to signal approximation. | Phase 3 Option A implementation |
 
 ---
 
