@@ -339,7 +339,7 @@ Audited against QUALITY.md gate list. All gaps logged here; branch protection st
 | G16 (spec traceability) | **Not implemented** | Defined in QUALITY.md; not wired in CI. Deferred — requires tooling to parse module docstrings. Phase 3 kickoff. |
 | G17 (prompt golden tests) | **Not implemented** | No prompts exist yet; gate activates when LLM adapter (Phase 3) lands. |
 | G18 (parser registration) | **Not implemented as CI step** | The test `tests/unit/ingestion/test_dryrun_harness.py` enforces this in the unit suite (G4); it is not a separate CI job. Acceptable — G4 already blocks on failure. |
-| Branch protection (require CI pass + review) | **Not enforceable** | Private repo on free GitHub plan → 403 from branch protection API. Options: (1) upgrade to GitHub Pro ($4/mo), (2) make repo public. Until then: PHASE_PROTOCOL.md §7 rule (no direct merge, PR + CI + human approval) is convention-enforced, not automated. Direct merges must be logged as deviations with reason. |
+| Branch protection (require CI pass + review) | **Active (2026-08-25)** | Repo made public. Configured via GitHub API: all G1–G15 + Quality Report required; strict (branch must be up to date); 1 approval required; dismiss stale reviews; enforce_admins=true. Direct push to main is now blocked. |
 
 ## Deferred decisions
 
