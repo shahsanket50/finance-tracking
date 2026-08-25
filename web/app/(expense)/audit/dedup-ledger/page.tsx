@@ -46,7 +46,7 @@ export default function DedupLedgerPage() {
     <div className="screen">
       <div className="page-head">
         <h2>Dedup ledger</h2>
-        <p>Every transaction: seen vs counted, traced to source. PRD §15.2 Level B.</p>
+        <p>Every transaction: seen vs counted, traced to source.</p>
       </div>
 
       {isFiltered && (

@@ -28,7 +28,7 @@ export default function AuditPage() {
     <div className="screen">
       <div className="page-head">
         <h2>Audit</h2>
-        <p>Statement coverage, dedup ledger, and resolver pairings. PRD §15.</p>
+        <p>Statement coverage, dedup ledger, and resolver pairings.</p>
       </div>
 
       {SUB_VIEWS.map((v) => (

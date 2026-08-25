@@ -74,7 +74,7 @@ export default function PairingsPage() {
     <div className="screen">
       <div className="page-head">
         <h2>Resolver pairings</h2>
-        <p>What the resolver matched and why. PRD §15.3.</p>
+        <p>What the resolver matched and why.</p>
       </div>
 
       {loading && <div className="card"><div className="card-sub">Loading…</div></div>}

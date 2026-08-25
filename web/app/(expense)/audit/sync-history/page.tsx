@@ -26,7 +26,7 @@ export default function SyncHistoryPage() {
     <div className="screen">
       <div className="page-head">
         <h2>Sync history</h2>
-        <p>Per-account ingestion progress. PRD §15.1.</p>
+        <p>Per-account ingestion progress.</p>
       </div>
 
       {loading && <div className="card"><div className="card-sub">Loading…</div></div>}

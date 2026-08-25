@@ -34,7 +34,7 @@ export default function OverlapMapPage() {
     <div className="screen">
       <div className="page-head">
         <h2>Overlap map</h2>
-        <p>Statement-period overlaps per account. PRD §15.2 Level A.</p>
+        <p>Statement-period overlaps per account.</p>
       </div>
 
       {loading && <div className="card"><div className="card-sub">Loading…</div></div>}
