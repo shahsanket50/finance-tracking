@@ -146,11 +146,32 @@ Findings get a severity:
    `docs/DECISIONS.md` — what the bug was, how it was caught, the fix. This is
    deliberately preserved (not just fixed and forgotten) as evidence for why the
    independent-authoring discipline exists.
-5a. **Merge the phase branch into main; confirm the merge commit before cutting
-    the next phase's branch.** A phase is not closed until the merge is on main —
-    cutting from a feature branch that hasn't landed produces a next phase that
-    will diverge from main when the PR eventually merges.
-7. Only after 1–5a: cut the next phase's branch and begin its kickoff (§1).
+5a. **Merge via PR only — never direct-merge or self-merge.**
+    - Open a GitHub PR from the feature branch into main.
+    - CI must pass (all required jobs green) before the PR is mergeable.
+    - At least one human approval is required before merge. The assistant
+      never approves or merges its own PRs — it opens the PR and stops.
+    - A direct `git merge` to main is not a valid close, even if explicitly
+      requested under time pressure. If the user asks for a direct merge,
+      explain why this step exists (the PR + CI gate is the only automated
+      backstop) and offer to open the PR instead.
+    - Exception: if branch protection is unavailable (e.g. private repo on
+      free GitHub plan), document the direct merge as a deviation in the
+      close report, note exactly why, and log it in PROJECT_STATE.md.
+      This exception does not remove the requirement to have CI pass and
+      human approval — it only removes automated enforcement.
+5b. **UI verification checkpoint (any phase touching `web/`).**
+    Before the user approves the PR:
+    - Run the dev server: `cd web && npm run dev` (default: http://localhost:3000).
+    - Walk every screen modified in this phase against `docs/design/wireframe-reference.html`.
+    - For each screen, confirm: correct nav/sidebar state, correct token usage
+      (card, card-sub, page-head, screen, badge variants), loading/error/empty states
+      render, and all interactive elements (accordion expand, filter chips, clear buttons)
+      function as wired.
+    - Report findings as a named checklist in the PR description — not as prose.
+      Each screen gets its own row: screen name | wireframe section | status (PASS / FAIL / PARTIAL).
+    - A FAIL or PARTIAL blocks PR approval the same as a failing CI gate.
+7. Only after 1–5b: cut the next phase's branch and begin its kickoff (§1).
 
 ## 8. What NOT to do
 

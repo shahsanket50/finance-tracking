@@ -2,7 +2,7 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-08-25
 **Current phase:** Phase 3 — Day-to-Day Layer (backend, not started)
 **Overall status:** 381 backend tests + 70 frontend tests (451 total). Phase 2.5 CLOSED 2026-08-23. Phase 3 is next.
 
@@ -313,6 +313,33 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | `covering_ingestion_event_ids` false positives | See Standing risks above. Field name is intentionally `covering_` not `seen_by` to signal approximation. | Phase 3 Option A implementation |
 
 ---
+
+## CI gaps (as of 2026-08-25)
+
+Audited against QUALITY.md gate list. All gaps logged here; branch protection status noted.
+
+| Gate | Status | Notes |
+|---|---|---|
+| G1 (ruff format + prettier) | **Active** | Runs on push + PR |
+| G2 (ruff lint + eslint) | **Active** | Runs on push + PR |
+| G3 (mypy + tsc --noEmit) | **Active** | Runs on push + PR |
+| G4 (backend pytest unit) | **Active** | Runs on push + PR |
+| G4b (frontend vitest) | **Added 2026-08-25** | Was missing for all of Phase 2.5 — every frontend result was manually reported. Now wired. |
+| G5 (Hypothesis property tests) | **Active** | Runs on push + PR |
+| G6 (golden dataset) | **Active** | Exit 5 (no tests collected) is non-fatal |
+| G7 (integration tests, minus PITR) | **Active** | PITR excluded; requires Docker testcontainers |
+| G8 (coverage ratchet) | **Active** | Cache-backed baseline; tiering + ratchet scripts run |
+| G9 (complexity/radon) | **Deferred — Phase 3 kickoff** | Tool not in backend/[dev]; enabling now produces false positives on unchanged code |
+| G10 (dead code, vulture/knip) | **Deferred — Phase 3 kickoff** | Same reason as G9 |
+| G11 (pip-audit/npm audit) | **Deferred — Phase 3 kickoff** | Same reason as G9 |
+| G12 (bandit/eslint-plugin-security) | **Deferred — Phase 3 kickoff** | Same reason as G9 |
+| G13 (gitleaks secret scan) | **Added 2026-08-25** | Was commented out. Now active — this project handles bank credentials and encryption keys; non-negotiable. |
+| G14 (real-data guard) | **Active** | Custom guard; always blocking |
+| G15 (migration + float lint) | **Active** | Custom guards; always blocking |
+| G16 (spec traceability) | **Not implemented** | Defined in QUALITY.md; not wired in CI. Deferred — requires tooling to parse module docstrings. Phase 3 kickoff. |
+| G17 (prompt golden tests) | **Not implemented** | No prompts exist yet; gate activates when LLM adapter (Phase 3) lands. |
+| G18 (parser registration) | **Not implemented as CI step** | The test `tests/unit/ingestion/test_dryrun_harness.py` enforces this in the unit suite (G4); it is not a separate CI job. Acceptable — G4 already blocks on failure. |
+| Branch protection (require CI pass + review) | **Not enforceable** | Private repo on free GitHub plan → 403 from branch protection API. Options: (1) upgrade to GitHub Pro ($4/mo), (2) make repo public. Until then: PHASE_PROTOCOL.md §7 rule (no direct merge, PR + CI + human approval) is convention-enforced, not automated. Direct merges must be logged as deviations with reason. |
 
 ## Deferred decisions
 
