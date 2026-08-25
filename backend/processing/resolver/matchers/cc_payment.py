@@ -19,8 +19,12 @@ def find_matches(candidates: list[CandidateTxn]) -> list[MarkedCCPaymentPayload]
     - Magnitudes equal, within CC_PAYMENT_MATCH_WINDOW_DAYS
     - Confidence >= RESOLVER_CONFIDENCE_THRESHOLD
     """
-    debits = [c for c in candidates if c.account_type == ACCOUNT_TYPE_SAVINGS and c.amount_paise < 0]
-    credits = [c for c in candidates if c.account_type == ACCOUNT_TYPE_CREDIT_CARD and c.amount_paise > 0]
+    debits = [
+        c for c in candidates if c.account_type == ACCOUNT_TYPE_SAVINGS and c.amount_paise < 0
+    ]
+    credits = [
+        c for c in candidates if c.account_type == ACCOUNT_TYPE_CREDIT_CARD and c.amount_paise > 0
+    ]
     results: list[MarkedCCPaymentPayload] = []
     matched_hashes: set[str] = set()
     for debit in debits:

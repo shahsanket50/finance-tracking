@@ -20,8 +20,8 @@ from sqlalchemy.orm import Session
 from core.events.models import TransactionEvent, User
 from core.events.store import read_since_seq
 from core.events.types import MARKED_INTERNAL_TRANSFER, TRANSACTION_INGESTED
-from core.projections.builder import build_projection_from_events
 from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
+from core.projections.builder import build_projection_from_events
 from ingestion.dryrun.confirm import confirm
 from ingestion.dryrun.session import DryRunSession
 from ingestion.parsers.base import ParsedStatement, ParsedTransaction
@@ -91,9 +91,7 @@ def _make_transfer_pair_session(user_id: uuid.UUID) -> DryRunSession:
 
 
 @pytest.mark.integration
-def test_confirm_wires_resolver_automatically(
-    pg_session: Session, test_user: User
-) -> None:
+def test_confirm_wires_resolver_automatically(pg_session: Session, test_user: User) -> None:
     """confirm() on a statement with a transfer pair → MarkedInternalTransfer written.
 
     No audit endpoint is called. The resolver runs as part of confirm() (TRD §2.3).
@@ -128,9 +126,7 @@ def test_confirm_wires_resolver_automatically(
 
 
 @pytest.mark.integration
-def test_confirm_resolver_idempotent_on_rerun(
-    pg_session: Session, test_user: User
-) -> None:
+def test_confirm_resolver_idempotent_on_rerun(pg_session: Session, test_user: User) -> None:
     """run_resolver() called again after confirm() writes 0 new events (idempotent catch-up)."""
     assert isinstance(test_user, User)
     dry_session = _make_transfer_pair_session(test_user.id)
@@ -164,9 +160,7 @@ def test_confirm_resolver_idempotent_on_rerun(
 
 
 @pytest.mark.integration
-def test_confirm_event_type_casing_end_to_end(
-    pg_session: Session, test_user: User
-) -> None:
+def test_confirm_event_type_casing_end_to_end(pg_session: Session, test_user: User) -> None:
     """End-to-end B-1 regression: real confirm() → real DB event → reducer recognizes it.
 
     The unit-level casing test only checks that confirm.py passes the constant to a mock.
@@ -191,8 +185,9 @@ def test_confirm_event_type_casing_end_to_end(
     state = build_projection_from_events(events, "transactions_view")
 
     import typing
+
     transactions = typing.cast(list[dict[str, object]], state["transactions"])
     assert len(transactions) == 2, (
-        f"Reducer must recognize TransactionIngested events — got {len(transactions)} transactions. "
-        "If 0, the event_type casing is wrong (snake_case stored, PascalCase expected by reducer)."
+        f"Expected 2 transactions, got {len(transactions)}. "
+        "If 0, reducer is not recognizing TransactionIngested (check event_type casing)."
     )

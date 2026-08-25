@@ -11,12 +11,12 @@ from typing import cast
 
 import pdfplumber
 
+from core.events.types import ACCOUNT_TYPE_SAVINGS
 from core.hashing.hash import (
     canonicalize_narration,
     compute_idempotency_hash,
     compute_occurrence_index,
 )
-from core.events.types import ACCOUNT_TYPE_SAVINGS
 from ingestion.parsers.base import AbstractParser, ParsedStatement, ParsedTransaction
 
 # Matches a DD/MM/YY date (two-digit year, used in transaction rows).

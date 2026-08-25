@@ -9,12 +9,12 @@ from decimal import Decimal
 
 import pdfplumber
 
+from core.events.types import ACCOUNT_TYPE_CREDIT_CARD
 from core.hashing.hash import (
     canonicalize_narration,
     compute_idempotency_hash,
     compute_occurrence_index,
 )
-from core.events.types import ACCOUNT_TYPE_CREDIT_CARD
 from ingestion.parsers.base import AbstractParser, ParsedStatement, ParsedTransaction
 
 
