@@ -133,14 +133,45 @@ Findings get a severity:
 2. Adversarial review (§6) run, CRITICALs resolved.
 3. Any retroactive gaps (§4) targeting this phase's close are resolved or
    explicitly re-targeted to the next phase with reasoning.
-4. `PROJECT_STATE.md` updated: phase marked CLOSED with date, commit, and gate
+4. **Wave-diff check:** list every wave that was actually executed and diff it
+   against the approved plan. Any wave that was dropped, merged into another,
+   or renamed must be called out explicitly as a deviation — with the reason —
+   in the close report. A close report that silently omits a planned wave is
+   not a close report; it is an incomplete record that prevents future diagnosis
+   of missing coverage.
+5. `PROJECT_STATE.md` updated: phase marked CLOSED with date, commit, and gate
    evidence. `SESSION_LOG.md` gets a closing entry.
-5. Any bugs found *during* this phase's review process that trace back to a
+6. Any bugs found *during* this phase's review process that trace back to a
    *previous* phase's shipped code get a short retroactive note in
    `docs/DECISIONS.md` — what the bug was, how it was caught, the fix. This is
    deliberately preserved (not just fixed and forgotten) as evidence for why the
    independent-authoring discipline exists.
-6. Only after 1–5: cut the next phase's branch and begin its kickoff (§1).
+5a. **Merge via PR only — never direct-merge or self-merge.**
+    - Open a GitHub PR from the feature branch into main.
+    - CI must pass (all required jobs green) before the PR is mergeable.
+    - At least one human approval is required before merge. The assistant
+      never approves or merges its own PRs — it opens the PR and stops.
+    - A direct `git merge` to main is not a valid close, even if explicitly
+      requested under time pressure. If the user asks for a direct merge,
+      explain why this step exists (the PR + CI gate is the only automated
+      backstop) and offer to open the PR instead.
+    - Exception: if branch protection is unavailable (e.g. private repo on
+      free GitHub plan), document the direct merge as a deviation in the
+      close report, note exactly why, and log it in PROJECT_STATE.md.
+      This exception does not remove the requirement to have CI pass and
+      human approval — it only removes automated enforcement.
+5b. **UI verification checkpoint (any phase touching `web/`).**
+    Before the user approves the PR:
+    - Run the dev server: `cd web && npm run dev` (default: http://localhost:3000).
+    - Walk every screen modified in this phase against `docs/design/wireframe-reference.html`.
+    - For each screen, confirm: correct nav/sidebar state, correct token usage
+      (card, card-sub, page-head, screen, badge variants), loading/error/empty states
+      render, and all interactive elements (accordion expand, filter chips, clear buttons)
+      function as wired.
+    - Report findings as a named checklist in the PR description — not as prose.
+      Each screen gets its own row: screen name | wireframe section | status (PASS / FAIL / PARTIAL).
+    - A FAIL or PARTIAL blocks PR approval the same as a failing CI gate.
+7. Only after 1–5b: cut the next phase's branch and begin its kickoff (§1).
 
 ## 8. What NOT to do
 

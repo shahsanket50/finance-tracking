@@ -17,6 +17,8 @@ Every session, in this order:
 5. Check `docs/CODE_GRAPH.md` to understand where new code belongs.
 6. At end of session, append to `docs/SESSION_LOG.md` and update `docs/PROJECT_STATE.md`.
 
+**If working on `web/`:** also read `docs/design/wireframe-reference.html` (authoritative for token values, component patterns, and the interaction model — context switch, audit drill-down, accordion) and `docs/TRD.md §15` (UI Technical Notes). Do not port the wireframe HTML directly — translate to Next.js + shadcn/ui following TRD §15.
+
 If a task is not traceable to a PRD/TRD section, **stop and ask** rather than inventing scope.
 
 ---
@@ -193,5 +195,6 @@ Stop and ask the owner rather than proceeding if:
 | `docs/CODE_GRAPH.md` | Module map and dependency graph. Update when structure changes. |
 | `docs/DECISIONS.md` | Architecture decision records (ADRs). |
 | `docs/QUALITY.md` | Quality gates, coverage thresholds, CI pipeline, per-run reporting. |
+| `docs/design/wireframe-reference.html` | Interactive wireframe for all 13 screens (Phase 2.5+). Authoritative for token values, component patterns, and interaction model. Visual reference only — not React/shadcn source. |
 
 **PRD and TRD in `docs/` are the source of truth for the build.** They are synced from Notion; if they disagree with Notion, flag it rather than silently choosing one.

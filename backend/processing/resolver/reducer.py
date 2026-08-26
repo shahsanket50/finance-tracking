@@ -15,6 +15,13 @@ from __future__ import annotations
 from typing import cast
 
 from core.events.store import Event
+from core.events.types import (
+    MARKED_CC_PAYMENT,
+    MARKED_FD_BOOKING,
+    MARKED_INTERNAL_TRANSFER,
+    MARKED_REVERSAL,
+    TRANSACTION_INGESTED,
+)
 from core.projections.builder import register_reducer
 
 
@@ -38,7 +45,7 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
     excluded: list[str] = list(cast(list[str], state["excluded_hashes"]))
     reasons: dict[str, str] = dict(cast(dict[str, str], state["exclusion_reasons"]))
 
-    if event.event_type == "TransactionIngested":
+    if event.event_type == TRANSACTION_INGESTED:
         p = event.payload
         transactions.append(
             {
@@ -50,25 +57,25 @@ def _reducer(state: dict[str, object], event: Event) -> dict[str, object]:
                 "transaction_type": p.get("transaction_type", "expense"),
             }
         )
-    elif event.event_type == "MarkedInternalTransfer":
+    elif event.event_type == MARKED_INTERNAL_TRANSFER:
         p = event.payload
         h1, h2 = str(p["debit_hash"]), str(p["credit_hash"])
         excluded.extend([h1, h2])
         reasons[h1] = "internal_transfer"
         reasons[h2] = "internal_transfer"
-    elif event.event_type == "MarkedCCPayment":
+    elif event.event_type == MARKED_CC_PAYMENT:
         p = event.payload
         h1, h2 = str(p["savings_debit_hash"]), str(p["cc_credit_hash"])
         excluded.extend([h1, h2])
         reasons[h1] = "cc_payment"
         reasons[h2] = "cc_payment"
-    elif event.event_type == "MarkedFDBooking":
+    elif event.event_type == MARKED_FD_BOOKING:
         p = event.payload
         h1, h2 = str(p["savings_debit_hash"]), str(p["fd_credit_hash"])
         excluded.extend([h1, h2])
         reasons[h1] = "fd_booking"
         reasons[h2] = "fd_booking"
-    elif event.event_type == "MarkedReversal":
+    elif event.event_type == MARKED_REVERSAL:
         p = event.payload
         h1, h2 = str(p["original_hash"]), str(p["reversal_hash"])
         excluded.extend([h1, h2])

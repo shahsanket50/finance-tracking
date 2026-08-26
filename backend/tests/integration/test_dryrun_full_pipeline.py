@@ -84,8 +84,13 @@ def test_dry_run_writes_zero_db_rows(
     assert isinstance(test_user, User)
     _make_dry_run_session_with_redis(hdfc_pdf_bytes, test_user.id, mock_redis)
 
-    assert pg_session.query(TransactionEvent).count() == 0
-    assert pg_session.query(IngestionEvent).count() == 0
+    assert (
+        pg_session.query(TransactionEvent).filter(TransactionEvent.user_id == test_user.id).count()
+        == 0
+    )
+    assert (
+        pg_session.query(IngestionEvent).filter(IngestionEvent.user_id == test_user.id).count() == 0
+    )
 
 
 # ── test 3: confirm writes exactly one IngestionEvent ────────────────────────

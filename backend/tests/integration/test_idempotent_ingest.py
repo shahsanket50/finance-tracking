@@ -198,6 +198,7 @@ def test_genuine_same_day_duplicate_both_rows_survive(
     statement = ParsedStatement(
         bank="HDFC",
         account_ref=account_ref,
+        account_type="savings",
         period_start=txn_date,
         period_end=txn_date,
         opening_balance_paise=opening,

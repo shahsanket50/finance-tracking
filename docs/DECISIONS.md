@@ -77,6 +77,13 @@ when the exact FK semantics (UUID vs idempotency hash, nullable vs required) can
 decided with the matcher code in hand. The `MarkedReversalPayload` stores
 `original_hash` and `reversal_hash` in the encrypted payload column in the interim.
 
+**Wave 2 follow-up (2026-08-14):** Reversal matcher is complete. The `reverses_transaction_id`
+FK column was not added in Wave 2. The reversal relationship is fully identified by
+`original_hash` and `reversal_hash` in the encrypted `MarkedReversalPayload` — no FK column
+is required for the matcher or reducer to function. Decision: FK column deferred to Phase 3
+review. If the Phase 3 audit view (`domain/audit`) has no structural need for it, the column
+will be dropped from scope permanently.
+
 ---
 
 ## ADR-014: Wave 2 matchers share a common matching primitive
@@ -93,6 +100,126 @@ Duplicating this logic across four callers creates calibration risk: a fix to th
 proximity window check must be applied in four places, and drift is silent. A shared
 primitive means calibration is a one-line change in one place, and a bug in the
 primitive is immediately visible across all four matchers' tests.
+
+---
+
+## ADR-015: Two-context IA (Expense / CA + shared utilities) over flat nav
+
+**Status:** Accepted · **Date:** 2026-08-16
+Expense and CA are two distinct usage modes with almost no screen overlap. The IA uses a persistent context switch that swaps the entire sidebar, plus shared utilities (Accounts, Notifications, Settings) reachable from both contexts without switching.
+**Why:** A flat nav containing all screens from both modes produces a sidebar too long to be useful in either mode. The shared ledger feeds both contexts, but the user's intent when opening the app is unambiguously one or the other — not both at once. Shared utilities serve both modes equally and should never require a context switch to reach them. See PRD §20.
+
+---
+
+## ADR-016: shadcn/ui as the component library
+
+**Status:** Accepted · **Date:** 2026-08-16
+Use shadcn/ui (copy-into-repo model, Radix + Tailwind, CSS-variable theming) rather than an opaque dependency-style component library.
+**Why:** Components are copied as fully-typed, readable, modifiable code into `web/components/ui/` — zero abstraction penalty, no opaque dependency boundary. Consistent with TRD T3 ("mainstream, best-documented for AI codegen") and directly supports the token-set design system (ADR-017) since theming is already CSS-variable-based. Alternative libraries (Mantine, Chakra) would add an opaque dependency layer that AI codegen agents cannot inspect or modify without risk.
+
+---
+
+## ADR-017: Theme as a CSS-variable token set (configurable, dark-first)
+
+**Status:** Accepted · **Date:** 2026-08-16
+The design system ships as a CSS-variable token file. Dark-first (ink/navy palette). A theme change is a new token file, not a code change. Settings exposes a theme selector (PRD §19).
+**Why:** Hardcoded colors in components are the most common cause of an app that looks themed in one place and unstyled in another. A CSS-variable token set is the smallest unit of discipline that prevents drift — every color reference must go through a token. Building dark-first avoids retrofitting (which typically breaks edge cases invisible in light mode). The token-set model also means user-selectable themes add zero per-screen code.
+
+---
+
+## ADR-018: Home is a pure visualization surface
+
+**Status:** Accepted · **Date:** 2026-08-16
+Home (Expense context landing screen) contains KPI strip + 7 dashboards driven by a shared time selector, and nothing else. No navigation tiles. No notification preview. No CA/FY data.
+**Why:** Navigation is the sidebar's job. Notifications is its own shared screen. CA/FY data belongs in the CA context. A Home that tries to do all three creates a screen with no center of gravity — every element fights for prominence. Making Home a pure visualization surface lets every pixel serve one purpose: telling the user where their money went in the selected window. The original §12 spec included nav tiles and a notification preview; PRD §12A supersedes it after UI review. See PRD §12A.1/§12A.5.
+
+---
+
+## ADR-019: Paired UI phases (N.5) over one appended frontend phase
+
+**Status:** Accepted · **Date:** 2026-08-16
+Insert a UI phase after each backend phase that produces something worth seeing (2.5, 3.5, 4.5) rather than building all frontend work in one phase appended at the end.
+**Why:** Appending UI at the end means backend APIs are designed without a consumer to validate them, and the UI gets built in one stretch with no feedback loop. Pairing each UI phase with the backend phase that produced its data: (a) never builds against a mock — the exit criterion requires wiring to a real, tested endpoint; (b) amortizes the design system correctly — 2.5 builds tokens once, 3.5/4.5 consume them; (c) makes beta-readiness checkable — Phase 5 ships because 2.5/3.5/4.5 have already built the actual product surface. Phase 2.5 can run in parallel with Phase 3 backend since they touch different layers. See TRD §14.
+
+---
+
+---
+
+## Retroactive defect B-1: event_type casing mismatch in confirm.py
+
+**Caught:** 2026-08-17, Phase 2.5 Wave 3 pre-coding audit
+**Phase introduced:** Phase 1 (confirm.py shipped in Wave 4A)
+**Phase missed at close:** Phase 2 adversarial review
+
+**What shipped broken:** `confirm.py` wrote `"transaction_ingested"` (snake_case) as the
+`event_type` for every ingested transaction. The reducer in `reducer.py` branches on
+`"TransactionIngested"` (PascalCase). The two strings never match — in production, replaying
+real ingested data produces an empty `transactions` list. The integration tests for the
+resolver pipeline bypassed `confirm.py` and called `append_event()` directly with the correct
+casing, so the mismatch was invisible to CI.
+
+**Fix:** Created `core/events/types.py` constants (`TRANSACTION_INGESTED`, `MARKED_*` etc.).
+`confirm.py` now imports `TRANSACTION_INGESTED`; `reducer.py` imports all five constants.
+`processing/resolver/events.py` drops its local `RESOLVER_EVENT_TYPES` and re-exports from
+`core.events.types`. Regression test added:
+`tests/unit/ingestion/test_confirm.py::test_confirm_pass_event_type_uses_transaction_ingested_constant`.
+
+---
+
+## Retroactive defect B-2: resolver pipeline was never wired into confirm.py
+
+**Caught:** 2026-08-17, Phase 2.5 Wave 3 pre-coding audit
+**Phase introduced:** Phase 2 (resolver matchers shipped in Waves 2A–2D)
+**Phase missed at close:** Phase 2 adversarial review
+
+**What shipped broken:** `find_matches()` (all four matchers) was never called in production
+code. Phase 2 tests exercised each matcher in isolation, bypassing `confirm.py` entirely.
+No production path existed that read ingested transactions, ran the matchers, and persisted
+resolver events. The audit view endpoints (planned for Phase 2.5 Wave 3) also could not
+return meaningful data since no resolver events would ever exist in the ledger.
+
+**Additional payload gap (same cause):** `confirm.py` wrote only `{narration,
+canonical_narration, occurrence_index}` to the encrypted `TransactionEvent.payload`. The
+reducer reads `idempotency_hash`, `amount_paise`, `value_date`, `account_ref`, and
+`transaction_type` from the payload — these were not written, so replay on real data would
+raise `KeyError`. The integration tests that passed used `append_event()` directly with
+full payloads, masking the gap.
+
+**Fix:** (1) Built `processing/resolver/pipeline.py`: `run_resolver(session, user_id) → int`
+— reads `TransactionIngested` rows, builds `CandidateTxn` list (using `account_type` from
+payload), checks existing resolver event hashes for idempotency, runs all four matchers,
+writes new resolver events with deterministic idempotency_hashes. (2) Added `account_type:
+str` to `ParsedStatement`; all five parsers set it (`"credit_card"` for CC parsers,
+`"savings"` for savings parsers). (3) `confirm.py` now includes all reducer-required fields
+in the payload dict and calls `run_resolver()` after writing transaction events (TRD §2.3).
+Integration tests: `tests/integration/test_confirm_resolver_wiring.py` (2 tests).
+
+---
+
+## Retroactive defect B-3: cross-matcher candidate claiming — savings transfer claimed as reversal
+
+**Caught:** 2026-08-22, Phase 2.5 Wave 3 integration tests
+**Phase introduced:** Phase 2 (matchers written in Waves 2A–2D) / Phase 2.5 (pipeline.py built)
+**Phase missed at close:** Phase 2 adversarial review
+
+**What shipped broken:** The reversal matcher (`reversal.py`) criteria overlap with the transfer matcher (`transfer.py`) criteria. Transfer: both legs `account_type == "savings"`, opposite signs, magnitudes equal. Reversal: both legs `same account_type`, opposite signs, magnitudes equal. A savings↔savings transfer pair satisfies *both* criteria simultaneously. The original `pipeline.py` (built in Phase 2.5 Wave 3) ran all four matchers against the same full candidates list with no cross-matcher coordination. Result: a single savings↔savings pair produced two resolver events — `MarkedInternalTransfer` and `MarkedReversal` — for the same two transaction hashes. The reducer applied both, leaving `exclusion_reason="reversal"` as the final state. The resolver-pairings endpoint returned 2 pairings where 1 was correct. The dedup ledger showed `exclusion_reason="reversal"` instead of `"internal_transfer"`.
+
+**Root cause:** Reversal is intentionally a catch-all (same account_type, opposite sign, any account class). This is correct behavior for reversals — a savings credit reversing a savings debit is valid. But the same criteria are a superset of the transfer criteria. There is no structural fix to the reversal matcher's criteria; the fix must be in the pipeline's execution order.
+
+**Was this in main?** `pipeline.py` did not exist in main before Phase 2.5. The four matchers existed in main with overlapping criteria, but nothing called them together, so the bug was latent (no execution path triggered it). The bug became live the moment `pipeline.py` was first constructed.
+
+**Fix:** Cascading exclusion in `run_resolver()`. A `claimed` set is pre-populated from existing DB resolver event payloads (for idempotent re-run), then updated as each matcher writes events. Lower-priority matchers receive only `_available()` — the candidates not yet in `claimed`. Matcher priority is enforced by `_MATCHER_PRIORITY` tuple in `pipeline.py` (explicit, inspectable):
+
+```python
+_MATCHER_PRIORITY = (
+    ("transfer", transfer),       # savings↔savings: most specific
+    ("cc_payment", cc_payment),   # savings debit + credit_card credit
+    ("fd_booking", fd_booking),   # savings debit + fd credit
+    ("reversal", reversal),       # catch-all: same account_type, opposite sign
+)
+```
+
+**Regression tests:** `tests/integration/test_audit_endpoints.py::test_resolver_pairings_returns_transfer_pair` (asserts exactly 1 pairing), `test_dedup_ledger_shows_transfer_pair_as_excluded` (asserts `exclusion_reason=="internal_transfer"`). Property test: `tests/property/processing/test_cross_matcher_priority.py` — Hypothesis, 200 examples, asserts no hash appears in >1 matcher's output.
 
 ---
 

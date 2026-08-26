@@ -658,3 +658,116 @@ Prompts live in `ingestion/parsers/prompts/llm_fallback_v1.txt`. Prompt version 
 | Harness update | extend `_DEFAULT_PARSERS` fallback in `harness.py` |
 | Unit tests | `backend/tests/unit/ingestion/test_llm_fallback_parser.py` |
 | Integration test | `backend/tests/integration/test_llm_fallback_pipeline.py` |
+
+---
+
+# 13. Phase 1 Gate — Closed
+
+**Closed:** 2026-08-08 · Commit 0eb3bd8, PR #4 · 212 unit + property tests passing, 8/8 integration tests passing against real testcontainers (Postgres + Redis).
+
+## 13.1 What shipped (scope note)
+
+Both CC and Savings parsers shipped, not a substitution — five parsers total: **HDFC CC, SBI CC, HDFC Savings, SBI Savings, Slice Savings.** All five call the shared `compute_occurrence_index()` / `compute_idempotency_hash()` functions from `core/hashing/hash.py` — no per-parser duplication (F-1 gate holds).
+
+## 13.2 Gate G18 — parser registration enforcement (new, permanent)
+
+**Root cause:** three fully-tested savings parsers were built and passed every unit test, but were never added to `_DEFAULT_PARSERS` in the dry-run harness — meaning they would never have actually run in production despite green tests. Caught only by a whole-branch review, not by the standard gate.
+
+**Fix, now permanent:** any new parser not present in `_DEFAULT_PARSERS` fails an enforcement test before merge (`test_dryrun_harness.py`). Added to `QUALITY.md` as gate G18. **Any future parser addition must pass this gate — registration is no longer a step someone has to remember, it's mechanically enforced**, consistent with the project's general preference for mechanical checks over discipline.
+
+## 13.3 Confirmed integration coverage
+
+All four integration tests specified after the Phase 1 review round now execute against real infrastructure (not mocked), per the earlier finding that "syntax verified" is not "passing":
+
+- `test_idempotent_ingest.py` — overlapping statements + genuine same-day duplicates, real Postgres.
+- `test_malformed_input.py` — garbage/empty input, zero DB writes (self-caught and fixed: was asserting whole-table count instead of scoping by `test_user.id` — a real test-isolation bug, corrected before this close).
+- `test_session_expiry.py` — real Redis TTL expiry with an actual sleep, not mocked.
+- `test_password_protected.py` — real AES-128 encrypted PDF fixtures (`pikepdf`, in-memory, not committed), correct/missing/wrong password.
+
+## 13.4 NULL≠0 negative-test coverage added
+
+Per TRD §10.3 (NULL means unknown, never coerced to zero), the balance-regex-miss path — previously silently returning 0 — now raises `ValueError` and is test-covered for HDFC CC, SBI CC, and SBI Savings.
+
+## 13.5 Open items carried into Phase 2
+
+- **Slice Savings ref-number regex** (`\S+`, loosened to fit the synthetic fixture rather than confirmed against a real statement) — flagged as a standing risk in `PROJECT_STATE.md`. Not to be trusted with real Slice data until validated against an actual statement sample.
+- **Dynamic Parser Builder** (LLM-assisted template generation, balance-check gated) — specced (see §12 above) but deferred to Phase 2. The `adapters/llm/` layer doesn't exist yet; building it in Phase 1 would have been scope creep without a concrete driving use case.
+- **F-9 retroactive gap** (Phase 0 critical-module tests co-authored, not independently authored) — re-authoring for `core/hashing/`, `core/events/`, `core/projections/` still required before Phase 2 closes.
+
+---
+
+# 14. UI Phases (paired, not appended)
+
+**Gap identified:** the phase roadmap (§5) never gave UI its own planning treatment — it appears only as a single bullet inside Phase 3's and Phase 4's "Build" lines. Two phases closed (backend-only) before this was caught. Fixing it now, without altering any existing phase content.
+
+## 14.1 Pattern
+
+A UI phase is inserted **after** each backend phase that produces something worth seeing, numbered `N.5`. It builds the screens that consume that phase's already-shipped API — never ahead of the data, never against a mock. This keeps the same discipline as the backend: nothing is built until there's a real, tested source of truth behind it.
+
+| Phase | Builds on | Screens |
+| --- | --- | --- |
+| **2.5 — Frontend Foundation** | Phase 2 (closed) | Design system, tokens, app shell, nav. First real screen: the audit view (Journey 7), since Phase 2's resolver/dedup data already exists to render. |
+| **3.5 — Day-to-Day UI** | Phase 3 | Dashboard (PRD §12.1), account management (PRD §13), budgets, onboarding checklist (Journey 1). |
+| **4.5 — CA View UI** | Phase 4 | Income/deductions/capital-gains/regime screens (PRD §1), FY completeness checklist. |
+| *(Phase 5 stays as-is)* | Phases 0–4.5 | Private beta — deploys what UI phases have already built; not a UI-building phase itself. |
+
+## 14.2 Why paired beats appended
+
+- **Never builds against a mock.** Every UI phase's exit criterion requires wiring to a real, already-tested endpoint — no screen ships ahead of the data it displays, matching the project's general refusal to trust anything unverified.
+- **Design system amortizes correctly.** 2.5 builds the tokens and primitives once; 3.5 and 4.5 consume them, so the cost of the design system is paid early and reused, not redone per phase.
+- **Doesn't block backend momentum.** Phase 3's backend work can proceed without waiting on 2.5 to fully finish, since they touch different layers — but 3.5 cannot start until Phase 3's API surface exists.
+- **Beta-readiness becomes checkable.** Phase 5 no longer implicitly assumes a UI appeared somewhere along the way — by the time Phase 5 starts, 2.5/3.5/4.5 have already shipped the actual product surface a beta user touches.
+
+## 14.3 Exit criterion pattern
+
+Each `N.5` phase follows the same `PHASE_PROTOCOL.md` discipline as backend phases: propose → approve → build in waves → report with raw evidence → adversarial review → close. Its exit criterion is always of the form: *"[screen(s)] render real data from [phase N]'s API, every acceptance criterion from the relevant PRD section / User Story journey is met, and the audit trail for what was built matches what was designed."*
+
+## 14.4 Phase 2.5 scope (next up)
+
+**Build:** design system (tokens, typography, color/status language), app shell (nav, layout), and the audit view screen (Journey 7 — overlap map, dedup ledger, resolver pairings), consuming the endpoints deferred from Phase 2 (§13, U7 — these get built as part of 2.5's wiring, not before).
+
+**Exit criterion:** the audit view renders real overlapping-statement data from a Phase 2 fixture, every Journey 7 acceptance criterion is met on screen (not just in the API), and the design system's tokens are the single source every subsequent UI phase consumes — no phase re-derives color or type choices independently.
+
+**Design decisions for 2.5 are being made separately** (visual direction, component library, scope-now-vs-defer) — see accompanying discussion.
+
+---
+
+# 15. UI Technical Notes
+
+Frontend technical decisions from UI review, for the `web/` build across phases 2.5 / 3.5 / 4.5. Screen content and IA live in PRD §12/§19/§20/§12A and User Stories §19; this section is the *technical* how.
+
+## 15.1 Stack & libraries
+
+- **Next.js + TypeScript** (strict), per T3.
+- **shadcn/ui** for components. Chosen because components are copied into the repo (fully typed, readable, modifiable) rather than an opaque dependency — consistent with T3's "mainstream, best-documented for AI codegen." Built on Radix + Tailwind, themed via CSS variables.
+- **Charting:** a library is required for the seven Home dashboards (PRD §12A.4). Pick one (e.g. Recharts or Chart.js, both already in the environment's available set) at Phase 3.5 kickoff. Charts must theme from the same CSS-variable tokens as everything else — no hardcoded colors.
+
+## 15.2 Design system (built in Phase 2.5, consumed by 3.5/4.5)
+
+- **Theme is a token set, fully configurable** (per user decision). Ship dark-first (ink/navy), but every color/type/spacing value is a CSS variable, so a new theme is a token file, not a code change. Settings exposes the selector (PRD §19).
+- **Tokens built in full in 2.5** (color incl. status green/amber/red, type scale — Space Grotesk display / IBM Plex Sans body / IBM Plex Mono numbers, spacing, elevation). **Components built incrementally** — only what the Audit screen needs in 2.5; 3.5/4.5 add components but never re-derive a token.
+- **Signature throughline:** every monetary/numeric value renders in IBM Plex Mono (tabular figures); every status or exclusion carries a plain-English "why" line, not just a color. This is the product thesis (nothing unexplained) expressed visually — enforce it as a component contract, not per-screen discretion.
+- **Money rendering:** integer paise from the API (TRD §10) is formatted to rupees *only at render*, using Indian grouping (lakh/crore, ₹12,34,567.89). Never compute or store the formatted string.
+
+## 15.3 App shell (Phase 2.5)
+
+- **Two-context switch** (Expense ⇄ CA) that swaps the entire sidebar (PRD §20.1). Implemented as a top-level layout state, not routing duplication.
+- **Shared utilities** (Accounts, Notifications, Settings) render outside the context switch and are reachable from both.
+- **Bell affordance** opens a notification preview panel; full Notifications is a shared screen. (Home does *not* carry a notification preview — PRD §12A.1.)
+
+## 15.4 Home dashboards (Phase 3.5)
+
+- **One shared time selector** drives all KPIs and charts (PRD §12A.2). Implement as a single screen-level state that every widget subscribes to — not per-widget date pickers. This is an architectural constraint: widgets are pure functions of (data, window), so the selector re-renders all of them together.
+- **Trend widgets must render a span even for a single-month selection** (§12A.2) — daily/weekly buckets within the month, or trailing months. A trend widget that can render a single point is a bug; the windowing logic that expands a focus-window into a trend series is shared, not per-chart.
+- **"Previous comparable period" for KPI deltas** must be defined per selector option before build (this-month→last-month is obvious; custom-range needs a rule). Flagged as an open item.
+- All seven charts read from Expense-context projections only; **no CA/FY data on Home** (§12A.5) — enforces the two-context data separation.
+
+## 15.5 Data dependency — endpoints precede screens
+
+Consistent with the backend discipline: no UI phase builds a screen ahead of the tested API that feeds it. The Audit endpoints deferred from Phase 2 (§13, U7) are built as part of Phase 2.5's wiring. The Home dashboards need aggregation endpoints (KPIs, per-category time series, merchant leaderboard) that are Phase 3.5 backend work preceding the 3.5 UI — sequence them so the chart never renders against a mock.
+
+## 15.6 Open UI items
+
+- Empty states for every screen (deferred to 3.5; logged in `PROJECT_STATE.md`). Audit-view empty state specifically flagged.
+- "Previous comparable period" rule for each selector option (§15.4).
+- Charting library selection (§15.1) — decide at 3.5 kickoff.

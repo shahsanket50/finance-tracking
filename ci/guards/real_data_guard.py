@@ -28,6 +28,7 @@ SCAN_DIRS = ["tests", "docs"]
 ALLOWLIST_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\\b\[A-Z\]\{5\}"),  # regex pattern definitions
     re.compile(r"REAL_DATA_PATTERNS"),  # this file itself
+    re.compile(r"00000000-0000-0000-0000-[0-9a-f]+"),  # synthetic sentinel UUIDs
 ]
 
 

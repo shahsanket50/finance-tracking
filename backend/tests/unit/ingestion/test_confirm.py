@@ -25,6 +25,14 @@ _FAKE_ENCRYPTED = b"fake_encrypted_payload_bytes"
 _FAKE_CONTENT_HASH = "a" * 64  # 64-char hex
 
 
+@pytest.fixture(autouse=True)
+def _mock_run_resolver() -> None:  # type: ignore[misc]
+    """Unit tests use a MagicMock DB session — patch run_resolver to a no-op
+    so tests don't hit real SQLAlchemy calls inside the resolver pipeline."""
+    with patch("ingestion.dryrun.confirm.run_resolver"):
+        yield
+
+
 def _make_txn(
     narration: str,
     amount_paise: int,
@@ -51,6 +59,7 @@ def _make_statement(transactions: list[ParsedTransaction]) -> ParsedStatement:
     return ParsedStatement(
         bank="test_cc",
         account_ref="TEST_CC_0001",
+        account_type="credit_card",
         period_start=date(2026, 1, 1),
         period_end=date(2026, 1, 31),
         opening_balance_paise=0,
@@ -388,3 +397,38 @@ def test_confirm_fail_zero_transaction_events() -> None:
     ):
         confirm(session.session_id, mock_db)
     mock_append.assert_not_called()
+
+
+# ── casing regression ─────────────────────────────────────────────────────────
+
+
+def test_confirm_pass_event_type_uses_transaction_ingested_constant() -> None:
+    """PASS → event_type arg to append_event equals TRANSACTION_INGESTED constant.
+
+    Regression test for the Phase 2.5 retroactive bug where confirm.py wrote
+    "transaction_ingested" (snake_case) while the reducer expects "TransactionIngested"
+    (PascalCase). Now enforced by importing and using the shared constant.
+    """
+    from core.events.types import TRANSACTION_INGESTED
+
+    session = _make_session(BalanceCheckResult.PASS)
+    mock_db = MagicMock(spec=Session)
+    with (
+        patch(
+            "ingestion.dryrun.confirm.get_redis_client",
+            return_value=_mock_redis_with_session(session),
+        ),
+        patch(
+            "ingestion.dryrun.confirm.encrypt_payload",
+            return_value=(_FAKE_ENCRYPTED, _TEST_KEY_ID),
+        ),
+        patch("ingestion.dryrun.confirm.append_event") as mock_append,
+    ):
+        confirm(session.session_id, mock_db)
+
+    # append_event signature: (session, user_id, event_type, aggregate_id, payload, ...)
+    event_types = [call.args[2] for call in mock_append.call_args_list]
+    assert len(event_types) > 0, "Expected at least one TransactionIngested event"
+    assert all(et == TRANSACTION_INGESTED for et in event_types), (
+        f"All event_type args must equal {TRANSACTION_INGESTED!r}, got {event_types}"
+    )

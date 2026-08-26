@@ -7,10 +7,14 @@ All other routes are added in subsequent tasks.
 from fastapi import FastAPI
 
 from ingestion.api.router import router as ingestion_router
+from processing.accounts.router import router as accounts_router
+from processing.audit.router import router as audit_router
 
 app = FastAPI(title="Finance Tracker API", version="0.1.0")
 
 app.include_router(ingestion_router, prefix="/api/v1/statements", tags=["statements"])
+app.include_router(audit_router, prefix="/api/v1/audit", tags=["audit"])
+app.include_router(accounts_router, prefix="/api/v1/accounts", tags=["accounts"])
 
 
 @app.get("/health")

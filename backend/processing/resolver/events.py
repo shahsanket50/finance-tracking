@@ -18,6 +18,8 @@ reverses_transaction_id column (TRD §9.5 M4) is deferred to Wave 2.
 
 from pydantic import BaseModel, Field
 
+from core.events.types import RESOLVER_EVENT_TYPES as RESOLVER_EVENT_TYPES  # re-export
+
 
 class MarkedInternalTransferPayload(BaseModel):
     """Payload for MarkedInternalTransfer event_type."""
@@ -68,13 +70,4 @@ class MarkedReversalPayload(BaseModel):
     confidence: int = Field(..., ge=0, le=10000)
 
 
-# Canonical event_type strings for resolver events — exactly what goes in
-# transaction_events.event_type when the resolver records a decision.
-RESOLVER_EVENT_TYPES: frozenset[str] = frozenset(
-    {
-        "MarkedInternalTransfer",
-        "MarkedCCPayment",
-        "MarkedFDBooking",
-        "MarkedReversal",
-    }
-)
+# RESOLVER_EVENT_TYPES is defined in core.events.types and re-exported above.
