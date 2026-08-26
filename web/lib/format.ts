@@ -8,7 +8,7 @@
  * Throws TypeError for any non-bigint input — floats are never accepted.
  */
 export function formatPaise(paise: bigint): string {
-  if (typeof paise !== 'bigint') {
+  if (typeof paise !== "bigint") {
     throw new TypeError(`formatPaise expects bigint, got ${typeof paise}`);
   }
 
@@ -19,7 +19,7 @@ export function formatPaise(paise: bigint): string {
   const cents = abs % 100n;
 
   const grouped = indianGroup(rupees.toString());
-  const paiseStr = cents.toString().padStart(2, '0');
+  const paiseStr = cents.toString().padStart(2, "0");
 
   const body = `₹${grouped}.${paiseStr}`;
   return negative ? `\u2212${body}` : body;
@@ -34,5 +34,5 @@ function indianGroup(s: string): string {
   for (let i = head.length; i > 0; i -= 2) {
     parts.unshift(head.slice(Math.max(0, i - 2), i));
   }
-  return parts.join(',') + ',' + tail;
+  return parts.join(",") + "," + tail;
 }

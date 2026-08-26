@@ -2,58 +2,58 @@
 // PostCSS plugin still reads and honors corePlugins at runtime.
 const config = {
   content: [
-    './app/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './lib/**/*.{ts,tsx}',
+    "./app/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./lib/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
       colors: {
         // Map project CSS variables to Tailwind's semantic color names
         // so shadcn/ui components that use `bg-primary`, `text-foreground` etc. work.
-        background: 'var(--bg)',
-        foreground: 'var(--text-primary)',
+        background: "var(--bg)",
+        foreground: "var(--text-primary)",
         primary: {
-          DEFAULT: 'var(--accent)',
-          foreground: 'var(--bg)',
+          DEFAULT: "var(--accent)",
+          foreground: "var(--bg)",
         },
         secondary: {
-          DEFAULT: 'var(--surface-2)',
-          foreground: 'var(--text-secondary)',
+          DEFAULT: "var(--surface-2)",
+          foreground: "var(--text-secondary)",
         },
         muted: {
-          DEFAULT: 'var(--surface-2)',
-          foreground: 'var(--text-muted)',
+          DEFAULT: "var(--surface-2)",
+          foreground: "var(--text-muted)",
         },
         destructive: {
-          DEFAULT: 'var(--danger)',
-          bg: 'var(--danger-bg)',
-          foreground: 'var(--bg)',
+          DEFAULT: "var(--danger)",
+          bg: "var(--danger-bg)",
+          foreground: "var(--bg)",
         },
         success: {
-          DEFAULT: 'var(--success)',
-          bg: 'var(--success-bg)',
-          foreground: 'var(--bg)',
+          DEFAULT: "var(--success)",
+          bg: "var(--success-bg)",
+          foreground: "var(--bg)",
         },
         warning: {
-          DEFAULT: 'var(--warning)',
-          bg: 'var(--warning-bg)',
-          foreground: 'var(--bg)',
+          DEFAULT: "var(--warning)",
+          bg: "var(--warning-bg)",
+          foreground: "var(--bg)",
         },
         surface: {
-          1: 'var(--surface-1)',
-          2: 'var(--surface-2)',
-          3: 'var(--surface-3)',
+          1: "var(--surface-1)",
+          2: "var(--surface-2)",
+          3: "var(--surface-3)",
         },
-        border: 'var(--border)',
-        'border-strong': 'var(--border-strong)',
-        ring: 'var(--accent)',
-        'accent-bg': 'var(--accent-bg)',
+        border: "var(--border)",
+        "border-strong": "var(--border-strong)",
+        ring: "var(--accent)",
+        "accent-bg": "var(--accent-bg)",
       },
       borderRadius: {
-        lg: '12px',
-        md: '8px',
-        sm: '6px',
+        lg: "12px",
+        md: "8px",
+        sm: "6px",
       },
     },
   },

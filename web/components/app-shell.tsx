@@ -1,23 +1,32 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { Sidebar } from './sidebar';
+import { useState } from "react";
+import { usePathname } from "next/navigation";
+import { Sidebar } from "./sidebar";
 
-export type AppContext = 'expense' | 'ca';
+export type AppContext = "expense" | "ca";
 
 const CA_PREFIXES = [
-  '/tax-health', '/fy-checklist', '/advance-tax',
-  '/deductions', '/capital-gains', '/income-tds', '/documents',
+  "/tax-health",
+  "/fy-checklist",
+  "/advance-tax",
+  "/deductions",
+  "/capital-gains",
+  "/income-tds",
+  "/documents",
 ];
 
 function contextFromPath(path: string): AppContext {
-  return CA_PREFIXES.some(p => path === p || path.startsWith(p + '/')) ? 'ca' : 'expense';
+  return CA_PREFIXES.some((p) => path === p || path.startsWith(p + "/"))
+    ? "ca"
+    : "expense";
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [context, setContext] = useState<AppContext>(() => contextFromPath(pathname));
+  const [context, setContext] = useState<AppContext>(() =>
+    contextFromPath(pathname),
+  );
 
   return (
     <div className="shell">
