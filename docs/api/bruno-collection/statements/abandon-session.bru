@@ -1,0 +1,15 @@
+meta {
+  name: Abandon Session
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/statements/:session_id/abandon
+  body: none
+  auth: none
+}
+
+docs {
+  Delete a dry-run session from Redis without writing to the database.
+}

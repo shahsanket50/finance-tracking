@@ -1,0 +1,15 @@
+meta {
+  name: Sync History
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/audit/sync-history
+  body: none
+  auth: none
+}
+
+docs {
+  List all statement ingestion events for the current user, newest first.
+}

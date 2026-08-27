@@ -1,85 +1,18 @@
-/** Pure functions and API types for the 4 audit screens. Implements PRD §15. */
+/** Pure functions for the 4 audit screens. API types are generated from openapi.json. */
 
-// ── API response types (mirror backend Pydantic models) ───────────────────────
+import type { components } from "./api-types";
 
-export interface SyncHistoryEntry {
-  event_id: string;
-  account_ref: string;
-  bank: string;
-  period_start: string | null;
-  period_end: string | null;
-  status: string;
-  records_added: number;
-  records_skipped: number;
-  balance_check: string | null;
-  confidence: number | null;
-  created_at: string;
-  // Backend-computed from SYNC_STALL_THRESHOLD_DAYS. Do not recompute on the frontend.
-  is_stalled: boolean;
-}
+// ── Generated API types ───────────────────────────────────────────────────────
 
-export interface StatementBar {
-  event_id: string;
-  period_start: string | null;
-  period_end: string | null;
-  overlaps_with: string[];
-}
-
-export interface AccountOverlap {
-  account_ref: string;
-  statements: StatementBar[];
-}
-
-export interface OverlapMapResponse {
-  accounts: AccountOverlap[];
-}
-
-export interface DedupLedgerEntry {
-  idempotency_hash: string;
-  amount_paise: string;
-  value_date: string;
-  account_ref: string;
-  transaction_type: string;
-  is_counted: boolean;
-  exclusion_reason: string | null;
-  // Period-covering approximation — see PROJECT_STATE.md §known-limitations.
-  // Includes any IngestionEvent whose statement period covers this value_date;
-  // does not guarantee those events' parses actually emitted this hash.
-  covering_ingestion_event_ids: string[];
-}
-
-export interface DedupLedgerResponse {
-  total_seen: number;
-  total_counted: number;
-  total_excluded: number;
-  entries: DedupLedgerEntry[];
-}
-
-export interface PairingLeg {
-  role: string;
-  idempotency_hash: string;
-  account_ref: string;
-  period_start: string | null;
-  period_end: string | null;
-}
-
-export interface ResolverPairing {
-  event_id: string;
-  event_type: string;
-  matched_by: string;
-  confidence: number;
-  value_date: string;
-  legs: PairingLeg[];
-}
-
-export interface AccountTransaction {
-  idempotency_hash: string;
-  value_date: string;
-  amount_paise: string;
-  narration: string;
-  transaction_type: string;
-  account_ref: string;
-}
+export type SyncHistoryEntry = components["schemas"]["SyncHistoryEntry"];
+export type StatementBar = components["schemas"]["StatementBar"];
+export type AccountOverlap = components["schemas"]["AccountOverlap"];
+export type OverlapMapResponse = components["schemas"]["OverlapMapResponse"];
+export type DedupLedgerEntry = components["schemas"]["DedupLedgerEntry"];
+export type DedupLedgerResponse = components["schemas"]["DedupLedgerResponse"];
+export type PairingLeg = components["schemas"]["PairingLeg"];
+export type ResolverPairing = components["schemas"]["ResolverPairing"];
+export type AccountTransaction = components["schemas"]["AccountTransaction"];
 
 // ── Pure functions ────────────────────────────────────────────────────────────
 

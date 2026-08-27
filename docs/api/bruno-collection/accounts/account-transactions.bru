@@ -1,0 +1,20 @@
+meta {
+  name: Account Transactions
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/accounts/:account_ref/transactions
+  body: none
+  auth: none
+}
+
+params:query {
+  ~from: 
+  ~to: 
+}
+
+docs {
+  List transactions for an account, filtered by value_date range.
+}

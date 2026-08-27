@@ -1,0 +1,20 @@
+meta {
+  name: Dedup Ledger
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/audit/dedup-ledger
+  body: none
+  auth: none
+}
+
+params:query {
+  ~from: 
+  ~to: 
+}
+
+docs {
+  Return the seen-vs-counted dedup ledger. Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD filter.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Upload Statement
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/statements/upload
+  body: none
+  auth: none
+}
+
+params:query {
+   account_ref: 
+  ~password: 
+}
+
+docs {
+  Parse a PDF statement and return a dry-run preview. Writes nothing to the database.
+}

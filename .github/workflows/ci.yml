@@ -186,6 +186,26 @@ jobs:
           path: .coverage-baseline.json
           key: coverage-baseline-${{ github.sha }}
 
+  # ── Frontend type drift check ────────────────────────────────
+  frontend-type-drift:
+    name: "Frontend · Type drift check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Regenerate types from committed spec
+        run: npx openapi-typescript ../docs/api/openapi.json -o lib/api-types.gen.ts
+        working-directory: web
+      - name: Diff against committed api-types.ts
+        run: diff lib/api-types.ts lib/api-types.gen.ts || (echo "FAIL: web/lib/api-types.ts is out of date. Run: npx openapi-typescript ../docs/api/openapi.json -o web/lib/api-types.ts" && exit 1)
+        working-directory: web
+
   # ── G4b: Frontend tests ─────────────────────────────────────
   frontend-tests:
     name: "G4b · Frontend tests (vitest)"
@@ -222,6 +242,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── OpenAPI drift check ──────────────────────────────────────────────────────
+  openapi-drift:
+    name: "OpenAPI · Drift check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --no-cache-dir -e "backend/[dev]"
+      - run: python scripts/check-openapi-drift.py
+        env:
+          PYTHONPATH: backend
+
   # ── G14: Real-data guard ─────────────────────────────────────────────────────
   real-data-guard:
     name: "G14 · Real-data guard"
@@ -254,11 +288,13 @@ jobs:
       - lint
       - typecheck
       - unit-tests
+      - frontend-type-drift
       - frontend-tests
       - property-tests
       - golden-dataset
       - integration-tests
       - coverage
+      - openapi-drift
       - real-data-guard
       - migration-check
       - secret-scan
@@ -335,11 +371,13 @@ jobs:
       - lint
       - typecheck
       - unit-tests
+      - frontend-type-drift
       - frontend-tests
       - property-tests
       - golden-dataset
       - integration-tests
       - coverage
+      - openapi-drift
       - real-data-guard
       - migration-check
       - secret-scan
