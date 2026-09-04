@@ -4,652 +4,652 @@
  */
 
 export interface paths {
-    "/api/v1/statements/upload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload Statement
-         * @description Parse a PDF statement and return a dry-run preview. Writes nothing to the database.
-         */
-        post: operations["upload_statement_api_v1_statements_upload_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  "/api/v1/statements/upload": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/statements/{session_id}/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm Session
-         * @description Commit a dry-run session to the database.
-         */
-        post: operations["confirm_session_api_v1_statements__session_id__confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Upload Statement
+     * @description Parse a PDF statement and return a dry-run preview. Writes nothing to the database.
+     */
+    post: operations["upload_statement_api_v1_statements_upload_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/statements/{session_id}/confirm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/statements/{session_id}/abandon": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Abandon Session
-         * @description Delete a dry-run session from Redis without writing to the database.
-         */
-        post: operations["abandon_session_api_v1_statements__session_id__abandon_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Confirm Session
+     * @description Commit a dry-run session to the database.
+     */
+    post: operations["confirm_session_api_v1_statements__session_id__confirm_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/statements/{session_id}/abandon": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/audit/sync-history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Sync History
-         * @description List all statement ingestion events for the current user, newest first.
-         */
-        get: operations["sync_history_api_v1_audit_sync_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Abandon Session
+     * @description Delete a dry-run session from Redis without writing to the database.
+     */
+    post: operations["abandon_session_api_v1_statements__session_id__abandon_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/audit/sync-history": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/audit/overlap-map": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Overlap Map
-         * @description Return statements grouped by account with pairwise period overlap detection.
-         */
-        get: operations["overlap_map_api_v1_audit_overlap_map_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Sync History
+     * @description List all statement ingestion events for the current user, newest first.
+     */
+    get: operations["sync_history_api_v1_audit_sync_history_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/audit/overlap-map": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/audit/dedup-ledger": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Dedup Ledger
-         * @description Return the seen-vs-counted dedup ledger. Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD filter.
-         */
-        get: operations["dedup_ledger_api_v1_audit_dedup_ledger_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Overlap Map
+     * @description Return statements grouped by account with pairwise period overlap detection.
+     */
+    get: operations["overlap_map_api_v1_audit_overlap_map_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/audit/dedup-ledger": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/audit/resolver-pairings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Resolver Pairings
-         * @description List all resolver decision events with their matched-pair legs.
-         */
-        get: operations["resolver_pairings_api_v1_audit_resolver_pairings_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Dedup Ledger
+     * @description Return the seen-vs-counted dedup ledger. Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD filter.
+     */
+    get: operations["dedup_ledger_api_v1_audit_dedup_ledger_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/audit/resolver-pairings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/accounts/{account_ref}/transactions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Account Transactions
-         * @description List transactions for an account, filtered by value_date range.
-         */
-        get: operations["account_transactions_api_v1_accounts__account_ref__transactions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Resolver Pairings
+     * @description List all resolver decision events with their matched-pair legs.
+     */
+    get: operations["resolver_pairings_api_v1_audit_resolver_pairings_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/accounts/{account_ref}/transactions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Health */
-        get: operations["health_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Account Transactions
+     * @description List transactions for an account, filtered by value_date range.
+     */
+    get: operations["account_transactions_api_v1_accounts__account_ref__transactions_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/health": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /** Health */
+    get: operations["health_health_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /** AccountOverlap */
-        AccountOverlap: {
-            /** Account Ref */
-            account_ref: string;
-            /** Statements */
-            statements: components["schemas"]["StatementBar"][];
-        };
-        /** AccountTransaction */
-        AccountTransaction: {
-            /** Idempotency Hash */
-            idempotency_hash: string;
-            /**
-             * Value Date
-             * Format: date
-             */
-            value_date: string;
-            /** Amount Paise */
-            amount_paise: string;
-            /** Narration */
-            narration: string;
-            /** Transaction Type */
-            transaction_type: string;
-            /** Account Ref */
-            account_ref: string;
-        };
-        /** Body_upload_statement_api_v1_statements_upload_post */
-        Body_upload_statement_api_v1_statements_upload_post: {
-            /** File */
-            file: string;
-        };
-        /** DedupLedgerEntry */
-        DedupLedgerEntry: {
-            /** Idempotency Hash */
-            idempotency_hash: string;
-            /** Amount Paise */
-            amount_paise: string;
-            /** Value Date */
-            value_date: string;
-            /** Account Ref */
-            account_ref: string;
-            /** Transaction Type */
-            transaction_type: string;
-            /** Is Counted */
-            is_counted: boolean;
-            /** Exclusion Reason */
-            exclusion_reason: string | null;
-            /** Covering Ingestion Event Ids */
-            covering_ingestion_event_ids: string[];
-        };
-        /** DedupLedgerResponse */
-        DedupLedgerResponse: {
-            /** Total Seen */
-            total_seen: number;
-            /** Total Counted */
-            total_counted: number;
-            /** Total Excluded */
-            total_excluded: number;
-            /** Entries */
-            entries: components["schemas"]["DedupLedgerEntry"][];
-        };
-        /** DryRunPreview */
-        DryRunPreview: {
-            /** Session Id */
-            session_id: string;
-            /** Account Ref */
-            account_ref: string;
-            /**
-             * Period Start
-             * Format: date
-             */
-            period_start: string;
-            /**
-             * Period End
-             * Format: date
-             */
-            period_end: string;
-            /** Opening Balance Paise */
-            opening_balance_paise: string;
-            /** Closing Balance Paise */
-            closing_balance_paise: string;
-            /** Balance Check */
-            balance_check: string;
-            /** Transaction Count */
-            transaction_count: number;
-            /** Transactions */
-            transactions: components["schemas"]["TransactionPreview"][];
-            /** Confidence */
-            confidence: number;
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
-        /** HealthResponse */
-        HealthResponse: {
-            /** Status */
-            status: string;
-        };
-        /** OverlapMapResponse */
-        OverlapMapResponse: {
-            /** Accounts */
-            accounts: components["schemas"]["AccountOverlap"][];
-        };
-        /** PairingLeg */
-        PairingLeg: {
-            /** Role */
-            role: string;
-            /** Idempotency Hash */
-            idempotency_hash: string;
-            /** Account Ref */
-            account_ref: string;
-            /** Period Start */
-            period_start: string | null;
-            /** Period End */
-            period_end: string | null;
-        };
-        /** ResolverPairing */
-        ResolverPairing: {
-            /** Event Id */
-            event_id: string;
-            /** Event Type */
-            event_type: string;
-            /** Matched By */
-            matched_by: string;
-            /** Confidence */
-            confidence: number;
-            /**
-             * Value Date
-             * Format: date
-             */
-            value_date: string;
-            /** Legs */
-            legs: components["schemas"]["PairingLeg"][];
-        };
-        /** SessionActionResponse */
-        SessionActionResponse: {
-            /** Status */
-            status: string;
-            /** Session Id */
-            session_id: string;
-        };
-        /** StatementBar */
-        StatementBar: {
-            /** Event Id */
-            event_id: string;
-            /** Period Start */
-            period_start: string | null;
-            /** Period End */
-            period_end: string | null;
-            /** Overlaps With */
-            overlaps_with: string[];
-        };
-        /** SyncHistoryEntry */
-        SyncHistoryEntry: {
-            /** Event Id */
-            event_id: string;
-            /** Account Ref */
-            account_ref: string;
-            /** Bank */
-            bank: string;
-            /** Period Start */
-            period_start: string | null;
-            /** Period End */
-            period_end: string | null;
-            /** Status */
-            status: string;
-            /** Records Added */
-            records_added: number;
-            /** Records Skipped */
-            records_skipped: number;
-            /** Balance Check */
-            balance_check: string | null;
-            /** Confidence */
-            confidence: number | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Is Stalled */
-            is_stalled: boolean;
-        };
-        /** TransactionPreview */
-        TransactionPreview: {
-            /** Account Ref */
-            account_ref: string;
-            /**
-             * Value Date
-             * Format: date
-             */
-            value_date: string;
-            /** Amount Paise */
-            amount_paise: string;
-            /** Narration */
-            narration: string;
-            /** Idempotency Hash */
-            idempotency_hash: string;
-            /** Occurrence Index */
-            occurrence_index: number;
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
-        };
+  schemas: {
+    /** AccountOverlap */
+    AccountOverlap: {
+      /** Account Ref */
+      account_ref: string;
+      /** Statements */
+      statements: components["schemas"]["StatementBar"][];
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /** AccountTransaction */
+    AccountTransaction: {
+      /** Idempotency Hash */
+      idempotency_hash: string;
+      /**
+       * Value Date
+       * Format: date
+       */
+      value_date: string;
+      /** Amount Paise */
+      amount_paise: string;
+      /** Narration */
+      narration: string;
+      /** Transaction Type */
+      transaction_type: string;
+      /** Account Ref */
+      account_ref: string;
+    };
+    /** Body_upload_statement_api_v1_statements_upload_post */
+    Body_upload_statement_api_v1_statements_upload_post: {
+      /** File */
+      file: string;
+    };
+    /** DedupLedgerEntry */
+    DedupLedgerEntry: {
+      /** Idempotency Hash */
+      idempotency_hash: string;
+      /** Amount Paise */
+      amount_paise: string;
+      /** Value Date */
+      value_date: string;
+      /** Account Ref */
+      account_ref: string;
+      /** Transaction Type */
+      transaction_type: string;
+      /** Is Counted */
+      is_counted: boolean;
+      /** Exclusion Reason */
+      exclusion_reason: string | null;
+      /** Covering Ingestion Event Ids */
+      covering_ingestion_event_ids: string[];
+    };
+    /** DedupLedgerResponse */
+    DedupLedgerResponse: {
+      /** Total Seen */
+      total_seen: number;
+      /** Total Counted */
+      total_counted: number;
+      /** Total Excluded */
+      total_excluded: number;
+      /** Entries */
+      entries: components["schemas"]["DedupLedgerEntry"][];
+    };
+    /** DryRunPreview */
+    DryRunPreview: {
+      /** Session Id */
+      session_id: string;
+      /** Account Ref */
+      account_ref: string;
+      /**
+       * Period Start
+       * Format: date
+       */
+      period_start: string;
+      /**
+       * Period End
+       * Format: date
+       */
+      period_end: string;
+      /** Opening Balance Paise */
+      opening_balance_paise: string;
+      /** Closing Balance Paise */
+      closing_balance_paise: string;
+      /** Balance Check */
+      balance_check: string;
+      /** Transaction Count */
+      transaction_count: number;
+      /** Transactions */
+      transactions: components["schemas"]["TransactionPreview"][];
+      /** Confidence */
+      confidence: number;
+    };
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components["schemas"]["ValidationError"][];
+    };
+    /** HealthResponse */
+    HealthResponse: {
+      /** Status */
+      status: string;
+    };
+    /** OverlapMapResponse */
+    OverlapMapResponse: {
+      /** Accounts */
+      accounts: components["schemas"]["AccountOverlap"][];
+    };
+    /** PairingLeg */
+    PairingLeg: {
+      /** Role */
+      role: string;
+      /** Idempotency Hash */
+      idempotency_hash: string;
+      /** Account Ref */
+      account_ref: string;
+      /** Period Start */
+      period_start: string | null;
+      /** Period End */
+      period_end: string | null;
+    };
+    /** ResolverPairing */
+    ResolverPairing: {
+      /** Event Id */
+      event_id: string;
+      /** Event Type */
+      event_type: string;
+      /** Matched By */
+      matched_by: string;
+      /** Confidence */
+      confidence: number;
+      /**
+       * Value Date
+       * Format: date
+       */
+      value_date: string;
+      /** Legs */
+      legs: components["schemas"]["PairingLeg"][];
+    };
+    /** SessionActionResponse */
+    SessionActionResponse: {
+      /** Status */
+      status: string;
+      /** Session Id */
+      session_id: string;
+    };
+    /** StatementBar */
+    StatementBar: {
+      /** Event Id */
+      event_id: string;
+      /** Period Start */
+      period_start: string | null;
+      /** Period End */
+      period_end: string | null;
+      /** Overlaps With */
+      overlaps_with: string[];
+    };
+    /** SyncHistoryEntry */
+    SyncHistoryEntry: {
+      /** Event Id */
+      event_id: string;
+      /** Account Ref */
+      account_ref: string;
+      /** Bank */
+      bank: string;
+      /** Period Start */
+      period_start: string | null;
+      /** Period End */
+      period_end: string | null;
+      /** Status */
+      status: string;
+      /** Records Added */
+      records_added: number;
+      /** Records Skipped */
+      records_skipped: number;
+      /** Balance Check */
+      balance_check: string | null;
+      /** Confidence */
+      confidence: number | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Is Stalled */
+      is_stalled: boolean;
+    };
+    /** TransactionPreview */
+    TransactionPreview: {
+      /** Account Ref */
+      account_ref: string;
+      /**
+       * Value Date
+       * Format: date
+       */
+      value_date: string;
+      /** Amount Paise */
+      amount_paise: string;
+      /** Narration */
+      narration: string;
+      /** Idempotency Hash */
+      idempotency_hash: string;
+      /** Occurrence Index */
+      occurrence_index: number;
+    };
+    /** ValidationError */
+    ValidationError: {
+      /** Location */
+      loc: (string | number)[];
+      /** Message */
+      msg: string;
+      /** Error Type */
+      type: string;
+      /** Input */
+      input?: unknown;
+      /** Context */
+      ctx?: Record<string, never>;
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    upload_statement_api_v1_statements_upload_post: {
-        parameters: {
-            query: {
-                account_ref: string;
-                password?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_statement_api_v1_statements_upload_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DryRunPreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  upload_statement_api_v1_statements_upload_post: {
+    parameters: {
+      query: {
+        account_ref: string;
+        password?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    confirm_session_api_v1_statements__session_id__confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "multipart/form-data": components["schemas"]["Body_upload_statement_api_v1_statements_upload_post"];
+      };
     };
-    abandon_session_api_v1_statements__session_id__abandon_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                session_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["DryRunPreview"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    sync_history_api_v1_audit_sync_history_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncHistoryEntry"][];
-                };
-            };
-        };
+  };
+  confirm_session_api_v1_statements__session_id__confirm_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        session_id: string;
+      };
+      cookie?: never;
     };
-    overlap_map_api_v1_audit_overlap_map_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OverlapMapResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["SessionActionResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    dedup_ledger_api_v1_audit_dedup_ledger_get: {
-        parameters: {
-            query?: {
-                from?: string | null;
-                to?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DedupLedgerResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  abandon_session_api_v1_statements__session_id__abandon_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        session_id: string;
+      };
+      cookie?: never;
     };
-    resolver_pairings_api_v1_audit_resolver_pairings_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResolverPairing"][];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["SessionActionResponse"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
     };
-    account_transactions_api_v1_accounts__account_ref__transactions_get: {
-        parameters: {
-            query?: {
-                from?: string | null;
-                to?: string | null;
-            };
-            header?: never;
-            path: {
-                account_ref: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccountTransaction"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  sync_history_api_v1_audit_sync_history_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    health_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HealthResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["SyncHistoryEntry"][];
         };
+      };
     };
+  };
+  overlap_map_api_v1_audit_overlap_map_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["OverlapMapResponse"];
+        };
+      };
+    };
+  };
+  dedup_ledger_api_v1_audit_dedup_ledger_get: {
+    parameters: {
+      query?: {
+        from?: string | null;
+        to?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DedupLedgerResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  resolver_pairings_api_v1_audit_resolver_pairings_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ResolverPairing"][];
+        };
+      };
+    };
+  };
+  account_transactions_api_v1_accounts__account_ref__transactions_get: {
+    parameters: {
+      query?: {
+        from?: string | null;
+        to?: string | null;
+      };
+      header?: never;
+      path: {
+        account_ref: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountTransaction"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  health_health_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HealthResponse"];
+        };
+      };
+    };
+  };
 }
