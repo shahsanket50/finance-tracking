@@ -1,0 +1,1014 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Finance Tracker API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/statements/upload": {
+      "post": {
+        "tags": [
+          "statements"
+        ],
+        "summary": "Upload Statement",
+        "description": "Parse a PDF statement and return a dry-run preview. Writes nothing to the database.",
+        "operationId": "upload_statement_api_v1_statements_upload_post",
+        "parameters": [
+          {
+            "name": "account_ref",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Ref"
+            }
+          },
+          {
+            "name": "password",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Password"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_statement_api_v1_statements_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DryRunPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/statements/{session_id}/confirm": {
+      "post": {
+        "tags": [
+          "statements"
+        ],
+        "summary": "Confirm Session",
+        "description": "Commit a dry-run session to the database.",
+        "operationId": "confirm_session_api_v1_statements__session_id__confirm_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/statements/{session_id}/abandon": {
+      "post": {
+        "tags": [
+          "statements"
+        ],
+        "summary": "Abandon Session",
+        "description": "Delete a dry-run session from Redis without writing to the database.",
+        "operationId": "abandon_session_api_v1_statements__session_id__abandon_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/sync-history": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Sync History",
+        "description": "List all statement ingestion events for the current user, newest first.",
+        "operationId": "sync_history_api_v1_audit_sync_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SyncHistoryEntry"
+                  },
+                  "type": "array",
+                  "title": "Response Sync History Api V1 Audit Sync History Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/overlap-map": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Overlap Map",
+        "description": "Return statements grouped by account with pairwise period overlap detection.",
+        "operationId": "overlap_map_api_v1_audit_overlap_map_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapMapResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/dedup-ledger": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Dedup Ledger",
+        "description": "Return the seen-vs-counted dedup ledger. Optional ?from=YYYY-MM-DD&to=YYYY-MM-DD filter.",
+        "operationId": "dedup_ledger_api_v1_audit_dedup_ledger_get",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DedupLedgerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/resolver-pairings": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "Resolver Pairings",
+        "description": "List all resolver decision events with their matched-pair legs.",
+        "operationId": "resolver_pairings_api_v1_audit_resolver_pairings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResolverPairing"
+                  },
+                  "type": "array",
+                  "title": "Response Resolver Pairings Api V1 Audit Resolver Pairings Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_ref}/transactions": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Account Transactions",
+        "description": "List transactions for an account, filtered by value_date range.",
+        "operationId": "account_transactions_api_v1_accounts__account_ref__transactions_get",
+        "parameters": [
+          {
+            "name": "account_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Ref"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountTransaction"
+                  },
+                  "title": "Response Account Transactions Api V1 Accounts  Account Ref  Transactions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountOverlap": {
+        "properties": {
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/StatementBar"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ref",
+          "statements"
+        ],
+        "title": "AccountOverlap"
+      },
+      "AccountTransaction": {
+        "properties": {
+          "idempotency_hash": {
+            "type": "string",
+            "title": "Idempotency Hash"
+          },
+          "value_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Value Date"
+          },
+          "amount_paise": {
+            "type": "string",
+            "title": "Amount Paise"
+          },
+          "narration": {
+            "type": "string",
+            "title": "Narration"
+          },
+          "transaction_type": {
+            "type": "string",
+            "title": "Transaction Type"
+          },
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_hash",
+          "value_date",
+          "amount_paise",
+          "narration",
+          "transaction_type",
+          "account_ref"
+        ],
+        "title": "AccountTransaction"
+      },
+      "Body_upload_statement_api_v1_statements_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_statement_api_v1_statements_upload_post"
+      },
+      "DedupLedgerEntry": {
+        "properties": {
+          "idempotency_hash": {
+            "type": "string",
+            "title": "Idempotency Hash"
+          },
+          "amount_paise": {
+            "type": "string",
+            "title": "Amount Paise"
+          },
+          "value_date": {
+            "type": "string",
+            "title": "Value Date"
+          },
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "transaction_type": {
+            "type": "string",
+            "title": "Transaction Type"
+          },
+          "is_counted": {
+            "type": "boolean",
+            "title": "Is Counted"
+          },
+          "exclusion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exclusion Reason"
+          },
+          "covering_ingestion_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Covering Ingestion Event Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idempotency_hash",
+          "amount_paise",
+          "value_date",
+          "account_ref",
+          "transaction_type",
+          "is_counted",
+          "exclusion_reason",
+          "covering_ingestion_event_ids"
+        ],
+        "title": "DedupLedgerEntry"
+      },
+      "DedupLedgerResponse": {
+        "properties": {
+          "total_seen": {
+            "type": "integer",
+            "title": "Total Seen"
+          },
+          "total_counted": {
+            "type": "integer",
+            "title": "Total Counted"
+          },
+          "total_excluded": {
+            "type": "integer",
+            "title": "Total Excluded"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/DedupLedgerEntry"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_seen",
+          "total_counted",
+          "total_excluded",
+          "entries"
+        ],
+        "title": "DedupLedgerResponse"
+      },
+      "DryRunPreview": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "period_start": {
+            "type": "string",
+            "format": "date",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "format": "date",
+            "title": "Period End"
+          },
+          "opening_balance_paise": {
+            "type": "string",
+            "title": "Opening Balance Paise"
+          },
+          "closing_balance_paise": {
+            "type": "string",
+            "title": "Closing Balance Paise"
+          },
+          "balance_check": {
+            "type": "string",
+            "title": "Balance Check"
+          },
+          "transaction_count": {
+            "type": "integer",
+            "title": "Transaction Count"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionPreview"
+            },
+            "type": "array",
+            "title": "Transactions"
+          },
+          "confidence": {
+            "type": "integer",
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "account_ref",
+          "period_start",
+          "period_end",
+          "opening_balance_paise",
+          "closing_balance_paise",
+          "balance_check",
+          "transaction_count",
+          "transactions",
+          "confidence"
+        ],
+        "title": "DryRunPreview"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "OverlapMapResponse": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AccountOverlap"
+            },
+            "type": "array",
+            "title": "Accounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts"
+        ],
+        "title": "OverlapMapResponse"
+      },
+      "PairingLeg": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "idempotency_hash": {
+            "type": "string",
+            "title": "Idempotency Hash"
+          },
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "idempotency_hash",
+          "account_ref",
+          "period_start",
+          "period_end"
+        ],
+        "title": "PairingLeg"
+      },
+      "ResolverPairing": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "matched_by": {
+            "type": "string",
+            "title": "Matched By"
+          },
+          "confidence": {
+            "type": "integer",
+            "title": "Confidence"
+          },
+          "value_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Value Date"
+          },
+          "legs": {
+            "items": {
+              "$ref": "#/components/schemas/PairingLeg"
+            },
+            "type": "array",
+            "title": "Legs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "event_type",
+          "matched_by",
+          "confidence",
+          "value_date",
+          "legs"
+        ],
+        "title": "ResolverPairing"
+      },
+      "SessionActionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "session_id"
+        ],
+        "title": "SessionActionResponse"
+      },
+      "StatementBar": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "overlaps_with": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Overlaps With"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "period_start",
+          "period_end",
+          "overlaps_with"
+        ],
+        "title": "StatementBar"
+      },
+      "SyncHistoryEntry": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "bank": {
+            "type": "string",
+            "title": "Bank"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "records_added": {
+            "type": "integer",
+            "title": "Records Added"
+          },
+          "records_skipped": {
+            "type": "integer",
+            "title": "Records Skipped"
+          },
+          "balance_check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Balance Check"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "is_stalled": {
+            "type": "boolean",
+            "title": "Is Stalled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "account_ref",
+          "bank",
+          "period_start",
+          "period_end",
+          "status",
+          "records_added",
+          "records_skipped",
+          "balance_check",
+          "confidence",
+          "created_at",
+          "is_stalled"
+        ],
+        "title": "SyncHistoryEntry"
+      },
+      "TransactionPreview": {
+        "properties": {
+          "account_ref": {
+            "type": "string",
+            "title": "Account Ref"
+          },
+          "value_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Value Date"
+          },
+          "amount_paise": {
+            "type": "string",
+            "title": "Amount Paise"
+          },
+          "narration": {
+            "type": "string",
+            "title": "Narration"
+          },
+          "idempotency_hash": {
+            "type": "string",
+            "title": "Idempotency Hash"
+          },
+          "occurrence_index": {
+            "type": "integer",
+            "title": "Occurrence Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ref",
+          "value_date",
+          "amount_paise",
+          "narration",
+          "idempotency_hash",
+          "occurrence_index"
+        ],
+        "title": "TransactionPreview"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

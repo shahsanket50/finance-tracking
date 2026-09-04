@@ -1,0 +1,15 @@
+meta {
+  name: Confirm Session
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/statements/:session_id/confirm
+  body: none
+  auth: none
+}
+
+docs {
+  Commit a dry-run session to the database.
+}

@@ -30,7 +30,7 @@ from core.projections.builder import build_projection
 from processing.audit.config import SYNC_STALL_THRESHOLD_DAYS
 from processing.resolver.audit import build_audit_view
 
-router = APIRouter()
+router = APIRouter(tags=["audit"])
 
 _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 

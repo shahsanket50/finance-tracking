@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from core.events.models import TransactionEvent
 from core.events.types import TRANSACTION_INGESTED
 
-router = APIRouter()
+router = APIRouter(tags=["accounts"])
 
 _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 

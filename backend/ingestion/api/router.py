@@ -40,10 +40,15 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-router = APIRouter()
+router = APIRouter(tags=["statements"])
 
 # TODO: replace with real auth dependency
 _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
+class SessionActionResponse(BaseModel):
+    status: str
+    session_id: str
 
 
 class TransactionPreview(BaseModel):
@@ -94,7 +99,7 @@ def _session_to_preview(session: DryRunSession) -> DryRunPreview:
     )
 
 
-@router.post("/upload")
+@router.post("/upload", response_model=DryRunPreview)
 async def upload_statement(
     file: UploadFile,
     account_ref: str,
@@ -115,22 +120,22 @@ async def upload_statement(
     return _session_to_preview(session)
 
 
-@router.post("/{session_id}/confirm")
+@router.post("/{session_id}/confirm", response_model=SessionActionResponse)
 def confirm_session(
     session_id: str,
     db: Session = Depends(get_db),  # noqa: B008
-) -> dict[str, str]:
+) -> SessionActionResponse:
     """Commit a dry-run session to the database."""
     try:
         confirm(session_id, db)
     except SessionExpiredError as exc:
         raise HTTPException(status_code=404, detail="Session not found or expired") from exc
 
-    return {"status": "confirmed", "session_id": session_id}
+    return SessionActionResponse(status="confirmed", session_id=session_id)
 
 
-@router.post("/{session_id}/abandon")
-def abandon_session(session_id: str) -> dict[str, str]:
+@router.post("/{session_id}/abandon", response_model=SessionActionResponse)
+def abandon_session(session_id: str) -> SessionActionResponse:
     """Delete a dry-run session from Redis without writing to the database."""
     abandon(session_id)
-    return {"status": "abandoned", "session_id": session_id}
+    return SessionActionResponse(status="abandoned", session_id=session_id)
