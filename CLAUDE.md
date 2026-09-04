@@ -161,7 +161,7 @@ Store all timestamps in UTC. Perform **all** financial-year, statement-period, a
 When a backend route changes (new field, new endpoint, changed response model):
 
 1. Run `PYTHONPATH=backend python scripts/export-openapi.py` from the repo root.
-2. Run `npx openapi-typescript ../docs/api/openapi.json -o lib/api-types.ts` from `web/`.
+2. Run `npx openapi-typescript ../docs/api/openapi.json -o lib/api-types.ts && npx prettier --write lib/api-types.ts` from `web/`.
 3. Run `python scripts/generate-bruno-collection.py` from the repo root.
 4. Commit all three outputs (`docs/api/openapi.json`, `web/lib/api-types.ts`, `docs/api/bruno-collection/`) alongside the backend change.
 
