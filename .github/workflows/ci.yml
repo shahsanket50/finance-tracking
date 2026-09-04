@@ -200,13 +200,15 @@ jobs:
       - run: npm ci
         working-directory: web
       - name: Regenerate types from committed spec
-        run: npx openapi-typescript ../docs/api/openapi.json -o lib/api-types.gen.ts
         working-directory: web
+        run: |
+          npx openapi-typescript ../docs/api/openapi.json -o lib/api-types.gen.ts
+          npx prettier --write lib/api-types.gen.ts
       - name: Diff against committed api-types.ts
         working-directory: web
         run: |
           if ! diff lib/api-types.ts lib/api-types.gen.ts > /dev/null; then
-            echo "FAIL: web/lib/api-types.ts is out of date. Run: npx openapi-typescript ../docs/api/openapi.json -o web/lib/api-types.ts"
+            echo "FAIL: web/lib/api-types.ts is out of date. Run: npx openapi-typescript ../docs/api/openapi.json -o web/lib/api-types.ts && npx prettier --write web/lib/api-types.ts"
             exit 1
           fi
 
