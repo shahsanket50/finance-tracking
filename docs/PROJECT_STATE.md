@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-25
-**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started)
-**Overall status:** 381 backend tests + 70 frontend tests (451 total). Phase 2.5 CLOSED 2026-08-23. Phase 3 is next.
+**Last updated:** 2026-09-04
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 1 in progress)
+**Overall status:** 381 backend tests + 70 frontend tests (451 total). Phase 2.5 CLOSED 2026-08-23. Phase 3 Wave 1 started 2026-09-04.
 
 ---
 
@@ -292,7 +292,7 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | Risk | Mitigation | Status |
 |---|---|---|
 | Tax logic cannot be owner-verified | Engage a qualified CA to review the rule-set before Phase 4 closes | Open — not yet arranged |
-| Gmail restricted-scope verification with Google is a long lead time | Start the application early; it gates Phase 5, not Phase 1 | Open — not started |
+| Gmail restricted-scope verification with Google is a long lead time | Start the application early; it gates Phase 6, not Phase 1 | Open — not started |
 | AA TSP partner not selected | Blocks AA ingestion only; Gmail path is unblocked | Open — deferred |
 | AI-written code drifting from spec | Golden dataset + invariant tests + spec-traceability rule in `CLAUDE.md` | Mitigated by design |
 | `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. | Open — Phase 4 blocker |
@@ -303,6 +303,96 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | `run_resolver()` re-scans all `TransactionIngested` rows on every call | No watermark — every `confirm()` call decrypts and re-processes every historical transaction for the user. Degrades linearly with statement history. Fix: add a `since_seq` watermark stored per-user (mutable settings table), skip rows already processed. Low-priority until user history is non-trivial. | Open — Phase 3 or 4 |
 | `covering_ingestion_event_ids` is a period-covering approximation, not ground truth | **Explicitly accepted limitation (2026-08-23, Option B decision).** `DedupLedgerEntry.covering_ingestion_event_ids` is computed by matching all `IngestionEvent` rows for an account whose `period_start ≤ value_date ≤ period_end`. False-positive case: Statement B covers the period but its parse never emitted hash X — B still appears in the list. This is rare in practice (requires a partial/truncated re-upload, not a standard full-period re-export). Option A (record per-statement hash sets at confirm time via a join table) is the correct fix; deferred to Phase 3 when the full transaction query layer is built and a `statement_transactions` join table serves multiple purposes. Until then, the field is labeled `covering_ingestion_event_ids` (not `seen_by`) in both API and frontend to make the approximation honest. The raw artifacts are deleted on success — backfill is impossible. | Open — Phase 3 |
 | `_STUB_USER_ID` hardwired in all API routers | `uuid("00000000-0000-0000-0000-000000000001")` appears in `processing/audit/router.py`, `processing/accounts/router.py`, and `ingestion/api/router.py`. Phase 5 auth (Google OAuth, TRD §T13) replaces these with a request-derived user_id. Grep `_STUB_USER_ID` for all 5 sites. | Open — Phase 5 |
+
+---
+
+## Phase 3 — Day-to-Day Layer [IN PROGRESS — started 2026-09-04]
+
+**Goal:** Automated merchant normalization, LLM-assisted categorization, budget CRUD and tracking, nature/running-cost tagging, account CRUD, credit-card dual-model handling, cold-start initialization.
+
+**Merge base:** `6a45bfc` (Merge PR #7 — OpenAPI tooling)
+
+**Wave plan:**
+
+| Wave | Deliverable | Status | Critical module |
+|---|---|---|---|
+| 1 | LLM adapter + merchant normalizer | In progress | YES — independent test authoring required |
+| 2 | Categorization (rules + LLM + per-user learning) | Not started | YES — independent test authoring required |
+| 3 | Nature tagging (rules + LLM + user-confirm) | Not started | YES — independent test authoring required |
+| 4 | Account CRUD + CC dual model | Not started | PARTIAL — CC tests independently authored |
+| 5 | Budget CRUD + utilization derivation | Not started | YES — utilization tests independently authored |
+| 6 | Cold start + adversarial review | Not started | N/A |
+
+**Exit criterion checklist (must be PASS with named test before phase close):**
+
+```
+MERCHANT NORMALIZATION
+[ ] N1  canonical_merchant(narration) → deterministic name every call (property test)
+[ ] N2  normalization result recorded as an event; replay produces identical merchant name
+[ ] N3  LLM fallback only fires when no rule matches (unit test with stub adapter)
+
+LLM ADAPTER
+[ ] A1  provider-agnostic interface: swap model without changing call-site code (unit test)
+[ ] A2  every LLM call returns a Pydantic-validated schema; free-text response raises (unit test)
+[ ] A3  confidence below threshold → review queue, never auto-committed (unit + property test)
+[ ] A4  prompt files are version-controlled; changing a prompt triggers its golden test set (G17)
+[ ] A5  LLM classification result recorded as an event; replayed identically (integration test)
+
+CATEGORIZATION
+[ ] C1  high-confidence categorization auto-commits to ledger (unit test)
+[ ] C2  low-confidence categorization → review queue (unit test with stub adapter)
+[ ] C3  user correction of a category → rule learned for that merchant; future same merchant auto-categorizes correctly (unit test)
+[ ] C4  pipeline ordering enforced: resolver runs before classifier (existing test + new assertion)
+[ ] C5  golden fixture: known narrations → expected categories, zero regressions (G17)
+[ ] C6  user manual category correction is recorded as its own event and takes precedence over the original LLM/rule classification on replay — replaying the log never reverts a correction (unit test; independent test authoring applies)
+
+NATURE TAGS
+[ ] T1  nature tag assigned only to `expense` type transactions, never `income`/`transfer`/`investment`
+[ ] T2  rules-based assignment covers obvious cases (rent → essential-fixed, etc.)
+[ ] T3  marginal cases → LLM + user confirm flow (not auto-committed)
+[ ] T4  running-cost total = essential-fixed + essential-variable (derivation, property test)
+[ ] T5  nature assignment recorded as event; replay identical
+
+BUDGET CRUD & TRACKING
+[ ] B1  create budget: category + monthly limit + FY scope stored correctly
+[ ] B2  budget utilization = sum of non-excluded expenses in category for calendar month (derivation, property test)
+[ ] B3  budget utilization never double-counts a transaction (Invariant 1 preserved; property test)
+[ ] B4  editing a budget does not alter historical utilization
+[ ] B5  deleting a budget does not delete transaction data
+[ ] B6  budget projection exposes: spent, limit, remaining, % used per category per month
+
+ACCOUNT CRUD
+[ ] AC1  create account: name, type (savings/CC/investment), last-4, institution stored
+[ ] AC2  update account metadata; account_id never changes
+[ ] AC3  deactivating an account does not delete its transactions
+[ ] AC4  CC account has associated liability balance field
+
+CREDIT-CARD DUAL MODEL
+[ ] CC1  CC spend transactions categorized and budgeted against the spend account
+[ ] CC2  CC bill payment matched by resolver (existing Invariant 4) and not counted as expense
+[ ] CC3  statement cycle period stored separately; transactions allocated to calendar month of occurrence
+[ ] CC4  outstanding liability balance updated on each statement ingestion
+
+COLD START
+[ ] CS1  upload of 2 FY of statements processes without duplicate hash collisions (Invariant 1)
+[ ] CS2  parse failures during cold start flagged and retried via dry-run harness; no partial ingestion (Invariant 2)
+[ ] CS3  cold start does not block on any single failed statement — failures are isolated
+
+OPENAPI / TYPE CONTRACT
+[ ] OA1  every new route has response_model + tags
+[ ] OA2  openapi.json regenerated and committed with route changes
+[ ] OA3  api-types.ts regenerated + prettier-formatted; drift-check CI passes
+```
+
+**Uncalibrated constants (flag `# UNVERIFIED` in code):**
+- `NORMALIZATION_CONFIDENCE_THRESHOLD` — Wave 1
+- `CATEGORIZATION_CONFIDENCE_THRESHOLD` — Wave 2
+
+**Named gaps deferred from Phase 3:**
+
+| Gap | Deferred to | Reason |
+|---|---|---|
+| Gmail automated fetch pipeline (PRD §2.1 V2, §2.3) | Phase 6 — Gmail & Automation (dedicated phase) | Full OAuth + scheduler + incremental-scan state machine is a distinct subsystem. Phase 5 is Private Beta (deploy/auth/onboarding per TRD §5); folding Gmail automation into it would conflate two independent complexity classes. Gmail restricted-scope verification with Google is a long-lead-time item — start the application early. |
 
 ---
 
