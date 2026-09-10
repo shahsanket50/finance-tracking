@@ -85,7 +85,7 @@ def test_classify_transaction_always_returns_valid_category(merchant: str) -> No
     """For any rule-matching merchant, classify_transaction must return a category
     that is in ALL_CATEGORIES. An implementation that returns an ad-hoc string
     would fail this property across many merchants simultaneously."""
-    result = classify_transaction("hash_prop_cat", merchant, "user_prop_cat")
+    result = classify_transaction("hash_prop_cat", merchant, [])
     assert result.category in ALL_CATEGORIES, (
         f"classify_transaction('{merchant}') returned category '{result.category}' "
         "which is not a member of ALL_CATEGORIES"
@@ -100,7 +100,7 @@ def test_classify_transaction_confidence_is_valid_bps(merchant: str) -> None:
     This guards against implementations that return raw floats (0.0–1.0) or
     percentages (0–100) instead of basis points (0–10000).
     """
-    result = classify_transaction("hash_prop_bps", merchant, "user_prop_bps")
+    result = classify_transaction("hash_prop_bps", merchant, [])
     assert 0 <= result.confidence_bps <= 10000, (
         f"classify_transaction('{merchant}') returned confidence_bps={result.confidence_bps} "
         "which is outside [0, 10000] — likely a scale error (float or percentage instead of bps)"

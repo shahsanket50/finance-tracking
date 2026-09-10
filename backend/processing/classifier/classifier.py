@@ -13,14 +13,6 @@ from processing.classifier.config import CATEGORIZATION_CONFIDENCE_THRESHOLD
 from processing.classifier.events import CategoryCorrectedPayload, TransactionCategorizedPayload
 from processing.classifier.rules import match_rule
 
-# Per-user learned rules: {user_id: {merchant_canonical: category}}
-_user_rules: dict[str, dict[str, Category]] = {}
-
-
-def clear_user_rules() -> None:
-    """Clear all learned per-user rules. For testing only."""
-    _user_rules.clear()
-
 
 class MerchantCategoryOutput(BaseModel):
     """LLM output schema for merchant category classification."""
@@ -28,21 +20,33 @@ class MerchantCategoryOutput(BaseModel):
     category: Category
 
 
+def build_learned_rules(correction_events: list[object]) -> dict[str, Category]:
+    """Derive per-merchant learned rules from a list of CategoryCorrected events.
+
+    This is a DERIVATION — pure function over recorded facts. Safe to recompute.
+    The most recent correction for each merchant wins.
+    """
+    rules: dict[str, Category] = {}
+    for event in correction_events:
+        if isinstance(event, CategoryCorrectedPayload):
+            rules[event.merchant_canonical] = event.category
+    return rules
+
+
 def _classify_transaction(
     transaction_hash: str,
     merchant_canonical: str,
-    user_id: str,
+    correction_events: list[object],
 ) -> TransactionCategorizedPayload:
-    # 1. Per-user learned rules
-    user_merchant_rules = _user_rules.get(user_id, {})
-    if merchant_canonical in user_merchant_rules:
-        learned_category = user_merchant_rules[merchant_canonical]
+    # 1. Per-user learned rules — derived from recorded CategoryCorrected events.
+    learned = build_learned_rules(correction_events)
+    if merchant_canonical in learned:
         return TransactionCategorizedPayload(
             transaction_hash=transaction_hash,
-            category=learned_category,
+            category=learned[merchant_canonical],
             method="rule",
             confidence_bps=9500,
-            rule_id=f"user:{user_id}:{merchant_canonical}",
+            rule_id=f"learned:{merchant_canonical}",
             prompt_version=None,
             merchant_canonical=merchant_canonical,
         )
@@ -61,7 +65,7 @@ def _classify_transaction(
             merchant_canonical=merchant_canonical,
         )
 
-    # 3. LLM fallback — adapter is read from base module so tests can patch it
+    # 3. LLM fallback — adapter read from base module so tests can patch it.
     adapter = _base_module._llm_adapter
     prompt = f"Classify merchant into one of {ALL_CATEGORIES}: {merchant_canonical}"
     result = asyncio.run(adapter.complete(prompt, MerchantCategoryOutput, "classifier-v1"))
@@ -91,10 +95,7 @@ def _record_correction(
     prior_category: Category,
     user_id: str,
 ) -> CategoryCorrectedPayload:
-    if user_id not in _user_rules:
-        _user_rules[user_id] = {}
-    _user_rules[user_id][merchant_canonical] = corrected_category
-
+    """Pure function — returns the event payload. No side effects."""
     return CategoryCorrectedPayload(
         transaction_hash=transaction_hash,
         category=corrected_category,

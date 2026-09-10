@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, get_args, get_origin
+import typing
+from typing import Any, Literal, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -17,8 +18,11 @@ def _make_default_instance(schema: type[BaseModel]) -> BaseModel:
         origin = get_origin(annotation)
         args = get_args(annotation)
 
+        # Literal["a", "b", ...] — pick the first valid value
+        if origin is typing.Literal:
+            kwargs[field_name] = args[0]
         # Optional[X] or Union[X, None] — use None
-        if type(None) in args:
+        elif type(None) in args:
             kwargs[field_name] = None
         elif annotation is str:
             kwargs[field_name] = ""

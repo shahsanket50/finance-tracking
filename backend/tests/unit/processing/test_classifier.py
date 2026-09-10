@@ -17,7 +17,6 @@ import pytest
 from adapters.llm.base import BelowConfidenceThreshold, LLMResult
 from processing.classifier.base import (
     classify_transaction,
-    clear_user_rules,
     record_correction,
     resolve_category,
 )
@@ -27,17 +26,6 @@ from processing.classifier.events import (
     CategoryCorrectedPayload,
     TransactionCategorizedPayload,
 )
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def reset_user_rules() -> None:
-    """Clear per-user learned rules between tests to prevent state leakage."""
-    clear_user_rules()
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -90,7 +78,7 @@ class TestHighConfidenceAutoCommit:
         ("Amazon", "shopping"),
     ])
     def test_result_confidence_meets_threshold(self, merchant: str, expected_category: str) -> None:
-        result = classify_transaction("hash_c1", merchant, "user_c1")
+        result = classify_transaction("hash_c1", merchant, [])
         assert result.confidence_bps >= CATEGORIZATION_CONFIDENCE_THRESHOLD, (
             f"classify_transaction('{merchant}') returned confidence_bps="
             f"{result.confidence_bps} which is below threshold "
@@ -99,14 +87,14 @@ class TestHighConfidenceAutoCommit:
 
     @pytest.mark.parametrize("merchant", ["Swiggy", "Zomato", "Amazon"])
     def test_result_category_is_valid(self, merchant: str) -> None:
-        result = classify_transaction("hash_c1_cat", merchant, "user_c1")
+        result = classify_transaction("hash_c1_cat", merchant, [])
         assert result.category in ALL_CATEGORIES, (
             f"classify_transaction returned category '{result.category}' not in ALL_CATEGORIES"
         )
 
     @pytest.mark.parametrize("merchant", ["Swiggy", "Zomato", "Amazon"])
     def test_result_method_is_rule_or_llm(self, merchant: str) -> None:
-        result = classify_transaction("hash_c1_method", merchant, "user_c1")
+        result = classify_transaction("hash_c1_method", merchant, [])
         assert result.method in ("rule", "llm"), (
             f"classify_transaction returned unexpected method '{result.method}'"
         )
@@ -117,7 +105,7 @@ class TestHighConfidenceAutoCommit:
         ("Amazon", "shopping"),
     ])
     def test_result_type(self, merchant: str, expected_category: str) -> None:
-        result = classify_transaction("hash_c1_type", merchant, "user_c1")
+        result = classify_transaction("hash_c1_type", merchant, [])
         assert isinstance(result, TransactionCategorizedPayload)
 
 
@@ -161,7 +149,7 @@ class TestLowConfidenceRaisesException:
                     )
 
                 mock_adapter.complete = fake_complete
-                classify_transaction("hash_c2", "UnknownGarbage12345XYZ", "user_c2")
+                classify_transaction("hash_c2", "UnknownGarbage12345XYZ", [])
 
         exc = exc_info.value
         assert hasattr(exc, "confidence_bps"), "BelowConfidenceThreshold must carry confidence_bps"
@@ -234,6 +222,58 @@ class TestRecordCorrectionPayload:
         )
         assert result.corrected_by == "user_001"
 
+    def test_learned_rule_applied_when_correction_event_passed(self) -> None:
+        """C3 — event-log-driven learning: if a CategoryCorrected event is in the
+        correction_events list, classify_transaction must use it as the learned rule.
+
+        This is the key invariant: per-user learning works by passing recorded
+        CategoryCorrected events to classify_transaction, NOT via side-effectful
+        in-memory state. This test would fail against an implementation that
+        discards the correction_events list and relies on a mutable dict instead.
+        """
+        # Record a correction for "UnknownCafe" → "food_dining"
+        correction = record_correction(
+            transaction_hash="hash_c3f_original",
+            merchant_canonical="UnknownCafe",
+            corrected_category="food_dining",
+            prior_category="other",
+            user_id="user_learn",
+        )
+        # Now classify a NEW transaction for the same merchant, passing the correction event.
+        # A correct implementation derives the learned rule from correction_events.
+        result = classify_transaction(
+            "hash_c3f_new", "UnknownCafe", [correction]
+        )
+        assert result.category == "food_dining", (
+            f"classify_transaction returned '{result.category}' for 'UnknownCafe' after "
+            "a correction event was passed — learned rule from event history was not applied."
+        )
+        assert result.method == "rule", (
+            "classify_transaction should use method='rule' for a learned correction, "
+            f"got method='{result.method}'"
+        )
+
+    def test_learned_rule_absent_without_correction_event(self) -> None:
+        """Complement of above: passing no correction events → no learned rule.
+
+        An unknown merchant with no correction history must go to LLM fallback
+        (or global rules), not magically get a category from phantom state.
+        Confirms correction_events=[] means no learned rules, regardless of
+        what prior test runs may have called record_correction() on.
+        """
+        # Unknown merchant, no correction events — should NOT use "food_dining"
+        # as if it learned from a prior test.
+        result = classify_transaction("hash_c3g", "TotallyUnknownXYZ999", [])
+        # Result is valid but must not come from a learned rule (no corrections passed)
+        assert result.method in ("rule", "llm"), "method must be rule or llm"
+        # If method == "rule" and rule_id starts with "learned:", that is a bug —
+        # no learned rules were passed in.
+        if result.method == "rule" and result.rule_id is not None:
+            assert not result.rule_id.startswith("learned:"), (
+                f"classify_transaction used a learned rule (rule_id={result.rule_id!r}) "
+                "despite correction_events=[] — implementation has phantom mutable state."
+            )
+
 
 # ---------------------------------------------------------------------------
 # C4 — classifier signature accepts merchant_canonical, not raw_narration
@@ -261,12 +301,12 @@ class TestClassifierSignatureContract:
         )
 
     def test_parameter_order(self) -> None:
-        """transaction_hash, merchant_canonical, user_id — in that order."""
+        """transaction_hash, merchant_canonical, correction_events — in that order."""
         sig = inspect.signature(classify_transaction)
         params = list(sig.parameters.keys())
-        assert params[:3] == ["transaction_hash", "merchant_canonical", "user_id"], (
+        assert params[:3] == ["transaction_hash", "merchant_canonical", "correction_events"], (
             f"Parameter order is {params!r}, expected "
-            "['transaction_hash', 'merchant_canonical', 'user_id']"
+            "['transaction_hash', 'merchant_canonical', 'correction_events']"
         )
 
 
@@ -321,7 +361,7 @@ class TestPipelineOrderingC4:
         for canonical in excluded_merchant_canonicals:
             # Classifier does NOT refuse — it classifies anything it receives.
             # This assertion documents that the guard must be upstream.
-            result = classify_transaction("excluded_hash", canonical, "user_pipeline")
+            result = classify_transaction("excluded_hash", canonical, [])
             # The result category here is irrelevant — what matters is that a
             # correctly-wired pipeline never produces this call for excluded txns.
             assert result.category in (
@@ -363,7 +403,7 @@ class TestPipelineOrderingC4:
 def test_golden_merchant_to_category(merchant_canonical: str, expected_category: str) -> None:
     """C5 golden fixture: if the rules map a known merchant to a different category,
     this test fails and the deviation is visible before it reaches production."""
-    result = classify_transaction("hash_golden", merchant_canonical, "user_golden")
+    result = classify_transaction("hash_golden", merchant_canonical, [])
     assert result.category == expected_category, (
         f"Golden fixture mismatch for '{merchant_canonical}': "
         f"expected '{expected_category}', got '{result.category}'. "
