@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from pydantic import BaseModel
 
-from adapters.llm.base import BelowConfidenceThreshold
+from adapters.llm.base import BelowConfidenceThreshold, LLMAdapter
 from adapters.llm.stub import StubLLMAdapter
 from processing.normalizer.config import NORMALIZATION_CONFIDENCE_THRESHOLD
 from processing.normalizer.events import MerchantNormalizedPayload
 from processing.normalizer.rules import match_rule
 
-# Module-level adapter — patch this in tests.
+# Module-level adapter — patch this in tests via set_adapter().
 # Defaults to the stub so the module is usable without external configuration.
-_adapter: Any = StubLLMAdapter()
+_adapter: LLMAdapter = StubLLMAdapter()
 
 
-def set_adapter(adapter: Any) -> None:
+def set_adapter(adapter: LLMAdapter) -> None:
     """Replace the module-level LLM adapter. Call before invoking normalize_merchant."""
     global _adapter
     _adapter = adapter

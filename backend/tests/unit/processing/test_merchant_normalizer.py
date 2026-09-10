@@ -92,16 +92,11 @@ class TestN2RecordedDecisionPayload:
         )
 
     def test_payload_is_frozen(self) -> None:
-        """MerchantNormalizedPayload is frozen=True — mutations must raise."""
+        """MerchantNormalizedPayload is frozen=True — normal assignment must raise."""
         result = normalize_merchant("tx_005", SWIGGY_NARRATION)
-        # Pydantic v2 frozen models raise ValidationError; dataclasses raise FrozenInstanceError.
-        # Either is acceptable — the key is that mutation is not silently allowed.
-        raised = False
-        try:
-            object.__setattr__(result, "canonical_name", "tampered")
-        except Exception:  # noqa: BLE001
-            raised = True
-        assert raised, "MerchantNormalizedPayload must be immutable (frozen=True)"
+        # Pydantic v2 frozen models raise ValidationError on normal attribute assignment.
+        with pytest.raises(Exception):  # noqa: B017
+            result.canonical_name = "tampered"  # type: ignore[misc]
 
     def test_rule_match_sets_rule_id_not_prompt_version(self) -> None:
         """A rule-matched result must have rule_id set and prompt_version None."""

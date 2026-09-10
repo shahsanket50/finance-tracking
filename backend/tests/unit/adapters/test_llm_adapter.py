@@ -75,7 +75,7 @@ class TestA1ProviderAgnosticInterface:
     def test_call_site_accepts_any_conforming_implementation(self) -> None:
         """A call site typed to LLMAdapter can receive any conforming implementation."""
 
-        def accepts_adapter(adapter: "LLMAdapter[_SampleOutput]") -> bool:
+        def accepts_adapter(adapter: LLMAdapter[_SampleOutput]) -> bool:
             return isinstance(adapter, LLMAdapter)
 
         assert accepts_adapter(_HighConfidenceStub())
