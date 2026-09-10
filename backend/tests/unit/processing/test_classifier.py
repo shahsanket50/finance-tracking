@@ -17,6 +17,7 @@ import pytest
 from adapters.llm.base import BelowConfidenceThreshold, LLMResult
 from processing.classifier.base import (
     classify_transaction,
+    clear_user_rules,
     record_correction,
     resolve_category,
 )
@@ -26,6 +27,17 @@ from processing.classifier.events import (
     CategoryCorrectedPayload,
     TransactionCategorizedPayload,
 )
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def reset_user_rules() -> None:
+    """Clear per-user learned rules between tests to prevent state leakage."""
+    clear_user_rules()
+
 
 # ---------------------------------------------------------------------------
 # Helpers

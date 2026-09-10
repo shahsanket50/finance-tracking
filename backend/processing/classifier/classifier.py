@@ -17,6 +17,11 @@ from processing.classifier.rules import match_rule
 _user_rules: dict[str, dict[str, Category]] = {}
 
 
+def clear_user_rules() -> None:
+    """Clear all learned per-user rules. For testing only."""
+    _user_rules.clear()
+
+
 class MerchantCategoryOutput(BaseModel):
     """LLM output schema for merchant category classification."""
 

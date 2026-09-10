@@ -13,6 +13,13 @@ from processing.classifier.events import CategoryCorrectedPayload, TransactionCa
 _llm_adapter: LLMAdapter = StubLLMAdapter()
 
 
+def clear_user_rules() -> None:
+    """Clear all learned per-user rules. Call in test teardown to prevent state leakage."""
+    from processing.classifier.classifier import clear_user_rules as _clear
+
+    _clear()
+
+
 def set_adapter(adapter: LLMAdapter) -> None:
     """Replace the module-level LLM adapter. Call before invoking classify_transaction."""
     global _llm_adapter
