@@ -2,8 +2,21 @@
 
 from __future__ import annotations
 
+from adapters.llm.base import LLMAdapter
+from adapters.llm.stub import StubLLMAdapter
 from processing.classifier.categories import Category
 from processing.classifier.events import CategoryCorrectedPayload, TransactionCategorizedPayload
+
+# Module-level LLM adapter — patch this in tests via set_adapter() or mock.patch.
+# Defaults to the stub so the module is usable without external configuration.
+# Tests patch 'processing.classifier.base._llm_adapter' to inject low-confidence stubs.
+_llm_adapter: LLMAdapter = StubLLMAdapter()
+
+
+def set_adapter(adapter: LLMAdapter) -> None:
+    """Replace the module-level LLM adapter. Call before invoking classify_transaction."""
+    global _llm_adapter
+    _llm_adapter = adapter
 
 
 def classify_transaction(
@@ -29,7 +42,9 @@ def classify_transaction(
         BelowConfidenceThreshold: If LLM classification confidence is below threshold.
         RuntimeError: If no adapter is configured and LLM fallback is needed.
     """
-    ...
+    from processing.classifier.classifier import _classify_transaction
+
+    return _classify_transaction(transaction_hash, merchant_canonical, user_id)
 
 
 def record_correction(
@@ -55,7 +70,11 @@ def record_correction(
     Returns:
         CategoryCorrectedPayload ready to be recorded as an event.
     """
-    ...
+    from processing.classifier.classifier import _record_correction
+
+    return _record_correction(
+        transaction_hash, merchant_canonical, corrected_category, prior_category, user_id
+    )
 
 
 def resolve_category(
@@ -85,4 +104,6 @@ def resolve_category(
     Raises:
         ValueError: If no classification event exists in the event history.
     """
-    ...
+    from processing.classifier.classifier import _resolve_category
+
+    return _resolve_category(transaction_hash, user_id, events)
