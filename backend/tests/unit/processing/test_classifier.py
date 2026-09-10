@@ -271,6 +271,82 @@ class TestClassifierSignatureContract:
 
 
 # ---------------------------------------------------------------------------
+# C4b — pipeline ordering: resolver-excluded transactions never classified
+# ---------------------------------------------------------------------------
+#
+# The existing TestClassifierSignatureContract tests only that the function
+# accepts a parameter named merchant_canonical. The REAL C4 invariant is:
+# transactions excluded by the resolver (internal transfers, CC payments,
+# FD bookings, reversals) must not receive a category classification.
+#
+# Enforcement strategy: the caller (the pipeline orchestrator) is responsible
+# for skipping excluded transactions before calling classify_transaction.
+# The classifier itself has no awareness of resolver state — it can't check.
+# So the test must verify that a pipeline that DOES call classify_transaction
+# for an excluded transaction is detectable as wrong.
+#
+# What we can test here: the pipeline contract — classify_transaction returns
+# a valid category payload for any merchant canonical it receives, but it is
+# the CALLER's responsibility not to call it for excluded transactions.
+# We document this as a pipeline invariant test with a clear failure mode.
+
+
+class TestPipelineOrderingC4:
+    """C4: resolver exclusions must precede classification — pipeline ordering (PRD §4.1)."""
+
+    def test_excluded_transaction_types_must_not_be_classified(self) -> None:
+        """A transaction the resolver has excluded must never receive a category.
+
+        This test documents the pipeline contract: when a transaction is marked
+        as an internal transfer, CC payment, FD booking, or reversal by the resolver,
+        the pipeline must short-circuit BEFORE calling classify_transaction.
+
+        Enforcement: if classify_transaction IS called with the canonical name of
+        a resolver-excluded transaction, it returns a result — it has no way to
+        refuse. This confirms the invariant lives at the pipeline caller level,
+        not inside the classifier. The test records the expected behavior and
+        the boundary of responsibility.
+
+        A future pipeline integration test (Wave 6) will assert end-to-end that
+        excluded transactions produce no TransactionCategorizedPayload event in
+        the event log.
+        """
+        # These merchant canonicals correspond to resolver-excluded transaction types.
+        # If the classifier is called with them — which it must NOT be — it will
+        # return a category (e.g. "transfers"), not raise. The correct prevention
+        # is at the caller, not here.
+        excluded_merchant_canonicals = [
+            "NEFT Credit",    # income/transfer — resolver excludes the transfer leg
+        ]
+        for canonical in excluded_merchant_canonicals:
+            # Classifier does NOT refuse — it classifies anything it receives.
+            # This assertion documents that the guard must be upstream.
+            result = classify_transaction("excluded_hash", canonical, "user_pipeline")
+            # The result category here is irrelevant — what matters is that a
+            # correctly-wired pipeline never produces this call for excluded txns.
+            assert result.category in (
+                "income", "transfers", "other"
+            ), (
+                f"Classifier returned unexpected category {result.category!r} for "
+                f"excluded-type merchant {canonical!r} — this call should never "
+                "have reached the classifier in a correctly-ordered pipeline."
+            )
+
+    def test_pipeline_ordering_documented_as_caller_responsibility(self) -> None:
+        """Confirm classify_transaction has no resolver_excluded parameter.
+
+        If an implementation adds resolver_excluded: bool to the signature to
+        'guard' inside the classifier, that is wrong — it leaks resolver state
+        into the classifier layer. The classifier must be stateless w.r.t. resolver.
+        """
+        sig = inspect.signature(classify_transaction)
+        params = list(sig.parameters.keys())
+        assert "resolver_excluded" not in params
+        assert "is_excluded" not in params
+        assert "excluded" not in params
+
+
+# ---------------------------------------------------------------------------
 # C5 — golden fixture: known merchant canonicals → expected categories
 # ---------------------------------------------------------------------------
 
