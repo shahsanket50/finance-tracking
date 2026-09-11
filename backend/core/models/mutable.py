@@ -38,6 +38,9 @@ class Account(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
+    # account_ref links this mutable record to the immutable event log.
+    # Format: "{BANK}_{last4}" e.g. "HDFC_1234". Unique per user.
+    account_ref: Mapped[str | None] = mapped_column(String(128))
     nickname: Mapped[str | None] = mapped_column(String(128))
     account_type: Mapped[str | None] = mapped_column(String(32))
     last4: Mapped[str | None] = mapped_column(String(4))
