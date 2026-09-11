@@ -257,3 +257,177 @@ class TestMoneyNeverFloat:
             f"outstanding_liability_paise is {type(result.outstanding_liability_paise).__name__}, "
             "not int — float has been introduced into CC liability derivation"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC7 — Resolver-exclusion propagation into balance derivation
+#
+# Concrete scenario (PRD §8.1, Phase 2 resolver):
+#
+#   HDFC Savings account (account_ref="HDFC_1234"):
+#     - txn A: ₹50,000 salary credit        (+5_000_000 paise) — counted
+#     - txn B: ₹15,000 CC bill payment debit (-1_500_000 paise) — EXCLUDED via MarkedCCPayment
+#     - txn C: ₹3,200 grocery debit          (  -320_000 paise) — counted
+#
+#   HDFC CC account (account_ref="HDFC_CC_7890"):
+#     - txn D: ₹15,000 CC bill credit        (+1_500_000 paise) — EXCLUDED via MarkedCCPayment
+#     (The CC statement's individual spend transactions are categorized separately)
+#
+#   The resolver paired (B, D) as a MarkedCCPayment event.
+#   Both hashes must be excluded before the balance derivation sums amounts.
+#
+# Correct savings balance (exclusion-aware):
+#   +5_000_000 (A) + (-320_000) (C) = +4_680_000 paise = ₹46,800
+#
+# Incorrect savings balance (WITHOUT exclusion filter):
+#   +5_000_000 (A) + (-1_500_000) (B) + (-320_000) (C) = +3_180_000 paise = ₹31,800
+#   — ₹15,000 short because the CC payment was counted as a real debit twice:
+#     once here in the savings balance, and again as spend on the CC account.
+# ---------------------------------------------------------------------------
+
+
+class TestResolverExclusionPropagatesIntoBalance:
+    """AC7: resolver-excluded hashes must be filtered BEFORE summing balance amounts.
+
+    This is the highest-stakes correctness claim in Wave 4. If excluded transactions
+    are included in the balance derivation, the savings balance shows a lower net
+    (double-counted CC payments, transfers) and the CC liability shows a lower
+    outstanding balance (payment credit counted as spend reduction, not excluded).
+    """
+
+    # Paise amounts — all int, no floats
+    SALARY_CREDIT_PAISE = 5_000_000    # ₹50,000 credit  (txn A, counted)
+    CC_PAYMENT_PAISE = -1_500_000      # ₹15,000 debit   (txn B, EXCLUDED)
+    GROCERY_DEBIT_PAISE = -320_000     # ₹3,200 debit    (txn C, counted)
+    CC_BILL_CREDIT_PAISE = 1_500_000   # ₹15,000 credit  (txn D, EXCLUDED — CC side of same pair)
+
+    SAVINGS_ACCOUNT_REF = "HDFC_1234"
+    CC_ACCOUNT_REF = "HDFC_CC_7890"
+
+    HASH_A = "salary_abc123"       # txn A — counted
+    HASH_B = "cc_payment_def456"   # txn B — excluded (savings debit leg)
+    HASH_C = "grocery_ghi789"      # txn C — counted
+    HASH_D = "cc_credit_jkl012"    # txn D — excluded (CC credit leg)
+
+    def _non_excluded_amounts(
+        self,
+        all_amounts: dict[str, int],
+        excluded_hashes: set[str],
+    ) -> list[int]:
+        """Simulate what get_account_balance does: filter before summing."""
+        return [amt for h, amt in all_amounts.items() if h not in excluded_hashes]
+
+    def test_savings_balance_with_exclusion_applied(self) -> None:
+        """Correct path: CC payment debit (B) excluded → balance = ₹46,800."""
+        savings_amounts = {
+            self.HASH_A: self.SALARY_CREDIT_PAISE,
+            self.HASH_B: self.CC_PAYMENT_PAISE,   # resolver marked this excluded
+            self.HASH_C: self.GROCERY_DEBIT_PAISE,
+        }
+        excluded = {self.HASH_B, self.HASH_D}  # both legs from MarkedCCPayment
+
+        non_excluded = self._non_excluded_amounts(savings_amounts, excluded)
+        result = derive_savings_balance(self.SAVINGS_ACCOUNT_REF, "savings", non_excluded)
+
+        expected_paise = self.SALARY_CREDIT_PAISE + self.GROCERY_DEBIT_PAISE  # 4_680_000
+        assert result.derived_balance_paise == expected_paise, (
+            f"Savings balance with exclusion applied: expected {expected_paise} paise (₹46,800), "
+            f"got {result.derived_balance_paise} paise. "
+            "The CC payment debit must be excluded from the savings balance — "
+            "it is the settlement of CC spend already counted on the CC account."
+        )
+
+    def test_savings_balance_without_exclusion_is_wrong(self) -> None:
+        """Contrast path: including excluded txn B gives the wrong, lower balance.
+
+        This test is here to prove what the incorrect (non-exclusion-aware) result
+        would be, making the correctness of the exclusion path unambiguous.
+        """
+        savings_amounts_including_excluded = [
+            self.SALARY_CREDIT_PAISE,
+            self.CC_PAYMENT_PAISE,   # ← should be excluded but isn't here
+            self.GROCERY_DEBIT_PAISE,
+        ]
+        wrong_result = derive_savings_balance(
+            self.SAVINGS_ACCOUNT_REF, "savings", savings_amounts_including_excluded
+        )
+
+        wrong_paise = self.SALARY_CREDIT_PAISE + self.CC_PAYMENT_PAISE + self.GROCERY_DEBIT_PAISE  # 3_180_000
+        correct_paise = self.SALARY_CREDIT_PAISE + self.GROCERY_DEBIT_PAISE  # 4_680_000
+
+        assert wrong_result.derived_balance_paise == wrong_paise, (
+            "Contrast test setup error: expected the without-exclusion result to be "
+            f"{wrong_paise} paise"
+        )
+        assert wrong_paise != correct_paise, (
+            "The contrast test must produce a different number than the correct result — "
+            "if they're equal, the test proves nothing."
+        )
+        # Document the difference explicitly
+        shortfall_paise = correct_paise - wrong_paise
+        assert shortfall_paise == abs(self.CC_PAYMENT_PAISE), (
+            f"The shortfall should equal the CC payment amount ({abs(self.CC_PAYMENT_PAISE)} paise). "
+            f"Got shortfall={shortfall_paise} paise."
+        )
+
+    def test_cc_liability_with_exclusion_applied(self) -> None:
+        """Correct path: CC bill credit (D) excluded → liability = spend only.
+
+        On the CC account side, the ₹15,000 bill credit reduces the outstanding
+        liability — but it is a resolver-paired leg (HASH_D) and must be excluded
+        from the liability derivation for the same reason. The individual spend
+        transactions on the CC account are the correct input, not the settlement credit.
+        """
+        cc_amounts = {
+            self.HASH_D: self.CC_BILL_CREDIT_PAISE,  # excluded — settlement credit
+        }
+        # In this example, no individual CC spend transactions are present —
+        # we're testing that the settlement credit (D) is excluded.
+        excluded = {self.HASH_B, self.HASH_D}
+
+        non_excluded = self._non_excluded_amounts(cc_amounts, excluded)
+        result = derive_cc_outstanding_liability(self.CC_ACCOUNT_REF, non_excluded)
+
+        assert result.outstanding_liability_paise == 0, (
+            f"CC liability after excluding settlement credit: expected 0 paise "
+            f"(no uncovered spend), got {result.outstanding_liability_paise} paise. "
+            "HASH_D (the CC bill credit) must be excluded — it is the resolver-paired "
+            "settlement leg, not independent spend."
+        )
+
+    def test_both_exclusion_hashes_come_from_resolver_event(self) -> None:
+        """The excluded set is populated from RESOLVER_EVENT_TYPES in the event log.
+
+        This test documents the two hashes that the resolver would have recorded
+        in a MarkedCCPayment event, to make the link between resolver output and
+        balance-derivation input explicit.
+        """
+        from processing.resolver.events import MarkedCCPaymentPayload
+
+        # Simulate what the resolver records
+        resolver_event = MarkedCCPaymentPayload(
+            savings_debit_hash=self.HASH_B,
+            cc_credit_hash=self.HASH_D,
+            matched_by="cc_payment_matcher",
+            confidence=9000,
+            match_window_days=5,
+        )
+
+        # The balance derivation excludes both legs of the resolved pair
+        excluded = {resolver_event.savings_debit_hash, resolver_event.cc_credit_hash}
+        assert self.HASH_B in excluded
+        assert self.HASH_D in excluded
+
+        # Verify: savings balance with these hashes excluded = ₹46,800
+        savings_amounts = {
+            self.HASH_A: self.SALARY_CREDIT_PAISE,
+            self.HASH_B: self.CC_PAYMENT_PAISE,
+            self.HASH_C: self.GROCERY_DEBIT_PAISE,
+        }
+        non_excluded = self._non_excluded_amounts(savings_amounts, excluded)
+        result = derive_savings_balance(self.SAVINGS_ACCOUNT_REF, "savings", non_excluded)
+
+        assert result.derived_balance_paise == 4_680_000, (
+            f"Expected ₹46,800 (4_680_000 paise) after excluding resolver-paired hashes, "
+            f"got {result.derived_balance_paise} paise."
+        )

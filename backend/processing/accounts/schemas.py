@@ -21,6 +21,10 @@ class AccountCreate(BaseModel):
 
 
 class AccountUpdate(BaseModel):
+    # account_ref is intentionally absent — it is set once at creation and is immutable.
+    # Editing it would silently sever every past transaction's link to this account.
+    model_config = {"extra": "forbid"}
+
     nickname: str | None = Field(None, min_length=1, max_length=128)
     account_type: AccountType | None = None
     last4: str | None = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
