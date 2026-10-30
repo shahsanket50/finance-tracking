@@ -7,7 +7,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from processing.classifier.categories import ALL_CATEGORIES
+from processing.classifier.categories import EXPENSE_CATEGORIES
 
 
 class BudgetCreate(BaseModel):
@@ -18,9 +18,12 @@ class BudgetCreate(BaseModel):
 
     @field_validator("category")
     @classmethod
-    def category_must_be_valid(cls, v: str) -> str:
-        if v not in ALL_CATEGORIES:
-            raise ValueError(f"category must be one of {ALL_CATEGORIES}, got {v!r}")
+    def category_must_be_expense(cls, v: str) -> str:
+        """Budgets cap spend, so only expense categories are budgetable (PRD §4.3)."""
+        if v not in EXPENSE_CATEGORIES:
+            raise ValueError(
+                f"category must be an expense category {EXPENSE_CATEGORIES}, got {v!r}"
+            )
         return v
 
     @field_validator("month")

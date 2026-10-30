@@ -475,14 +475,22 @@ class TestResolveCategory:
             f"but returned '{result}'"
         )
 
-    @pytest.mark.xfail(
-        reason="Contract says ValueError on empty list but this is not 100% explicit; "
-        "marking xfail to document the expectation — implementation may differ"
-    )
     def test_empty_event_list_raises_value_error(self) -> None:
         """No events at all → should raise ValueError per contract docstring."""
         with pytest.raises(ValueError):
             resolve_category("hash_empty", "user_001", [])
+
+    def test_other_transactions_events_are_ignored(self) -> None:
+        """resolve_category must only consider events for its own transaction_hash.
+
+        Regression: the original implementation ignored transaction_hash, so a correction
+        on another transaction leaked into this one's category.
+        """
+        own = _make_categorized(transaction_hash="hash_own", category="groceries")
+        other_correction = _make_corrected(transaction_hash="hash_other", category="travel")
+        assert resolve_category("hash_own", "user_001", [own, other_correction]) == "groceries"
+        with pytest.raises(ValueError):
+            resolve_category("hash_missing", "user_001", [own, other_correction])
 
     def test_correction_is_never_reverted_by_replay(self) -> None:
         """Critical invariant C6: once a correction exists, replay must never return

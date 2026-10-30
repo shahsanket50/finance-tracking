@@ -15,6 +15,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from api_errors import (
+    BALANCE_NOT_SUPPORTED,
+    DERIVATION_ERROR_RESPONSES,
+    ApiError,
+    ledger_integrity_error,
+)
 from core.events.store import read_since_seq
 from core.models.mutable import Account
 from db import get_db
@@ -35,6 +41,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 # TODO: replace with real auth dependency in Phase 5
 _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+_BALANCE_ACCOUNT_TYPES = frozenset({"savings", "current", "credit_card"})
 
 
 def _require_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> Account:
@@ -120,7 +127,11 @@ def deactivate_account(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{account_id}/balance", response_model=AccountBalanceResponse)
+@router.get(
+    "/{account_id}/balance",
+    response_model=AccountBalanceResponse,
+    responses=DERIVATION_ERROR_RESPONSES,
+)
 def get_account_balance(
     account_id: uuid.UUID,
     db: Session = Depends(get_db),  # noqa: B008
@@ -141,14 +152,24 @@ def get_account_balance(
             detail="Account has no account_ref — cannot derive balance from event log",
         )
 
-    anchor = load_statement_anchor(db, _STUB_USER_ID, account.account_ref)
-    legs = balance_legs_from_events(read_since_seq(db, _STUB_USER_ID), account.account_ref)
     account_type = account.account_type or "savings"
-
-    if account_type == "credit_card":
-        summary = derive_cc_outstanding_liability(account.account_ref, anchor, legs)
-    else:
-        summary = derive_savings_balance(account.account_ref, account_type, anchor, legs)
+    if account_type not in _BALANCE_ACCOUNT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=ApiError(
+                code=BALANCE_NOT_SUPPORTED,
+                message=f"No balance derivation for account_type={account_type!r}",
+            ).model_dump(),
+        )
+    try:
+        anchor = load_statement_anchor(db, _STUB_USER_ID, account.account_ref)
+        legs = balance_legs_from_events(read_since_seq(db, _STUB_USER_ID), account.account_ref)
+        if account_type == "credit_card":
+            summary = derive_cc_outstanding_liability(account.account_ref, anchor, legs)
+        else:
+            summary = derive_savings_balance(account.account_ref, account_type, anchor, legs)
+    except (ValueError, TypeError) as err:
+        raise ledger_integrity_error(err) from err
 
     return AccountBalanceResponse(
         account_ref=account.account_ref,

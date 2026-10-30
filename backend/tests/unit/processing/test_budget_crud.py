@@ -219,12 +219,20 @@ class TestBudgetCategoryValidation:
         )
         assert resp.status_code == 422
 
-    def test_all_valid_categories_accepted(self) -> None:
-        from processing.classifier.categories import ALL_CATEGORIES
+    def test_all_expense_categories_accepted(self) -> None:
+        """Owner decision 2026-10-30: only expense categories are budgetable (PRD §4.3)."""
+        from processing.classifier.categories import EXPENSE_CATEGORIES
 
-        for cat in ALL_CATEGORIES:
+        for cat in EXPENSE_CATEGORIES:
             body = BudgetCreate(category=cat, month=date(2026, 3, 1), target_paise=100_000)
             assert body.category == cat
+
+    def test_non_expense_categories_rejected(self) -> None:
+        from processing.classifier.categories import NON_EXPENSE_CATEGORIES
+
+        for cat in NON_EXPENSE_CATEGORIES:
+            with pytest.raises(ValidationError):
+                BudgetCreate(category=cat, month=date(2026, 3, 1), target_paise=100_000)
 
 
 # ---------------------------------------------------------------------------

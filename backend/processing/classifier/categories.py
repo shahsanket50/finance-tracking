@@ -41,3 +41,11 @@ ALL_CATEGORIES: tuple[str, ...] = (
     "income",
     "other",
 )
+
+# Categories that hold spend. Income, transfers and investments are flows, not spend: a
+# credit in an expense category is a refund (negative expense), anywhere else it is not
+# spend at all. Single source for budget validation and expense totals (PRD §4.3, §12A).
+NON_EXPENSE_CATEGORIES: frozenset[str] = frozenset({"income", "transfers", "investments"})
+EXPENSE_CATEGORIES: tuple[str, ...] = tuple(
+    c for c in ALL_CATEGORIES if c not in NON_EXPENSE_CATEGORIES
+)

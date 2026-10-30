@@ -110,20 +110,19 @@ def _resolve_category(
     user_id: str,
     events: list[object],
 ) -> Category:
-    if not events:
-        raise ValueError("No classification events for transaction")
+    from processing.classifier.effective import derive_effective_categories
 
-    last_correction: CategoryCorrectedPayload | None = None
-    base_category: Category | None = None
-
-    for event in events:
-        if isinstance(event, CategoryCorrectedPayload):
-            last_correction = event
-        elif isinstance(event, TransactionCategorizedPayload):
-            base_category = event.category
-
-    if last_correction is not None:
-        return last_correction.category
-    if base_category is not None:
-        return base_category
-    raise ValueError("No classification events for transaction")
+    categorized = [
+        e
+        for e in events
+        if isinstance(e, TransactionCategorizedPayload) and e.transaction_hash == transaction_hash
+    ]
+    corrections = [
+        e
+        for e in events
+        if isinstance(e, CategoryCorrectedPayload) and e.transaction_hash == transaction_hash
+    ]
+    effective = derive_effective_categories(categorized, corrections).get(transaction_hash)
+    if effective is None:
+        raise ValueError(f"No classification events for transaction {transaction_hash}")
+    return effective
