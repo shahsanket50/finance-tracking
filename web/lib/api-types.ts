@@ -412,6 +412,17 @@ export interface components {
       /** Last4 */
       last4?: string | null;
     };
+    /** ApiError */
+    ApiError: {
+      /** Code */
+      code: string;
+      /** Message */
+      message: string;
+    };
+    /** ApiErrorResponse */
+    ApiErrorResponse: {
+      detail: components["schemas"]["ApiError"];
+    };
     /** Body_upload_statement_api_v1_statements_upload_post */
     Body_upload_statement_api_v1_statements_upload_post: {
       /** File */
@@ -1061,6 +1072,15 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+      /** @description Recorded ledger data violates a derivation contract; no number returned. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiErrorResponse"];
         };
       };
     };
