@@ -271,6 +271,28 @@ _MATCHER_PRIORITY = (
 
 ---
 
+## Retroactive defect B-7: Wave 4/5 endpoints unreachable in production (unregistered routers, unmigrated column)
+
+**Caught:** 2026-10-30, Phase 3 Wave 5 closeout
+**Phase introduced:** Phase 3 Wave 4 (account CRUD + balance), Wave 5 (budgets)
+**Phase missed at close:** Wave 4 gate
+**Severity:** CRITICAL. Wave 4 stays open until it is closed.
+
+**What shipped broken:**
+1. **Routers never registered.** `processing/accounts/crud_router.py` (`/accounts` CRUD and `/accounts/{id}/balance`) and `processing/budgets/router.py` were never included in `main.py`, so every endpoint was unreachable. The OpenAPI drift check passed because the live app never had the routes.
+2. **Column never migrated.** The Wave 4 ORM added `accounts.account_ref`, but no migration created it, so the first real `POST /accounts` fails with `UndefinedColumn`.
+
+**Why it was masked:** all Wave 4 route tests built their own `FastAPI()` app with a mock DB session, so neither `main.py` nor the migrated schema was ever exercised.
+
+**Fix (Wave 5 closeout):** both routers registered under `/api/v1` (2dd7a77). Migration `004_accounts_account_ref`. Regression guards:
+- `tests/unit/test_route_registration.py`: expected paths are live and in the committed spec, and every `router` module under `processing/`/`ingestion/` is included. Verified to fail against the pre-fix `main.py`.
+- `tests/integration/test_schema_matches_orm.py`: every ORM column exists after `alembic upgrade head`. Verified to fail without migration 004.
+- `tests/integration/test_account_balance_route.py`: end-to-end through the registered routes with real `confirm()` rows.
+
+**Not fixed (carry-forward):** the model comment says `account_ref` is "unique per user", but there is no constraint, so two accounts can share a ref. Decide in Wave 6.
+
+---
+
 ## ADR-020: Budget utilization is signed net spend; refunds net in the month they post
 **Status:** Accepted · **Date:** 2026-10-30
 Net spend for (category, month) is −Σ signed amounts of non-excluded, hash-deduplicated transactions whose effective category is that category. It is unclamped and may be negative. A credit is a refund only if its effective category is an expense category; otherwise it is income. A refund nets in the month it posts. No refund-to-purchase matching and no rollover in V1. Contract: `derive_budget_utilization(transactions, excluded_hashes, category, month)` over typed frozen records (hash, signed amount, value_date, effective category). A thin edge adapter decrypts event rows into records, and effective category (correction → classifier → none) is a separate derivation.

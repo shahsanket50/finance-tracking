@@ -203,6 +203,7 @@ When Form 16 is uploaded:
 - **Refunds net against spend in the month they post.** A refund is a credit (positive amount) whose effective category is an expense category. A refund posting in a later month reduces the later month's net spend, and history is never rewritten.
 - **Net spend can be negative. The derivation never clamps it.** Display clamps: % used floors at 0 for the green/amber/red status, and the UI shows "net refund ₹X".
 - **A credit with no expense category is income** and never reduces a budget, e.g. salary.
+- **Budgets accept expense categories only** (decided 2026-10-30): income, transfers, investments and unknown strings are rejected with 422. There is one shared constant, `EXPENSE_CATEGORIES` in `processing/classifier/categories.py`, used by both budget validation and the §12A expense total.
 - **Out of scope for V1:** refund-to-original-purchase matching, and budget rollover. Rollover would be inflated by negative net spend.
 
 ---
@@ -737,6 +738,12 @@ A row of KPI tiles, each a single number for the selected window with a delta vs
 - **Total expense** — expense only (transfers/investments excluded per transaction-type, §7).
 - **Savings rate** — surplus ÷ income (%).
 - **Net cashflow** — income − expense.
+
+**KPI definitions (decided 2026-10-30, owner; ADR-020/021).** Exact, so every tile reconciles to the bank statement:
+- **Total expense** = −Σ signed amounts of transactions that are (a) not in the resolver's `excluded_hashes`, (b) each counted once by hash, and (c) either carry an expense category (any category except income, transfers, investments) or are uncategorized debits. **A refund, meaning a credit whose effective category is an expense category, is a negative expense**: it reduces Total expense in the window it posts in, and is never counted as income. The tile shows an **"of which refunds ₹X"** detail line, where X = the Σ of those credits. Total expense can fall below zero only if refunds exceed spend; the derivation never clamps it.
+- **Total income** = Σ signed amounts of non-excluded credits that are not refunds (category income, or uncategorized credits). Transfers, CC bill payments, FD bookings and reversals are excluded (§7.1).
+- **Reconciliation identity (asserted in tests):** Σ over expense categories of budget net spend (§4.3) + uncategorized debit spend = Total expense.
+- **Blocked on B-4:** the `transactions_view` totals currently read a `transaction_type` vocabulary that ingestion never writes. No Phase 3.5 UI may bind these tiles until B-4 closes (Phase 3 Wave 6).
 
 ### 12A.4 The seven dashboards
 

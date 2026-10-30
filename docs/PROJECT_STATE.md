@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-10-30
 **Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 closeout in progress; Wave 4 reopened)
-**Overall status:** 583 backend unit+property tests (+ 70 frontend = 653 total) plus 19 independent budget tests (12 failing by design until the fix). Three CRITICAL retroactive defects are open: B-4, B-5, B-6 (see below and DECISIONS.md). Waves 1–3 complete.
+**Overall status:** 648 backend unit+property tests passing + 1 strict xfail (B-4 reconciliation); 62 integration tests passing locally (test_pitr is compose-host-bound). Waves 1–3 complete. Wave 5 closeout implemented (B-5, B-6, B-7 fixed). B-4 is open → Wave 6. Wave 4 stays open until the closeout PR is green in CI.
 
 ---
 
@@ -319,8 +319,8 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | 1 | LLM adapter + merchant normalizer | **Done** | `549cbc6`–`9ef0b99` | 35 new (contract + independent + impl) |
 | 2 | Categorization (rules + LLM + per-user learning) | **Done** | `98d6af4`–`2deb148` | 41 new; _user_rules architectural fix in 2deb148 |
 | 3 | Nature tagging (rules + LLM + running-cost split) | **Done** | `fed95eb`–`8c7656d` | 64 new (61 unit N1–N9 + 3 property running-cost) |
-| 4 | Account CRUD + balance derivation | **Reopened 2026-10-30** (B-5, B-6) | `38302ea`–`23723ac` | 53 new (AC1–AC7 + SC1–SC2). AC7 expectation wrong and its wiring untested (B-6); CC liability sign inverted (B-5) |
-| 5 | Budget CRUD + utilization derivation | **In progress (closeout)** | `e8f614e` (G1–G3 clean), `df76c86` (independent tests) | Independent tests: 12/19 fail vs the current impl (Inv1 double count, Inv4 resolver legs counted) |
+| 4 | Account CRUD + balance derivation | **Reopened 2026-10-30**; fixes landed, closes with the Wave 5 PR | `38302ea`–`23723ac`; fixes `2dd7a77`, `8b812d3` | B-5 (sign), B-6 (AC7 + exclusion wiring) and B-7 (routes unregistered, `account_ref` unmigrated) fixed. AC7 rewritten (`e3f163c`) |
+| 5 | Budget CRUD + utilization derivation | **Implemented; awaiting PR CI + review** | `e8f614e` style · `871f861` docs · `f3b0206` contract · `1f32546` test infra · `e3f163c` independent tests · `2dd7a77` impl · `8b812d3` B-7 · `d4956f5` expense-only budgets + errors | Independent tests 67 + 6 integration green. Test commit `e3f163c` precedes impl `2dd7a77` |
 | 6 | Cold start + pipeline wiring + A4/A5 + adversarial review | Not started | — | — |
 
 **Wave 2 architectural note:** `_user_rules` (mutable module-level dict, TRD §9.2 violation) removed in `2deb148`. `classify_transaction` now accepts `correction_events: list[object]`; learned rules are derived by `build_learned_rules()` from the event log on each call.
@@ -332,8 +332,9 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | # | Where | Defect | Status |
 |---|---|---|---|
 | B-4 | `confirm.py:92` → `reducer.py`, nature tagger | `transaction_type` written as `debit`/`credit`, read as `expense`/`income`. `transactions_view` totals are always 0 on real data, and the tagger rejects every real row. CRITICAL for the Phase 3 gate. | **Open → Wave 6.** Design settled (ADR-021). Reconciliation test is `xfail(strict=True)`. No 3.5 UI on `transactions_view` totals until closed. |
-| B-5 | `accounts/balance.py` | CC liability sign inverted (`max(0, Σ)` assumes spend is positive; parsers write Dr negative) | **Open → fix in Wave 5 closeout** (ADR-022) |
-| B-6 | `accounts/crud_router.py:175-186`, AC7 tests | AC7 expected a balance excluding paired legs (₹46,800 vs the statement's ₹31,800); the exclusion query reads the resolver rows' own hashes and never matches; the AC7 tests never ran the query | **Open → fix in Wave 5 closeout.** Wave 4 stays open until it passes. |
+| B-5 | `accounts/balance.py` | CC liability sign inverted (`max(0, Σ)` assumes spend is positive; parsers write Dr negative) | **Fixed `2dd7a77`** (ADR-022). Tests: `test_account_balance.py` card class, `test_account_balance_route.py::test_card_liability_is_positive_for_purchases_on_real_statement`; five-parser sign contract `1f32546` |
+| B-6 | `accounts/crud_router.py:175-186`, AC7 tests | AC7 expected a balance excluding paired legs (₹46,800 vs the statement's ₹31,800); the exclusion query reads the resolver rows' own hashes and never matches; the AC7 tests never ran the query | **Fixed `2dd7a77`**: query deleted, balances anchored. Tests: AC7 rewritten in `test_account_balance.py` (`e3f163c`); `test_wave5_real_rows.py` CC-payment and transfer scenarios on real `confirm()` rows |
+| B-7 | `main.py`, migrations | Account CRUD/balance and budgets routers never registered (unreachable in prod); `accounts.account_ref` in the ORM but never migrated | **Fixed `2dd7a77` + `8b812d3`** (migration 004). Guards: `test_route_registration.py`, `test_schema_matches_orm.py` (both mutation-verified) |
 
 Cause shared with B-1/B-2: hand-built fixtures that never went through the real parser. Remedy: ADR-024 (real-parser factory + CI guard + five-parser sign contract test).
 
@@ -372,39 +373,53 @@ NATURE TAGS                                                        [Wave 3]
 [x] T2  rules-based assignment covers obvious cases — 12 category→nature mappings in rules.py
 [x] T3  marginal cases → LLM fallback; below NATURE_CONFIDENCE_THRESHOLD → BelowConfidenceThreshold
         (Reading A confirmed: "marginal" = below threshold, per Invariant 6. Not all LLM calls require confirm.)
-[x] T4  running-cost total = essential_fixed + essential_variable (test_nature_running_cost_property.py,
-        3 properties, 200 examples: partition correctness, floor correctness, int-only)
+[ ] T4  running-cost total = essential_fixed + essential_variable
+        → Reopened 2026-10-30 (sweep): `_sum_by_nature` exists only inside
+          test_nature_running_cost_property.py. There is no production running-cost derivation,
+          and none is checked on real (negative) debit amounts. → Wave 6.
 [ ] T5  nature assignment recorded as event; replay identical
         → Deferred to Wave 6 (requires pipeline wiring)
 
-BUDGET CRUD & TRACKING                                             [Wave 5 — in progress]
-[x] B1  create budget: category + monthly limit + FY scope stored correctly
-         POST /budgets → 201; target_paise as str; month first-of-month validated;
-         duplicate → 409; invalid category/paise → 422; GET list + GET by id.
-         27 unit tests (mock-session + TestClient validation). 550 backend tests total.
-[x] B2  budget utilization = sum of non-excluded expenses in category for calendar month
-         derive_budget_utilization(transactions, category, month) pure function.
-         Excludes excluded=True txs; only debits; absolute int result.
-[x] B3  budget utilization never double-counts a transaction (Invariant 1 preserved; property test)
-         2 property tests (200 examples each): exact sum, order-invariance.
+BUDGET CRUD & TRACKING                                             [Wave 5 — closeout implemented]
+[x] B1  create budget: expense category + monthly limit stored; non-expense/unknown → 422
+         POST /api/v1/budgets → 201; duplicate → 409; month must be the 1st; target > 0.
+         test_budget_crud.py (TestBudgetCreate/Duplicate/Category/Month/TargetPaise),
+         test_budget_category_validation.py (EXPENSE_CATEGORIES constant). Commits 2dd7a77, d4956f5.
+[x] B2  utilization = signed net spend of non-excluded rows in (category, calendar month)
+         derive_budget_utilization(transactions, excluded_hashes, category, month) (PRD §4.3).
+         test_budget_utilization_independent.py TestNetSpendBasics, TestRefundsAndIncome
+         (refund same/later month, unclamped negative, salary never reduces a budget). 2dd7a77.
+[x] B3  never double-counts a hash (Invariant 1)
+         TestInvariant1Dedup: same statement twice, two genuine coffees, 2 Hypothesis
+         properties, corrupted duplicate → ValueError. Resolver legs excluded via the
+         projection (Invariant 4): TestInvariant4Exclusion with real matcher output +
+         test_wave5_real_rows.py::test_cc_payment_legs_excluded_from_spend_but_counted_in_balances.
 [x] B4  editing a budget does not alter historical utilization
-         PATCH /budgets/{id} updates target_paise only (BudgetUpdate extra=forbid).
-         Utilization is a derivation — never stored, so patching the limit cannot affect it.
+         PATCH changes target_paise only (BudgetUpdate extra=forbid); utilization is a
+         derivation and is never stored. test_budget_crud.py PATCH tests.
 [x] B5  deleting a budget does not delete transaction data
-         DELETE /budgets/{id} → db.delete(budget) + commit; db.execute() never called.
-         Transaction events in immutable event log are untouched.
-[x] B6  budget projection exposes: spent, limit, remaining, % used per category per month
-         BudgetProjection dataclass: spent_paise, limit_paise, remaining_paise (negative
-         when over-budget), pct_used_bps (floor integer basis points). 583 backend tests total.
+         DELETE removes the budgets row only; test_budget_crud.py delete tests.
+[ ] B6  budget projection exposed over the API (spent, limit, remaining, % used)
+         → Deferred to Wave 6. derive_budget_projection exists (signed spent/remaining,
+           pct_used floors at 0), but categorization decisions aren't persisted yet (T5), so
+           a route would report 0 for every budget. Wave 6 exit criterion.
+
+Independent authoring evidence: contract f3b0206 → tests e3f163c (fresh session, spec +
+contract only) → implementation 2dd7a77. A first independent pass (df76c86) encoded a
+dict-row contract the owner rejected and was superseded by e3f163c.
+Refund netting decision: PRD §4.3 / ADR-020 (2026-10-30).
 
 ACCOUNT CRUD                                                       [Wave 4]
 [x] AC1  create account: name, type (savings/CC/investment), last-4, account_ref stored
-         (POST /accounts → Account ORM; account_ref column added in Wave 4)
+         (POST /api/v1/accounts; route registered and account_ref migrated only in the
+          Wave 5 closeout, B-7 → 8b812d3; test_account_balance_route.py exercises it end-to-end)
 [x] AC2  update account metadata; account_ref excluded from AccountUpdate (extra="forbid")
 [x] AC3  deactivating an account sets sync_status="deactivated"; no transaction data deleted
-[x] AC4  CC account outstanding liability derived separately from savings balance
-         (derive_cc_outstanding_liability() vs derive_savings_balance() — mutually exclusive
-          BalanceSummary fields; AC7 proves resolver exclusions propagate; 4 concrete tests)
+[x] AC4  CC liability derived separately from savings balance, both statement-anchored
+         (ADR-022): balance = closing + later legs, all legs count; liability = −balance,
+         unclamped (negative = credit balance); no anchor → null + anchor_period_end null.
+         B-5/B-6 fixed 2dd7a77. test_account_balance.py, test_account_balance_boundaries.py,
+         test_account_balance_route.py, test_account_balance_route_errors.py.
 
 CREDIT-CARD DUAL MODEL
 [x] CC1  CC spend transactions categorized/budgeted via spend-account path (resolver excludes bill payment leg)
@@ -421,13 +436,19 @@ COLD START                                                         [Wave 6 — n
 [ ] CS3  cold start does not block on any single failed statement — failures are isolated
 
 OPENAPI / TYPE CONTRACT
-[ ] OA1  every new route has response_model + tags
-         → Wave 4 CRUD router has response_model + tags; Wave 1–3 routes pending (no new HTTP routes added)
-[ ] OA2  openapi.json regenerated and committed with route changes
-         → Pending — Wave 4 adds /accounts routes; export not yet run this phase
-[ ] OA3  api-types.ts regenerated + prettier-formatted; drift-check CI passes
-         → Same as OA2
+[x] OA1  every new route has response_model + tags (accounts CRUD, budgets; router-level tags)
+[x] OA2  openapi.json regenerated + committed: 5e35ae9, 1e35932 (check-openapi-drift PASS locally)
+[x] OA3  api-types.ts regenerated + prettier-formatted with the spec (5e35ae9, 1e35932).
+         CI drift jobs to confirm on the PR. test_route_registration.py pins the paths.
 ```
+
+**Wave 6 exit criteria added during the Wave 5 closeout (2026-10-30, owner):**
+- **B-4 closed:** `transaction_type` derived (ADR-021). A real fixture goes through parser → ingest → resolver → classifier → nature tagger with non-zero totals. Σ category net spend + uncategorized = `transactions_view` expense total, with refunds netting as negative expense (PRD §12A) and an "of which refunds" detail. The strict xfail is removed. Tagger tests run on real-parser output.
+- **B6:** budget utilization endpoint over persisted categorization decisions (requires T5).
+- **T4:** a production running-cost derivation, tested on real (negative) amounts.
+- **Resolver:** the transfer matcher requires two different account_refs (independent tests). The reversal matcher stops auto-excluding on amount + date alone (see the Wave 5 review notes).
+- **Carry-forwards from ci/guards/test_row_shapes_baseline.json** (7 files) migrate to the factory.
+- **Open GAPs:** HdfcCcParser claims HDFC savings statements containing "Swiggy"; overdrawn savings balance format; `accounts.account_ref` uniqueness per user; three routers still copy `get_db`.
 
 **Uncalibrated constants (flag `# UNVERIFIED` in code):**
 - `NORMALIZATION_CONFIDENCE_THRESHOLD` — Wave 1
