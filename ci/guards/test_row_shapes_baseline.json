@@ -1,0 +1,92 @@
+{
+  "backend/tests/integration/test_append_only_enforcement.py": {
+    "max": 4,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "core/events — n/a"
+  },
+  "backend/tests/integration/test_audit_endpoints.py": {
+    "max": 13,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6"
+  },
+  "backend/tests/integration/test_confirm_resolver_wiring.py": {
+    "max": 2,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6"
+  },
+  "backend/tests/integration/test_event_append_and_replay.py": {
+    "max": 12,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "core/events — n/a"
+  },
+  "backend/tests/integration/test_idempotent_ingest.py": {
+    "max": 2,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "ingestion — n/a"
+  },
+  "backend/tests/integration/test_replay_determinism.py": {
+    "max": 2,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "core/events — n/a"
+  },
+  "backend/tests/integration/test_resolver_pipeline.py": {
+    "max": 15,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6"
+  },
+  "backend/tests/integration/test_session_expiry.py": {
+    "max": 1,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "ingestion/dryrun — n/a"
+  },
+  "backend/tests/property/ingestion/test_balance_check_invariant.py": {
+    "max": 1,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "ingestion/validators — n/a"
+  },
+  "backend/tests/property/processing/test_invariant4_property.py": {
+    "max": 2,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6"
+  },
+  "backend/tests/unit/core/test_event_store.py": {
+    "max": 2,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "core/events — n/a"
+  },
+  "backend/tests/unit/core/test_generator.py": {
+    "max": 2,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "tests/fixtures — n/a"
+  },
+  "backend/tests/unit/core/test_hash.py": {
+    "max": 4,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "core/hashing — n/a"
+  },
+  "backend/tests/unit/ingestion/test_balance_check.py": {
+    "max": 3,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "ingestion/validators — n/a"
+  },
+  "backend/tests/unit/ingestion/test_confirm.py": {
+    "max": 1,
+    "reason": "Event-store/validator/ingestion-unit test: exercises the primitive itself; no parser in scope.",
+    "owner": "ingestion/dryrun — n/a"
+  },
+  "backend/tests/unit/processing/test_audit_view.py": {
+    "max": 22,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6 (B-4 family)"
+  },
+  "backend/tests/unit/processing/test_nature_tagger.py": {
+    "max": 16,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6 — B-4 exit criterion"
+  },
+  "backend/tests/unit/processing/test_transactions_view_reducer.py": {
+    "max": 2,
+    "reason": "Carry-forward: derivation test on hand-built rows; migrate to tests/factories/real_rows.py.",
+    "owner": "Phase 3 Wave 6 — B-4 exit criterion"
+  }
+}
