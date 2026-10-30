@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-09-23
-**Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 complete)
-**Overall status:** 583 backend unit+property tests (+ 70 frontend = 653 total). Phase 3 Waves 1–5 complete. Wave 6 (pipeline wiring) is next.
+**Last updated:** 2026-10-30
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 closeout in progress; Wave 4 reopened)
+**Overall status:** 583 backend unit+property tests (+ 70 frontend = 653 total) plus 19 independent budget tests (12 failing by design until the fix). Three CRITICAL retroactive defects are open: B-4, B-5, B-6 (see below and DECISIONS.md). Waves 1–3 complete.
 
 ---
 
@@ -319,13 +319,23 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | 1 | LLM adapter + merchant normalizer | **Done** | `549cbc6`–`9ef0b99` | 35 new (contract + independent + impl) |
 | 2 | Categorization (rules + LLM + per-user learning) | **Done** | `98d6af4`–`2deb148` | 41 new; _user_rules architectural fix in 2deb148 |
 | 3 | Nature tagging (rules + LLM + running-cost split) | **Done** | `fed95eb`–`8c7656d` | 64 new (61 unit N1–N9 + 3 property running-cost) |
-| 4 | Account CRUD + balance derivation | **Done** | `38302ea`–`23723ac` | 53 new (AC1–AC7 + SC1–SC2); AC7 resolver-exclusion proof |
-| 5 | Budget CRUD + utilization derivation | Not started | — | — |
+| 4 | Account CRUD + balance derivation | **Reopened 2026-10-30** (B-5, B-6) | `38302ea`–`23723ac` | 53 new (AC1–AC7 + SC1–SC2). AC7 expectation wrong and its wiring untested (B-6); CC liability sign inverted (B-5) |
+| 5 | Budget CRUD + utilization derivation | **In progress (closeout)** | `e8f614e` (G1–G3 clean), `df76c86` (independent tests) | Independent tests: 12/19 fail vs the current impl (Inv1 double count, Inv4 resolver legs counted) |
 | 6 | Cold start + pipeline wiring + A4/A5 + adversarial review | Not started | — | — |
 
 **Wave 2 architectural note:** `_user_rules` (mutable module-level dict, TRD §9.2 violation) removed in `2deb148`. `classify_transaction` now accepts `correction_events: list[object]`; learned rules are derived by `build_learned_rules()` from the event log on each call.
 
 **Wave 4 architectural note:** Two named balance-derivation functions — `derive_savings_balance()` and `derive_cc_outstanding_liability()` — never one formula for both types. `account_ref` is set at creation and excluded from `AccountUpdate` (extra fields forbidden). Resolver-excluded hashes (RESOLVER_EVENT_TYPES) applied before summing, proven in AC7.
+
+**Wave 5 closeout — retroactive defects (2026-10-30):**
+
+| # | Where | Defect | Status |
+|---|---|---|---|
+| B-4 | `confirm.py:92` → `reducer.py`, nature tagger | `transaction_type` written as `debit`/`credit`, read as `expense`/`income`. `transactions_view` totals are always 0 on real data, and the tagger rejects every real row. CRITICAL for the Phase 3 gate. | **Open → Wave 6.** Design settled (ADR-021). Reconciliation test is `xfail(strict=True)`. No 3.5 UI on `transactions_view` totals until closed. |
+| B-5 | `accounts/balance.py` | CC liability sign inverted (`max(0, Σ)` assumes spend is positive; parsers write Dr negative) | **Open → fix in Wave 5 closeout** (ADR-022) |
+| B-6 | `accounts/crud_router.py:175-186`, AC7 tests | AC7 expected a balance excluding paired legs (₹46,800 vs the statement's ₹31,800); the exclusion query reads the resolver rows' own hashes and never matches; the AC7 tests never ran the query | **Open → fix in Wave 5 closeout.** Wave 4 stays open until it passes. |
+
+Cause shared with B-1/B-2: hand-built fixtures that never went through the real parser. Remedy: ADR-024 (real-parser factory + CI guard + five-parser sign contract test).
 
 **A4/A5 note:** Bundled into Wave 6 — both require the event store wired to the processing pipeline, which Wave 6 delivers. Creating prompt files before the pipeline runs them produces untestable fixtures.
 

@@ -368,7 +368,7 @@ This rule belongs in `CLAUDE.md` and must be asserted in review — it is the di
 | **H4** | **Timestamps stored in UTC; all FY, statement-period, and matching-window logic executed in IST.** A property test must assert correct FY assignment for transactions within one hour of the 31 March boundary. |
 | **H6** | **The 2-FY backfill cap (T20) applies to transaction ingestion only.** Cost-basis documents — CAS, purchase deeds, ESOP exercise statements — are ingestible with **no date limit** via explicit upload. Without this, long-term capital gains could never compute correctly for older holdings. |
 | **M3** | **Tax rule-sets stored as versioned data (JSON/YAML)** with a pure evaluator, not as code. Enables CA review without reading source — which matters directly, since the owner cannot self-verify tax logic and external review is a Phase 4 exit condition. |
-| **M4** | **Reversals modelled explicitly** via `reverses_transaction_id`. Both legs excluded from spend totals. |
+| **M4** | **Reversals modelled explicitly** as a `MarkedReversal` resolver event whose payload carries `original_hash` and `reversal_hash` (ADR-013: the `reverses_transaction_id` column was not built, and payload hashes are the link). Both legs are excluded from spend/income totals (not from balances, ADR-022). |
 | **M5** | **Foreign-currency transactions: INR is canonical**, with original currency, original amount, and markup retained as metadata. This is not multi-currency support (still out of scope) — it is simply not discarding data the statement gives us. |
 | **M7** | **Golden tests compare normalized semantic structure, not bytes.** Byte comparison would break every test on any formatting change, training people to bulk-update expectations — which defeats the purpose. |
 | **M8** | **Notification aggregation and throttling.** 40 failed statements produce one message ("6 statements failed to parse"), not 40. Prevents alert storms driving users to disable Tier 1 notifications, which are meant to be mandatory. |
@@ -429,6 +429,7 @@ Every numeric quantity is a scaled integer. **No floats anywhere, at any layer.*
 - Do **not** store an unsigned amount plus a separate direction flag — that invites code paths that forget to apply the sign.
 - UI displays `abs(amount)` with the direction shown visually.
 - `transaction_type` (income/expense/transfer/investment) is orthogonal to sign and does not encode it.
+- **`transaction_type` is DERIVED, not written at ingestion (ADR-021, 2026-10-30).** Ingestion writes only the signed amount. Flow totals and the nature tagger's expense-only gate use: sign < 0, hash not in `excluded_hashes`, and effective category. Any stored vocabulary lives once, in `core/events/types.py`. *Known defect B-4: ingestion currently writes `debit`/`credit` and the reducer and tagger read `expense`/`income`; fix scheduled for Phase 3 Wave 6.*
 
 ## 10.3 NULL versus zero — a correctness rule, not a style choice
 
