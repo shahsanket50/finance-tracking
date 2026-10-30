@@ -272,6 +272,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python ci/guards/real_data_guard.py .
+      - run: python ci/guards/test_row_shapes.py .  # ADR-024: no hand-built rows outside tests/factories
 
   # ── G15: Migration + float check ─────────────────────────────────────────────
   migration-check:

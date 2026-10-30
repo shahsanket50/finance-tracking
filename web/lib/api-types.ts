@@ -164,6 +164,141 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/accounts": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Accounts
+     * @description List all accounts for the authenticated user.
+     */
+    get: operations["list_accounts_api_v1_accounts_get"];
+    put?: never;
+    /**
+     * Create Account
+     * @description Create a new account record. Does not trigger statement ingestion.
+     */
+    post: operations["create_account_api_v1_accounts_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/accounts/{account_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Account
+     * @description Get a single account by ID.
+     */
+    get: operations["get_account_api_v1_accounts__account_id__get"];
+    put?: never;
+    post?: never;
+    /**
+     * Deactivate Account
+     * @description Soft-deactivate an account (sync_status = "deactivated").
+     *
+     *     Hard delete is not permitted — the event log references this account_ref
+     *     and must remain intact for replay (TRD §3.1). Per TRD §9.3 (crypto-shredding),
+     *     deactivation destroys the active encryption key; the account data is recoverable
+     *     by re-issuing a key. UI must say "deactivated," never "deleted."
+     */
+    delete: operations["deactivate_account_api_v1_accounts__account_id__delete"];
+    options?: never;
+    head?: never;
+    /**
+     * Update Account
+     * @description Update account metadata (nickname, type, last4).
+     */
+    patch: operations["update_account_api_v1_accounts__account_id__patch"];
+    trace?: never;
+  };
+  "/api/v1/accounts/{account_id}/balance": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Account Balance
+     * @description Derive the account's balance from its latest statement anchor (PRD §8.1, ADR-022).
+     *
+     *     DERIVATION: latest statement closing balance + every ingested leg dated after that
+     *     statement, resolver-paired legs included (exclusion is for flow totals, not balances).
+     *     savings/current → derived_balance_paise; credit_card → outstanding_liability_paise
+     *     (−balance, unclamped: negative = credit balance). No anchor → the field is null and
+     *     anchor_period_end is null: the balance is unknown, not zero.
+     */
+    get: operations["get_account_balance_api_v1_accounts__account_id__balance_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/budgets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List Budgets
+     * @description List all budgets for the authenticated user.
+     */
+    get: operations["list_budgets_api_v1_budgets_get"];
+    put?: never;
+    /**
+     * Create Budget
+     * @description Create a new budget. Duplicate (user, category, month) → 409.
+     */
+    post: operations["create_budget_api_v1_budgets_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/budgets/{budget_id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Budget
+     * @description Get a single budget by ID.
+     */
+    get: operations["get_budget_api_v1_budgets__budget_id__get"];
+    put?: never;
+    post?: never;
+    /**
+     * Delete Budget
+     * @description Delete a budget row. Transaction data in the event log is never touched.
+     */
+    delete: operations["delete_budget_api_v1_budgets__budget_id__delete"];
+    options?: never;
+    head?: never;
+    /**
+     * Patch Budget
+     * @description Update target_paise on an existing budget. category and month are immutable.
+     */
+    patch: operations["patch_budget_api_v1_budgets__budget_id__patch"];
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -185,12 +320,69 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** AccountBalanceResponse */
+    AccountBalanceResponse: {
+      /** Account Ref */
+      account_ref: string;
+      /** Account Type */
+      account_type: string;
+      /** Derived Balance Paise */
+      derived_balance_paise: string | null;
+      /** Outstanding Liability Paise */
+      outstanding_liability_paise: string | null;
+      /** Anchor Period End */
+      anchor_period_end: string | null;
+    };
+    /** AccountCreate */
+    AccountCreate: {
+      /** Nickname */
+      nickname: string;
+      /**
+       * Account Type
+       * @enum {string}
+       */
+      account_type: "savings" | "current" | "credit_card" | "investment";
+      /** Last4 */
+      last4?: string | null;
+      /** Account Ref */
+      account_ref: string;
+    };
     /** AccountOverlap */
     AccountOverlap: {
       /** Account Ref */
       account_ref: string;
       /** Statements */
       statements: components["schemas"]["StatementBar"][];
+    };
+    /** AccountResponse */
+    AccountResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string;
+      /** Nickname */
+      nickname: string | null;
+      /** Account Type */
+      account_type: string | null;
+      /** Last4 */
+      last4: string | null;
+      /** Account Ref */
+      account_ref: string | null;
+      /** Sync Status */
+      sync_status: string;
+      /** Last Synced At */
+      last_synced_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
     };
     /** AccountTransaction */
     AccountTransaction: {
@@ -210,10 +402,83 @@ export interface components {
       /** Account Ref */
       account_ref: string;
     };
+    /** AccountUpdate */
+    AccountUpdate: {
+      /** Nickname */
+      nickname?: string | null;
+      /** Account Type */
+      account_type?:
+        ("savings" | "current" | "credit_card" | "investment") | null;
+      /** Last4 */
+      last4?: string | null;
+    };
+    /** ApiError */
+    ApiError: {
+      /** Code */
+      code: string;
+      /** Message */
+      message: string;
+    };
+    /** ApiErrorResponse */
+    ApiErrorResponse: {
+      detail: components["schemas"]["ApiError"];
+    };
     /** Body_upload_statement_api_v1_statements_upload_post */
     Body_upload_statement_api_v1_statements_upload_post: {
       /** File */
       file: string;
+    };
+    /** BudgetCreate */
+    BudgetCreate: {
+      /** Category */
+      category: string;
+      /**
+       * Month
+       * Format: date
+       */
+      month: string;
+      /** Target Paise */
+      target_paise: number;
+    };
+    /** BudgetResponse */
+    BudgetResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string;
+      /** Category */
+      category: string;
+      /**
+       * Month
+       * Format: date
+       */
+      month: string;
+      /** Target Paise */
+      target_paise: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /**
+     * BudgetUpdate
+     * @description PATCH body — only target_paise is mutable. category and month are immutable.
+     */
+    BudgetUpdate: {
+      /** Target Paise */
+      target_paise: number;
     };
     /** DedupLedgerEntry */
     DedupLedgerEntry: {
@@ -619,6 +884,342 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AccountTransaction"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_accounts_api_v1_accounts_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountResponse"][];
+        };
+      };
+    };
+  };
+  create_account_api_v1_accounts_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AccountCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_account_api_v1_accounts__account_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        account_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  deactivate_account_api_v1_accounts__account_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        account_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_account_api_v1_accounts__account_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        account_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AccountUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_account_balance_api_v1_accounts__account_id__balance_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        account_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AccountBalanceResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+      /** @description Recorded ledger data violates a derivation contract; no number returned. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ApiErrorResponse"];
+        };
+      };
+    };
+  };
+  list_budgets_api_v1_budgets_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BudgetResponse"][];
+        };
+      };
+    };
+  };
+  create_budget_api_v1_budgets_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BudgetCreate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BudgetResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_budget_api_v1_budgets__budget_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        budget_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BudgetResponse"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_budget_api_v1_budgets__budget_id__delete: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        budget_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  patch_budget_api_v1_budgets__budget_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        budget_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BudgetUpdate"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BudgetResponse"];
         };
       };
       /** @description Validation Error */

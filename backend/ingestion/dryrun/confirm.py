@@ -15,6 +15,7 @@ from core.events.models import IngestionEvent, RawArtifact
 from core.events.store import append_event
 from core.events.types import TRANSACTION_INGESTED
 from ingestion.dryrun.session import DryRunSession, _redis_key, load_session  # noqa: F401
+from ingestion.parsers.base import ParsedStatement, ParsedTransaction
 from ingestion.validators.balance_check import BalanceCheckResult
 from processing.resolver.pipeline import run_resolver
 
@@ -29,6 +30,28 @@ def get_redis_client() -> Any:
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     return redis.from_url(url)  # type: ignore[no-untyped-call]
+
+
+def transaction_event_payload(
+    statement: ParsedStatement, txn: ParsedTransaction
+) -> dict[str, object]:
+    """The exact TransactionIngested payload confirm() writes for one parsed transaction.
+
+    Single source for production and the real-row test factory (ADR-024). The fields must
+    stay in sync with what reducer.py and pipeline.py read from event.payload.
+    transaction_type is written as "debit"/"credit": known defect B-4 (ADR-021).
+    """
+    return {
+        "idempotency_hash": txn.idempotency_hash,
+        "amount_paise": txn.amount_paise,
+        "value_date": str(txn.value_date),
+        "account_ref": txn.account_ref,
+        "account_type": statement.account_type,
+        "narration": txn.narration,
+        "canonical_narration": txn.canonical_narration,
+        "occurrence_index": txn.occurrence_index,
+        "transaction_type": "debit" if txn.amount_paise < 0 else "credit",
+    }
 
 
 def confirm(session_id: str, db_session: Session) -> None:
@@ -56,6 +79,10 @@ def confirm(session_id: str, db_session: Session) -> None:
         "account_ref": statement.account_ref,
         "raw_artifact_content_hash": dry_session.raw_artifact_content_hash,
         "transaction_count": len(statement.transactions),
+        # Statement anchor for balance derivation (ADR-022); signed as parsed, period_end
+        # lives in the IngestionEvent.period_end column.
+        "opening_balance_paise": statement.opening_balance_paise,
+        "closing_balance_paise": statement.closing_balance_paise,
     }
     encrypted_payload, key_id = encrypt_payload(db_session, dry_session.user_id, payload_dict)
 
@@ -89,25 +116,14 @@ def confirm(session_id: str, db_session: Session) -> None:
     # Write TransactionEvents (PASS only)
     if is_pass:
         for txn in statement.transactions:
-            transaction_type = "debit" if txn.amount_paise < 0 else "credit"
+            payload = transaction_event_payload(statement, txn)
+            transaction_type = str(payload["transaction_type"])
             append_event(
                 db_session,
                 dry_session.user_id,
                 TRANSACTION_INGESTED,
                 txn.account_ref,
-                {
-                    # Payload fields needed by reducer + pipeline — must stay in sync
-                    # with what reducer.py reads from event.payload.
-                    "idempotency_hash": txn.idempotency_hash,
-                    "amount_paise": txn.amount_paise,
-                    "value_date": str(txn.value_date),
-                    "account_ref": txn.account_ref,
-                    "account_type": statement.account_type,
-                    "narration": txn.narration,
-                    "canonical_narration": txn.canonical_narration,
-                    "occurrence_index": txn.occurrence_index,
-                    "transaction_type": transaction_type,
-                },
+                payload,
                 value_date=txn.value_date,
                 amount_paise=txn.amount_paise,
                 idempotency_hash=txn.idempotency_hash,

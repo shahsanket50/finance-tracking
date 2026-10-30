@@ -223,6 +223,103 @@ _MATCHER_PRIORITY = (
 
 ---
 
+## Retroactive defect B-4: `transaction_type` written as debit/credit, read as expense/income
+
+**Caught:** 2026-10-30, Phase 3 Wave 5 closeout (while checking the refund decision against the code)
+**Phase introduced:** Phase 2 / 2.5 (`confirm.py` payload expansion in the B-2 fix)
+**Phase missed at close:** Phase 2.5 and Phase 3 Waves 3–4
+**Severity:** CRITICAL for the Phase 3 gate. *(Defect series B-n; not the Phase 0 adversarial-review items that reuse B-4/B-5 in PROJECT_STATE.)*
+
+**What shipped broken:** TRD §10.2 defines `transaction_type` as income/expense/transfer/investment, orthogonal to sign. `ingestion/dryrun/confirm.py:92` writes `"debit"`/`"credit"`, derived from the sign. The resolver reducer (`processing/resolver/reducer.py`) counts only `"expense"`/`"income"`, so the `transactions_view` `expense_paise`/`income_paise` totals are **always 0** on real ingested data, a silently wrong number. The nature tagger raises unless `transaction_type == "expense"`, so it rejects every real row.
+
+**Why it was masked:** Phase 2 integration fixtures and the Wave 3 tagger tests were hand-built with `"expense"` and never went through the real parser. This is the same failure family as B-1/B-2.
+
+**Decision (owner, 2026-10-30), ADR-021:** `transaction_type` is derived, not written at ingestion. The implementation plan is approved in Wave 6.
+**Containment until fixed:** the Wave 5 reconciliation test is `xfail(strict=True)` citing B-4. No Phase 3.5 UI may wire to `transactions_view` totals until B-4 closes.
+**Wave 6 exit criterion:** a fixture file goes through the real parser → ingest → resolver → classifier → nature tagger; totals are non-zero; Σ category net spend + uncategorized = `transactions_view` expense total. Tagger tests also run on real-parser output.
+
+---
+
+## Retroactive defect B-5: credit-card liability sign inverted
+
+**Caught:** 2026-10-30, Phase 3 Wave 5 closeout
+**Phase introduced:** Phase 3 Wave 4 (`processing/accounts/balance.py`)
+**Phase missed at close:** Wave 4 gate
+**Severity:** CRITICAL
+
+**What shipped broken:** The CC parsers (`hdfc_cc.py`, `sbi_cc.py` `_parse_amount`) write Dr (purchase) as negative and Cr (payment) as positive, per TRD §10.2. `derive_cc_outstanding_liability` computed `max(0, Σ amounts)`, assuming spend is positive. On real data a card with ₹15,000 of purchases reports liability 0, and an overpaid card reports its credit surplus as a positive liability.
+
+**Why it was masked:** the Wave 4 tests hand-built CC rows with spend positive, so the parser ↔ derivation sign contract was never exercised.
+
+**Fix (Wave 5 closeout):** outstanding = −(signed anchored balance), unclamped (ADR-022). The sign convention is pinned by a contract test against all five parsers' golden output, and test rows come from the real-parser factory (ADR-024).
+
+---
+
+## Retroactive defect B-6: AC7 expected the wrong balance, and its exclusion wiring was never tested
+
+**Caught:** 2026-10-30, Phase 3 Wave 5 closeout
+**Phase introduced:** Phase 3 Wave 4 (`processing/accounts/crud_router.py`, AC7 tests)
+**Phase missed at close:** Wave 4 gate
+**Severity:** CRITICAL. Wave 4 stays open until it is fixed.
+
+**What shipped broken:**
+1. **Wrong expectation.** AC7 (defined only in SESSION_LOG:153, not in PRD/TRD) asserted that the savings balance excludes resolver-paired legs: ₹50k salary − ₹15k CC payment − ₹3.2k grocery gave "₹46,800 (not ₹31,800)". The statement closes at ₹31,800. Excluding legs from a balance breaks cash truth and Invariant 2.
+2. **Exclusion wiring never matches.** `crud_router.py:175-186` built `excluded_hashes` from the resolver rows' own `idempotency_hash`. That hash is `sha256(event_type:sorted(h1,h2))` (`resolver/pipeline.py:63-66`); leg hashes live only in the encrypted payload. Nothing was ever excluded.
+3. **Untested.** The AC7 tests hand-built `excluded = {HASH_B, HASH_D}` and called the pure derivation, so the query was never exercised.
+
+**Fix (Wave 5 closeout):** balances include all legs, anchored to the statement closing balance (ADR-022). The resolver-row query is deleted. The single exclusion source is the resolver projection's `excluded_hashes`, consumed only by flow totals. AC7 is rewritten against real `append_event` rows: a savings debit matched to a CC credit via `MarkedCCPayment`, plus an own-account transfer whose combined net change is 0.
+
+---
+
+## Retroactive defect B-7: Wave 4/5 endpoints unreachable in production (unregistered routers, unmigrated column)
+
+**Caught:** 2026-10-30, Phase 3 Wave 5 closeout
+**Phase introduced:** Phase 3 Wave 4 (account CRUD + balance), Wave 5 (budgets)
+**Phase missed at close:** Wave 4 gate
+**Severity:** CRITICAL. Wave 4 stays open until it is closed.
+
+**What shipped broken:**
+1. **Routers never registered.** `processing/accounts/crud_router.py` (`/accounts` CRUD and `/accounts/{id}/balance`) and `processing/budgets/router.py` were never included in `main.py`, so every endpoint was unreachable. The OpenAPI drift check passed because the live app never had the routes.
+2. **Column never migrated.** The Wave 4 ORM added `accounts.account_ref`, but no migration created it, so the first real `POST /accounts` fails with `UndefinedColumn`.
+
+**Why it was masked:** all Wave 4 route tests built their own `FastAPI()` app with a mock DB session, so neither `main.py` nor the migrated schema was ever exercised.
+
+**Fix (Wave 5 closeout):** both routers registered under `/api/v1` (2dd7a77). Migration `004_accounts_account_ref`. Regression guards:
+- `tests/unit/test_route_registration.py`: expected paths are live and in the committed spec, and every `router` module under `processing/`/`ingestion/` is included. Verified to fail against the pre-fix `main.py`.
+- `tests/integration/test_schema_matches_orm.py`: every ORM column exists after `alembic upgrade head`. Verified to fail without migration 004.
+- `tests/integration/test_account_balance_route.py`: end-to-end through the registered routes with real `confirm()` rows.
+
+**Not fixed (carry-forward):** the model comment says `account_ref` is "unique per user", but there is no constraint, so two accounts can share a ref. Decide in Wave 6.
+
+---
+
+## ADR-020: Budget utilization is signed net spend; refunds net in the month they post
+**Status:** Accepted · **Date:** 2026-10-30
+Net spend for (category, month) is −Σ signed amounts of non-excluded, hash-deduplicated transactions whose effective category is that category. It is unclamped and may be negative. A credit is a refund only if its effective category is an expense category; otherwise it is income. A refund nets in the month it posts. No refund-to-purchase matching and no rollover in V1. Contract: `derive_budget_utilization(transactions, excluded_hashes, category, month)` over typed frozen records (hash, signed amount, value_date, effective category). A thin edge adapter decrypts event rows into records, and effective category (correction → classifier → none) is a separate derivation.
+**Why:** a clamp or a debits-only rule makes month sums disagree with the bank statement and the dashboard (Phase 3 exit criterion: totals reconcile). Allocating to the posting month keeps history immutable (B4). Typed records follow `build_learned_rules(correction_events)` and keep decryption at the edge. PRD §4.3.
+
+## ADR-021: `transaction_type` is derived, never written at ingestion
+**Status:** Accepted (design); implementation plan approved in Wave 6 · **Date:** 2026-10-30
+Ingestion writes only the signed amount. Flow totals and the nature tagger's expense-only gate use sign < 0, not in `excluded_hashes`, and effective category. Any stored vocabulary lives once, in `core/events/types.py`.
+**Why:** TRD §10.2 says the type is orthogonal to sign. Writing a sign-derived vocabulary at ingestion produced B-4. A derived type also cannot drift from the category decision that actually determines it.
+
+## ADR-022: Resolver exclusion applies to flow totals, not balances; balances are statement-anchored and unclamped
+**Status:** Accepted · **Date:** 2026-10-30
+Exclusion (`excluded_hashes` from the resolver projection, the single source of truth) removes legs from spend, income and budget totals only. A savings balance = latest statement closing balance + Σ signed legs dated after that statement's period end. A card's outstanding liability = −(that signed balance), unclamped, where negative means a credit balance. With no anchor the value is `None`, never 0. Statement opening/closing balances are recorded in the `IngestionEvent` payload at confirm time (additive; older ingests carry no anchor and derive `None`).
+**Why:** balances are cash truth and must reconcile to the statement (Invariant 2); PRD §8.1 says the liability updates on statement arrival and decreases on payment. A clamp hides real overpayments. `None` rather than 0 follows TRD §10.3.
+
+## ADR-023: Resolver rows reference legs by payload hashes
+**Status:** Accepted · **Date:** 2026-10-30
+A resolver event keeps its own deterministic `idempotency_hash = sha256(event_type:sorted(h1,h2))`. The legs it pairs are named by the payload hashes (`debit_hash`/`credit_hash`, `savings_debit_hash`/`cc_credit_hash`, `savings_debit_hash`/`fd_credit_hash`, `original_hash`/`reversal_hash`), read by replay. No new table now. If a "resolvers touching this leg" lookup is ever needed, add a rebuildable `event_refs(event_id, ref_hash, role)` index, deferred until measured together with the `run_resolver` O(n) rescan.
+**Why:** `idempotency_hash` is the stable identity across re-ingestion and rebuilds, while row ids and seq are not. Reusing a leg's hash on the resolver row would collide with `uq_transaction_events_user_idempotency_hash` and violate Invariant 1.
+
+## ADR-024: Test rows come from real parser output
+**Status:** Accepted · **Date:** 2026-10-30
+A shared test factory builds transaction rows from real parser output through `append_event` (real signs, real payload vocabulary). A CI grep guard fails when transaction payloads are constructed by hand in tests outside the factory. The sign convention (debit negative, credit positive) is pinned by a contract test against all five parsers' golden output.
+**Why:** B-1, B-2, B-4, B-5 and B-6 share one cause: hand-built fixtures encoded an assumption the real pipeline didn't satisfy, so CI was green on code that is wrong in production.
+
+---
+
 ## Template
 
 ```markdown

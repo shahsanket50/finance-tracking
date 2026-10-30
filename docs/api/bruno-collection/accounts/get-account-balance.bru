@@ -1,0 +1,21 @@
+meta {
+  name: Get Account Balance
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/accounts/:account_id/balance
+  body: none
+  auth: none
+}
+
+docs {
+  Derive the account's balance from its latest statement anchor (PRD §8.1, ADR-022).
+
+DERIVATION: latest statement closing balance + every ingested leg dated after that
+statement, resolver-paired legs included (exclusion is for flow totals, not balances).
+savings/current → derived_balance_paise; credit_card → outstanding_liability_paise
+(−balance, unclamped: negative = credit balance). No anchor → the field is null and
+anchor_period_end is null: the balance is unknown, not zero.
+}

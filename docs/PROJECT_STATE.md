@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-08-25
-**Current phase:** Phase 3 — Day-to-Day Layer (backend, not started)
-**Overall status:** 381 backend tests + 70 frontend tests (451 total). Phase 2.5 CLOSED 2026-08-23. Phase 3 is next.
+**Last updated:** 2026-10-30
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 closeout in progress; Wave 4 reopened)
+**Overall status:** 648 backend unit+property tests passing + 1 strict xfail (B-4 reconciliation); 62 integration tests passing locally (test_pitr is compose-host-bound). Waves 1–3 complete. Wave 5 closeout implemented (B-5, B-6, B-7 fixed). B-4 is open → Wave 6. Wave 4 stays open until the closeout PR is green in CI.
 
 ---
 
@@ -292,10 +292,10 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | Risk | Mitigation | Status |
 |---|---|---|
 | Tax logic cannot be owner-verified | Engage a qualified CA to review the rule-set before Phase 4 closes | Open — not yet arranged |
-| Gmail restricted-scope verification with Google is a long lead time | Start the application early; it gates Phase 5, not Phase 1 | Open — not started |
+| Gmail restricted-scope verification with Google is a long lead time | Start the application early; it gates Phase 6, not Phase 1 | Open — not started |
 | AA TSP partner not selected | Blocks AA ingestion only; Gmail path is unblocked | Open — deferred |
 | AI-written code drifting from spec | Golden dataset + invariant tests + spec-traceability rule in `CLAUDE.md` | Mitigated by design |
-| `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. | Open — Phase 4 blocker |
+| `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. **Owner: Wave 6 (pipeline wiring).** | Open — Phase 3 Wave 6 / Phase 4 blocker |
 | Phase 0 critical-module tests not independently authored | F-9: Re-authoring complete (2026-08-14). 10 new tests written; 2 Phase 0 bugs confirmed (A-3 float hash, C-2 corrupt snapshot). Both bugs fixed in Phase 2. | **CLOSED** — fixed A-3 + C-2; all independently-authored tests pass |
 | Confidence formula constants not validated against real data | `CONFIDENCE_BASE_BP` (9000), `CONFIDENCE_SAME_DAY_BONUS_BP` (500), `CONFIDENCE_PER_DAY_PENALTY_BP` (200) are working assumptions in `config.py`. The formula produces scores that gate on `RESOLVER_CONFIDENCE_THRESHOLD` (8500), meaning 3-day matches (8400 bp) are rejected. Calibrate before live data ingestion. | Open — Phase 3 |
 | Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
@@ -303,6 +303,162 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | `run_resolver()` re-scans all `TransactionIngested` rows on every call | No watermark — every `confirm()` call decrypts and re-processes every historical transaction for the user. Degrades linearly with statement history. Fix: add a `since_seq` watermark stored per-user (mutable settings table), skip rows already processed. Low-priority until user history is non-trivial. | Open — Phase 3 or 4 |
 | `covering_ingestion_event_ids` is a period-covering approximation, not ground truth | **Explicitly accepted limitation (2026-08-23, Option B decision).** `DedupLedgerEntry.covering_ingestion_event_ids` is computed by matching all `IngestionEvent` rows for an account whose `period_start ≤ value_date ≤ period_end`. False-positive case: Statement B covers the period but its parse never emitted hash X — B still appears in the list. This is rare in practice (requires a partial/truncated re-upload, not a standard full-period re-export). Option A (record per-statement hash sets at confirm time via a join table) is the correct fix; deferred to Phase 3 when the full transaction query layer is built and a `statement_transactions` join table serves multiple purposes. Until then, the field is labeled `covering_ingestion_event_ids` (not `seen_by`) in both API and frontend to make the approximation honest. The raw artifacts are deleted on success — backfill is impossible. | Open — Phase 3 |
 | `_STUB_USER_ID` hardwired in all API routers | `uuid("00000000-0000-0000-0000-000000000001")` appears in `processing/audit/router.py`, `processing/accounts/router.py`, and `ingestion/api/router.py`. Phase 5 auth (Google OAuth, TRD §T13) replaces these with a request-derived user_id. Grep `_STUB_USER_ID` for all 5 sites. | Open — Phase 5 |
+
+---
+
+## Phase 3 — Day-to-Day Layer [IN PROGRESS — started 2026-09-04]
+
+**Goal:** Automated merchant normalization, LLM-assisted categorization, budget CRUD and tracking, nature/running-cost tagging, account CRUD, credit-card dual-model handling, cold-start initialization.
+
+**Merge base:** `6a45bfc` (Merge PR #7 — OpenAPI tooling)
+
+**Wave plan:**
+
+| Wave | Deliverable | Status | Commits | Tests |
+|---|---|---|---|---|
+| 1 | LLM adapter + merchant normalizer | **Done** | `549cbc6`–`9ef0b99` | 35 new (contract + independent + impl) |
+| 2 | Categorization (rules + LLM + per-user learning) | **Done** | `98d6af4`–`2deb148` | 41 new; _user_rules architectural fix in 2deb148 |
+| 3 | Nature tagging (rules + LLM + running-cost split) | **Done** | `fed95eb`–`8c7656d` | 64 new (61 unit N1–N9 + 3 property running-cost) |
+| 4 | Account CRUD + balance derivation | **Reopened 2026-10-30**; fixes landed, closes with the Wave 5 PR | `38302ea`–`23723ac`; fixes `2dd7a77`, `8b812d3` | B-5 (sign), B-6 (AC7 + exclusion wiring) and B-7 (routes unregistered, `account_ref` unmigrated) fixed. AC7 rewritten (`e3f163c`) |
+| 5 | Budget CRUD + utilization derivation | **Implemented; awaiting PR CI + review** | `e8f614e` style · `871f861` docs · `f3b0206` contract · `1f32546` test infra · `e3f163c` independent tests · `2dd7a77` impl · `8b812d3` B-7 · `d4956f5` expense-only budgets + errors | Independent tests 67 + 6 integration green. Test commit `e3f163c` precedes impl `2dd7a77` |
+| 6 | Cold start + pipeline wiring + A4/A5 + adversarial review | Not started | — | — |
+
+**Wave 2 architectural note:** `_user_rules` (mutable module-level dict, TRD §9.2 violation) removed in `2deb148`. `classify_transaction` now accepts `correction_events: list[object]`; learned rules are derived by `build_learned_rules()` from the event log on each call.
+
+**Wave 4 architectural note:** Two named balance-derivation functions — `derive_savings_balance()` and `derive_cc_outstanding_liability()` — never one formula for both types. `account_ref` is set at creation and excluded from `AccountUpdate` (extra fields forbidden). Resolver-excluded hashes (RESOLVER_EVENT_TYPES) applied before summing, proven in AC7.
+
+**Wave 5 closeout — retroactive defects (2026-10-30):**
+
+| # | Where | Defect | Status |
+|---|---|---|---|
+| B-4 | `confirm.py:92` → `reducer.py`, nature tagger | `transaction_type` written as `debit`/`credit`, read as `expense`/`income`. `transactions_view` totals are always 0 on real data, and the tagger rejects every real row. CRITICAL for the Phase 3 gate. | **Open → Wave 6.** Design settled (ADR-021). Reconciliation test is `xfail(strict=True)`. No 3.5 UI on `transactions_view` totals until closed. |
+| B-5 | `accounts/balance.py` | CC liability sign inverted (`max(0, Σ)` assumes spend is positive; parsers write Dr negative) | **Fixed `2dd7a77`** (ADR-022). Tests: `test_account_balance.py` card class, `test_account_balance_route.py::test_card_liability_is_positive_for_purchases_on_real_statement`; five-parser sign contract `1f32546` |
+| B-6 | `accounts/crud_router.py:175-186`, AC7 tests | AC7 expected a balance excluding paired legs (₹46,800 vs the statement's ₹31,800); the exclusion query reads the resolver rows' own hashes and never matches; the AC7 tests never ran the query | **Fixed `2dd7a77`**: query deleted, balances anchored. Tests: AC7 rewritten in `test_account_balance.py` (`e3f163c`); `test_wave5_real_rows.py` CC-payment and transfer scenarios on real `confirm()` rows |
+| B-7 | `main.py`, migrations | Account CRUD/balance and budgets routers never registered (unreachable in prod); `accounts.account_ref` in the ORM but never migrated | **Fixed `2dd7a77` + `8b812d3`** (migration 004). Guards: `test_route_registration.py`, `test_schema_matches_orm.py` (both mutation-verified) |
+
+Cause shared with B-1/B-2: hand-built fixtures that never went through the real parser. Remedy: ADR-024 (real-parser factory + CI guard + five-parser sign contract test).
+
+**A4/A5 note:** Bundled into Wave 6 — both require the event store wired to the processing pipeline, which Wave 6 delivers. Creating prompt files before the pipeline runs them produces untestable fixtures.
+
+**Exit criterion checklist (must be PASS with named test before phase close):**
+
+```
+MERCHANT NORMALIZATION                                             [Wave 1]
+[x] N1  canonical_merchant(narration) → deterministic name every call (property test)
+[x] N2  normalization result recorded as an event; replay produces identical merchant name
+[x] N3  LLM fallback only fires when no rule matches (unit test with stub adapter)
+
+LLM ADAPTER                                                        [Wave 1]
+[x] A1  provider-agnostic interface: swap model without changing call-site code (unit test)
+[x] A2  every LLM call returns a Pydantic-validated schema; free-text response raises (unit test)
+[x] A3  confidence below threshold → review queue, never auto-committed (unit + property test)
+[ ] A4  prompt files are version-controlled; changing a prompt triggers its golden test set (G17)
+        → Deferred to Wave 6 (requires pipeline wiring before prompts are exercised)
+[ ] A5  LLM classification result recorded as an event; replayed identically (integration test)
+        → Deferred to Wave 6
+
+CATEGORIZATION                                                     [Wave 2]
+[x] C1  high-confidence categorization auto-commits to ledger (unit test)
+[x] C2  low-confidence categorization → review queue (unit test with stub adapter)
+[x] C3  user correction of a category → rule learned for that merchant; future same merchant auto-categorizes correctly (unit test)
+[x] C4  pipeline ordering enforced: resolver runs before classifier (TestPipelineOrderingC4)
+[ ] C5  golden fixture: known narrations → expected categories, zero regressions (G17)
+        → Deferred to Wave 6 (requires prompt files + G17 activation)
+[x] C6  user manual category correction recorded as event; replay never reverts correction
+        (test_learned_rule_applied_when_correction_event_passed,
+         test_learned_rule_absent_without_correction_event)
+
+NATURE TAGS                                                        [Wave 3]
+[x] T1  nature tag assigned only to `expense` type transactions (ValueError guard in tag_nature)
+[x] T2  rules-based assignment covers obvious cases — 12 category→nature mappings in rules.py
+[x] T3  marginal cases → LLM fallback; below NATURE_CONFIDENCE_THRESHOLD → BelowConfidenceThreshold
+        (Reading A confirmed: "marginal" = below threshold, per Invariant 6. Not all LLM calls require confirm.)
+[ ] T4  running-cost total = essential_fixed + essential_variable
+        → Reopened 2026-10-30 (sweep): `_sum_by_nature` exists only inside
+          test_nature_running_cost_property.py. There is no production running-cost derivation,
+          and none is checked on real (negative) debit amounts. → Wave 6.
+[ ] T5  nature assignment recorded as event; replay identical
+        → Deferred to Wave 6 (requires pipeline wiring)
+
+BUDGET CRUD & TRACKING                                             [Wave 5 — closeout implemented]
+[x] B1  create budget: expense category + monthly limit stored; non-expense/unknown → 422
+         POST /api/v1/budgets → 201; duplicate → 409; month must be the 1st; target > 0.
+         test_budget_crud.py (TestBudgetCreate/Duplicate/Category/Month/TargetPaise),
+         test_budget_category_validation.py (EXPENSE_CATEGORIES constant). Commits 2dd7a77, d4956f5.
+[x] B2  utilization = signed net spend of non-excluded rows in (category, calendar month)
+         derive_budget_utilization(transactions, excluded_hashes, category, month) (PRD §4.3).
+         test_budget_utilization_independent.py TestNetSpendBasics, TestRefundsAndIncome
+         (refund same/later month, unclamped negative, salary never reduces a budget). 2dd7a77.
+[x] B3  never double-counts a hash (Invariant 1)
+         TestInvariant1Dedup: same statement twice, two genuine coffees, 2 Hypothesis
+         properties, corrupted duplicate → ValueError. Resolver legs excluded via the
+         projection (Invariant 4): TestInvariant4Exclusion with real matcher output +
+         test_wave5_real_rows.py::test_cc_payment_legs_excluded_from_spend_but_counted_in_balances.
+[x] B4  editing a budget does not alter historical utilization
+         PATCH changes target_paise only (BudgetUpdate extra=forbid); utilization is a
+         derivation and is never stored. test_budget_crud.py PATCH tests.
+[x] B5  deleting a budget does not delete transaction data
+         DELETE removes the budgets row only; test_budget_crud.py delete tests.
+[ ] B6  budget projection exposed over the API (spent, limit, remaining, % used)
+         → Deferred to Wave 6. derive_budget_projection exists (signed spent/remaining,
+           pct_used floors at 0), but categorization decisions aren't persisted yet (T5), so
+           a route would report 0 for every budget. Wave 6 exit criterion.
+
+Independent authoring evidence: contract f3b0206 → tests e3f163c (fresh session, spec +
+contract only) → implementation 2dd7a77. A first independent pass (df76c86) encoded a
+dict-row contract the owner rejected and was superseded by e3f163c.
+Refund netting decision: PRD §4.3 / ADR-020 (2026-10-30).
+
+ACCOUNT CRUD                                                       [Wave 4]
+[x] AC1  create account: name, type (savings/CC/investment), last-4, account_ref stored
+         (POST /api/v1/accounts; route registered and account_ref migrated only in the
+          Wave 5 closeout, B-7 → 8b812d3; test_account_balance_route.py exercises it end-to-end)
+[x] AC2  update account metadata; account_ref excluded from AccountUpdate (extra="forbid")
+[x] AC3  deactivating an account sets sync_status="deactivated"; no transaction data deleted
+[x] AC4  CC liability derived separately from savings balance, both statement-anchored
+         (ADR-022): balance = closing + later legs, all legs count; liability = −balance,
+         unclamped (negative = credit balance); no anchor → null + anchor_period_end null.
+         B-5/B-6 fixed 2dd7a77. test_account_balance.py, test_account_balance_boundaries.py,
+         test_account_balance_route.py, test_account_balance_route_errors.py.
+
+CREDIT-CARD DUAL MODEL
+[x] CC1  CC spend transactions categorized/budgeted via spend-account path (resolver excludes bill payment leg)
+[x] CC2  CC bill payment matched by resolver (Invariant 4, Phase 2) — not counted as expense
+[ ] CC3  statement cycle period stored separately; transactions allocated to calendar month
+         → Open — no schema field for statement cycle period yet; needed before Phase 3 close
+[ ] CC4  outstanding liability balance updated on each statement ingestion
+         → Partially addressed: GET /{id}/balance derives from event log on-read.
+            "Updated on ingestion" implies materialised storage — deferred to Wave 6 integration.
+
+COLD START                                                         [Wave 6 — not started]
+[ ] CS1  upload of 2 FY of statements processes without duplicate hash collisions (Invariant 1)
+[ ] CS2  parse failures during cold start flagged and retried via dry-run harness; no partial ingestion
+[ ] CS3  cold start does not block on any single failed statement — failures are isolated
+
+OPENAPI / TYPE CONTRACT
+[x] OA1  every new route has response_model + tags (accounts CRUD, budgets; router-level tags)
+[x] OA2  openapi.json regenerated + committed: 5e35ae9, 1e35932 (check-openapi-drift PASS locally)
+[x] OA3  api-types.ts regenerated + prettier-formatted with the spec (5e35ae9, 1e35932).
+         CI drift jobs to confirm on the PR. test_route_registration.py pins the paths.
+```
+
+**Wave 6 exit criteria added during the Wave 5 closeout (2026-10-30, owner):**
+- **B-4 closed:** `transaction_type` derived (ADR-021). A real fixture goes through parser → ingest → resolver → classifier → nature tagger with non-zero totals. Σ category net spend + uncategorized = `transactions_view` expense total, with refunds netting as negative expense (PRD §12A) and an "of which refunds" detail. The strict xfail is removed. Tagger tests run on real-parser output.
+- **B6:** budget utilization endpoint over persisted categorization decisions (requires T5).
+- **T4:** a production running-cost derivation, tested on real (negative) amounts.
+- **Resolver:** the transfer matcher requires two different account_refs (independent tests). The reversal matcher stops auto-excluding on amount + date alone (see the Wave 5 review notes).
+- **Carry-forwards from ci/guards/test_row_shapes_baseline.json** (7 files) migrate to the factory.
+- **Open GAPs:** HdfcCcParser claims HDFC savings statements containing "Swiggy"; overdrawn savings balance format; `accounts.account_ref` uniqueness per user; three routers still copy `get_db`.
+
+**Uncalibrated constants (flag `# UNVERIFIED` in code):**
+- `NORMALIZATION_CONFIDENCE_THRESHOLD` — Wave 1
+- `CATEGORIZATION_CONFIDENCE_THRESHOLD` — Wave 2
+
+**Named gaps deferred from Phase 3:**
+
+| Gap | Deferred to | Reason |
+|---|---|---|
+| Gmail automated fetch pipeline (PRD §2.1 V2, §2.3) | Phase 6 — Gmail & Automation (dedicated phase) | Full OAuth + scheduler + incremental-scan state machine is a distinct subsystem. Phase 5 is Private Beta (deploy/auth/onboarding per TRD §5); folding Gmail automation into it would conflate two independent complexity classes. Gmail restricted-scope verification with Google is a long-lead-time item — start the application early. |
 
 ---
 
