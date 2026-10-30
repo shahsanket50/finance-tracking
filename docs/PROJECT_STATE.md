@@ -2,9 +2,9 @@
 
 > **Update this file at the end of every session.** It is the first thing an agent reads after `CLAUDE.md`.
 
-**Last updated:** 2026-09-04
-**Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 1 in progress)
-**Overall status:** 381 backend tests + 70 frontend tests (451 total). Phase 2.5 CLOSED 2026-08-23. Phase 3 Wave 1 started 2026-09-04.
+**Last updated:** 2026-09-23
+**Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 complete)
+**Overall status:** 583 backend unit+property tests (+ 70 frontend = 653 total). Phase 3 Waves 1–5 complete. Wave 6 (pipeline wiring) is next.
 
 ---
 
@@ -295,7 +295,7 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 | Gmail restricted-scope verification with Google is a long lead time | Start the application early; it gates Phase 6, not Phase 1 | Open — not started |
 | AA TSP partner not selected | Blocks AA ingestion only; Gmail path is unblocked | Open — deferred |
 | AI-written code drifting from spec | Golden dataset + invariant tests + spec-traceability rule in `CLAUDE.md` | Mitigated by design |
-| `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. | Open — Phase 4 blocker |
+| `read_since_seq` covers `transaction_events` only | Full projection replay requires events from all event tables (`ingestion_events`, `document_events`). Must be fixed before a complete rebuild can be trusted. **Owner: Wave 6 (pipeline wiring).** | Open — Phase 3 Wave 6 / Phase 4 blocker |
 | Phase 0 critical-module tests not independently authored | F-9: Re-authoring complete (2026-08-14). 10 new tests written; 2 Phase 0 bugs confirmed (A-3 float hash, C-2 corrupt snapshot). Both bugs fixed in Phase 2. | **CLOSED** — fixed A-3 + C-2; all independently-authored tests pass |
 | Confidence formula constants not validated against real data | `CONFIDENCE_BASE_BP` (9000), `CONFIDENCE_SAME_DAY_BONUS_BP` (500), `CONFIDENCE_PER_DAY_PENALTY_BP` (200) are working assumptions in `config.py`. The formula produces scores that gate on `RESOLVER_CONFIDENCE_THRESHOLD` (8500), meaning 3-day matches (8400 bp) are rejected. Calibrate before live data ingestion. | Open — Phase 3 |
 | Slice Savings ref-number regex not confirmed against real statements | `slice_savings.py` uses `\S+` for the ref-number column (spec said `\d{10,25}`). Changed to match synthetic alphanumeric fixtures; real Slice statements not sampled. **Do not trust with live Slice data until a real PDF is reviewed.** | Open — validate before Phase 2 Slice ingestion work |
@@ -314,74 +314,109 @@ Low-priority gaps from F-9 re-authoring, deferred to Phase 2 close or later:
 
 **Wave plan:**
 
-| Wave | Deliverable | Status | Critical module |
-|---|---|---|---|
-| 1 | LLM adapter + merchant normalizer | In progress | YES — independent test authoring required |
-| 2 | Categorization (rules + LLM + per-user learning) | Not started | YES — independent test authoring required |
-| 3 | Nature tagging (rules + LLM + user-confirm) | Not started | YES — independent test authoring required |
-| 4 | Account CRUD + CC dual model | Not started | PARTIAL — CC tests independently authored |
-| 5 | Budget CRUD + utilization derivation | Not started | YES — utilization tests independently authored |
-| 6 | Cold start + adversarial review | Not started | N/A |
+| Wave | Deliverable | Status | Commits | Tests |
+|---|---|---|---|---|
+| 1 | LLM adapter + merchant normalizer | **Done** | `549cbc6`–`9ef0b99` | 35 new (contract + independent + impl) |
+| 2 | Categorization (rules + LLM + per-user learning) | **Done** | `98d6af4`–`2deb148` | 41 new; _user_rules architectural fix in 2deb148 |
+| 3 | Nature tagging (rules + LLM + running-cost split) | **Done** | `fed95eb`–`8c7656d` | 64 new (61 unit N1–N9 + 3 property running-cost) |
+| 4 | Account CRUD + balance derivation | **Done** | `38302ea`–`23723ac` | 53 new (AC1–AC7 + SC1–SC2); AC7 resolver-exclusion proof |
+| 5 | Budget CRUD + utilization derivation | Not started | — | — |
+| 6 | Cold start + pipeline wiring + A4/A5 + adversarial review | Not started | — | — |
+
+**Wave 2 architectural note:** `_user_rules` (mutable module-level dict, TRD §9.2 violation) removed in `2deb148`. `classify_transaction` now accepts `correction_events: list[object]`; learned rules are derived by `build_learned_rules()` from the event log on each call.
+
+**Wave 4 architectural note:** Two named balance-derivation functions — `derive_savings_balance()` and `derive_cc_outstanding_liability()` — never one formula for both types. `account_ref` is set at creation and excluded from `AccountUpdate` (extra fields forbidden). Resolver-excluded hashes (RESOLVER_EVENT_TYPES) applied before summing, proven in AC7.
+
+**A4/A5 note:** Bundled into Wave 6 — both require the event store wired to the processing pipeline, which Wave 6 delivers. Creating prompt files before the pipeline runs them produces untestable fixtures.
 
 **Exit criterion checklist (must be PASS with named test before phase close):**
 
 ```
-MERCHANT NORMALIZATION
-[ ] N1  canonical_merchant(narration) → deterministic name every call (property test)
-[ ] N2  normalization result recorded as an event; replay produces identical merchant name
-[ ] N3  LLM fallback only fires when no rule matches (unit test with stub adapter)
+MERCHANT NORMALIZATION                                             [Wave 1]
+[x] N1  canonical_merchant(narration) → deterministic name every call (property test)
+[x] N2  normalization result recorded as an event; replay produces identical merchant name
+[x] N3  LLM fallback only fires when no rule matches (unit test with stub adapter)
 
-LLM ADAPTER
-[ ] A1  provider-agnostic interface: swap model without changing call-site code (unit test)
-[ ] A2  every LLM call returns a Pydantic-validated schema; free-text response raises (unit test)
-[ ] A3  confidence below threshold → review queue, never auto-committed (unit + property test)
+LLM ADAPTER                                                        [Wave 1]
+[x] A1  provider-agnostic interface: swap model without changing call-site code (unit test)
+[x] A2  every LLM call returns a Pydantic-validated schema; free-text response raises (unit test)
+[x] A3  confidence below threshold → review queue, never auto-committed (unit + property test)
 [ ] A4  prompt files are version-controlled; changing a prompt triggers its golden test set (G17)
+        → Deferred to Wave 6 (requires pipeline wiring before prompts are exercised)
 [ ] A5  LLM classification result recorded as an event; replayed identically (integration test)
+        → Deferred to Wave 6
 
-CATEGORIZATION
-[ ] C1  high-confidence categorization auto-commits to ledger (unit test)
-[ ] C2  low-confidence categorization → review queue (unit test with stub adapter)
-[ ] C3  user correction of a category → rule learned for that merchant; future same merchant auto-categorizes correctly (unit test)
-[ ] C4  pipeline ordering enforced: resolver runs before classifier (existing test + new assertion)
+CATEGORIZATION                                                     [Wave 2]
+[x] C1  high-confidence categorization auto-commits to ledger (unit test)
+[x] C2  low-confidence categorization → review queue (unit test with stub adapter)
+[x] C3  user correction of a category → rule learned for that merchant; future same merchant auto-categorizes correctly (unit test)
+[x] C4  pipeline ordering enforced: resolver runs before classifier (TestPipelineOrderingC4)
 [ ] C5  golden fixture: known narrations → expected categories, zero regressions (G17)
-[ ] C6  user manual category correction is recorded as its own event and takes precedence over the original LLM/rule classification on replay — replaying the log never reverts a correction (unit test; independent test authoring applies)
+        → Deferred to Wave 6 (requires prompt files + G17 activation)
+[x] C6  user manual category correction recorded as event; replay never reverts correction
+        (test_learned_rule_applied_when_correction_event_passed,
+         test_learned_rule_absent_without_correction_event)
 
-NATURE TAGS
-[ ] T1  nature tag assigned only to `expense` type transactions, never `income`/`transfer`/`investment`
-[ ] T2  rules-based assignment covers obvious cases (rent → essential-fixed, etc.)
-[ ] T3  marginal cases → LLM + user confirm flow (not auto-committed)
-[ ] T4  running-cost total = essential-fixed + essential-variable (derivation, property test)
+NATURE TAGS                                                        [Wave 3]
+[x] T1  nature tag assigned only to `expense` type transactions (ValueError guard in tag_nature)
+[x] T2  rules-based assignment covers obvious cases — 12 category→nature mappings in rules.py
+[x] T3  marginal cases → LLM fallback; below NATURE_CONFIDENCE_THRESHOLD → BelowConfidenceThreshold
+        (Reading A confirmed: "marginal" = below threshold, per Invariant 6. Not all LLM calls require confirm.)
+[x] T4  running-cost total = essential_fixed + essential_variable (test_nature_running_cost_property.py,
+        3 properties, 200 examples: partition correctness, floor correctness, int-only)
 [ ] T5  nature assignment recorded as event; replay identical
+        → Deferred to Wave 6 (requires pipeline wiring)
 
-BUDGET CRUD & TRACKING
-[ ] B1  create budget: category + monthly limit + FY scope stored correctly
-[ ] B2  budget utilization = sum of non-excluded expenses in category for calendar month (derivation, property test)
-[ ] B3  budget utilization never double-counts a transaction (Invariant 1 preserved; property test)
-[ ] B4  editing a budget does not alter historical utilization
-[ ] B5  deleting a budget does not delete transaction data
-[ ] B6  budget projection exposes: spent, limit, remaining, % used per category per month
+BUDGET CRUD & TRACKING                                             [Wave 5 — in progress]
+[x] B1  create budget: category + monthly limit + FY scope stored correctly
+         POST /budgets → 201; target_paise as str; month first-of-month validated;
+         duplicate → 409; invalid category/paise → 422; GET list + GET by id.
+         27 unit tests (mock-session + TestClient validation). 550 backend tests total.
+[x] B2  budget utilization = sum of non-excluded expenses in category for calendar month
+         derive_budget_utilization(transactions, category, month) pure function.
+         Excludes excluded=True txs; only debits; absolute int result.
+[x] B3  budget utilization never double-counts a transaction (Invariant 1 preserved; property test)
+         2 property tests (200 examples each): exact sum, order-invariance.
+[x] B4  editing a budget does not alter historical utilization
+         PATCH /budgets/{id} updates target_paise only (BudgetUpdate extra=forbid).
+         Utilization is a derivation — never stored, so patching the limit cannot affect it.
+[x] B5  deleting a budget does not delete transaction data
+         DELETE /budgets/{id} → db.delete(budget) + commit; db.execute() never called.
+         Transaction events in immutable event log are untouched.
+[x] B6  budget projection exposes: spent, limit, remaining, % used per category per month
+         BudgetProjection dataclass: spent_paise, limit_paise, remaining_paise (negative
+         when over-budget), pct_used_bps (floor integer basis points). 583 backend tests total.
 
-ACCOUNT CRUD
-[ ] AC1  create account: name, type (savings/CC/investment), last-4, institution stored
-[ ] AC2  update account metadata; account_id never changes
-[ ] AC3  deactivating an account does not delete its transactions
-[ ] AC4  CC account has associated liability balance field
+ACCOUNT CRUD                                                       [Wave 4]
+[x] AC1  create account: name, type (savings/CC/investment), last-4, account_ref stored
+         (POST /accounts → Account ORM; account_ref column added in Wave 4)
+[x] AC2  update account metadata; account_ref excluded from AccountUpdate (extra="forbid")
+[x] AC3  deactivating an account sets sync_status="deactivated"; no transaction data deleted
+[x] AC4  CC account outstanding liability derived separately from savings balance
+         (derive_cc_outstanding_liability() vs derive_savings_balance() — mutually exclusive
+          BalanceSummary fields; AC7 proves resolver exclusions propagate; 4 concrete tests)
 
 CREDIT-CARD DUAL MODEL
-[ ] CC1  CC spend transactions categorized and budgeted against the spend account
-[ ] CC2  CC bill payment matched by resolver (existing Invariant 4) and not counted as expense
-[ ] CC3  statement cycle period stored separately; transactions allocated to calendar month of occurrence
+[x] CC1  CC spend transactions categorized/budgeted via spend-account path (resolver excludes bill payment leg)
+[x] CC2  CC bill payment matched by resolver (Invariant 4, Phase 2) — not counted as expense
+[ ] CC3  statement cycle period stored separately; transactions allocated to calendar month
+         → Open — no schema field for statement cycle period yet; needed before Phase 3 close
 [ ] CC4  outstanding liability balance updated on each statement ingestion
+         → Partially addressed: GET /{id}/balance derives from event log on-read.
+            "Updated on ingestion" implies materialised storage — deferred to Wave 6 integration.
 
-COLD START
+COLD START                                                         [Wave 6 — not started]
 [ ] CS1  upload of 2 FY of statements processes without duplicate hash collisions (Invariant 1)
-[ ] CS2  parse failures during cold start flagged and retried via dry-run harness; no partial ingestion (Invariant 2)
+[ ] CS2  parse failures during cold start flagged and retried via dry-run harness; no partial ingestion
 [ ] CS3  cold start does not block on any single failed statement — failures are isolated
 
 OPENAPI / TYPE CONTRACT
 [ ] OA1  every new route has response_model + tags
+         → Wave 4 CRUD router has response_model + tags; Wave 1–3 routes pending (no new HTTP routes added)
 [ ] OA2  openapi.json regenerated and committed with route changes
+         → Pending — Wave 4 adds /accounts routes; export not yet run this phase
 [ ] OA3  api-types.ts regenerated + prettier-formatted; drift-check CI passes
+         → Same as OA2
 ```
 
 **Uncalibrated constants (flag `# UNVERIFIED` in code):**

@@ -58,3 +58,4 @@ celerybeat.pid
 # Test artifacts
 .pytest_cache/
 coverage.xml
+.claude/settings.local.json

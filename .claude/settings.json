@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "REPO_ROOT=$(git rev-parse --show-toplevel) && cd \"$REPO_ROOT\" && PYTHONPATH=backend python3 -m pytest backend/tests/unit/ backend/tests/property/ -q --tb=short 2>&1 || echo '⚠️  Tests failing — expected if this edit precedes its implementation (independent test authoring). Review output above. Fix before committing.'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/scripts/append-session-log.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

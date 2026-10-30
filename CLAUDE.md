@@ -17,6 +17,20 @@ Every session, in this order:
 5. Check `docs/CODE_GRAPH.md` to understand where new code belongs.
 6. At end of session, append to `docs/SESSION_LOG.md` and update `docs/PROJECT_STATE.md`.
 
+### Automated hooks (`.claude/settings.json`)
+
+Two hooks run automatically — do not disable them:
+
+**PostToolUse (Edit|Write):** After every file edit, runs `PYTHONPATH=backend python3 -m pytest backend/tests/unit/ backend/tests/property/ -q --tb=short`. The hook always exits 0 — failures surface as a **warning**, not a blocker. This is intentional: independent test authoring means a test is expected to fail before its implementation file exists. Blocking on a failing test would create pressure to weaken the test just to unblock the next edit, which defeats the point. Read the warning output; fix failures before committing, not before the next edit. The full suite runs in ~2.5s.
+
+**Stop:** At session end, `scripts/append-session-log.sh` fires. It:
+- Runs the invariant property tests and captures pass/fail
+- Captures the current test count and recent commits
+- Prepends an auto-generated entry to `docs/SESSION_LOG.md`
+- Skips if an entry for today already exists
+
+The auto-generated entry is a **fallback only** — if the session produced real work, write a proper agent-authored entry above it (or replace it). The auto-entry is clearly marked `(REVIEW BEFORE COMMITTING)` so it is never accidentally committed as-is.
+
 **If working on `web/`:** also read `docs/design/wireframe-reference.html` (authoritative for token values, component patterns, and the interaction model — context switch, audit drill-down, accordion) and `docs/TRD.md §15` (UI Technical Notes). Do not port the wireframe HTML directly — translate to Next.js + shadcn/ui following TRD §15.
 
 If a task is not traceable to a PRD/TRD section, **stop and ask** rather than inventing scope.
