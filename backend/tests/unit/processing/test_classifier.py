@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import inspect
 import unittest.mock as mock
+from typing import Any
 
 import pytest
 
@@ -30,6 +31,7 @@ from processing.classifier.events import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_categorized(
     transaction_hash: str = "hash_a",
@@ -69,14 +71,18 @@ def _make_corrected(
 # C1 — high-confidence auto-commit
 # ---------------------------------------------------------------------------
 
+
 class TestHighConfidenceAutoCommit:
     """C1: well-known merchant → confidence >= threshold, valid category, valid method."""
 
-    @pytest.mark.parametrize("merchant,expected_category", [
-        ("Swiggy", "food_dining"),
-        ("Zomato", "food_dining"),
-        ("Amazon", "shopping"),
-    ])
+    @pytest.mark.parametrize(
+        "merchant,expected_category",
+        [
+            ("Swiggy", "food_dining"),
+            ("Zomato", "food_dining"),
+            ("Amazon", "shopping"),
+        ],
+    )
     def test_result_confidence_meets_threshold(self, merchant: str, expected_category: str) -> None:
         result = classify_transaction("hash_c1", merchant, [])
         assert result.confidence_bps >= CATEGORIZATION_CONFIDENCE_THRESHOLD, (
@@ -99,11 +105,14 @@ class TestHighConfidenceAutoCommit:
             f"classify_transaction returned unexpected method '{result.method}'"
         )
 
-    @pytest.mark.parametrize("merchant,expected_category", [
-        ("Swiggy", "food_dining"),
-        ("Zomato", "food_dining"),
-        ("Amazon", "shopping"),
-    ])
+    @pytest.mark.parametrize(
+        "merchant,expected_category",
+        [
+            ("Swiggy", "food_dining"),
+            ("Zomato", "food_dining"),
+            ("Amazon", "shopping"),
+        ],
+    )
     def test_result_type(self, merchant: str, expected_category: str) -> None:
         result = classify_transaction("hash_c1_type", merchant, [])
         assert isinstance(result, TransactionCategorizedPayload)
@@ -112,6 +121,7 @@ class TestHighConfidenceAutoCommit:
 # ---------------------------------------------------------------------------
 # C2 — low-confidence → BelowConfidenceThreshold
 # ---------------------------------------------------------------------------
+
 
 class TestLowConfidenceRaisesException:
     """C2: when the LLM returns confidence below threshold, BelowConfidenceThreshold is raised."""
@@ -130,11 +140,11 @@ class TestLowConfidenceRaisesException:
             ) as mock_adapter:
                 # Build a fake async complete that returns low confidence
 
-                async def fake_complete(  # type: ignore[type-arg]
+                async def fake_complete(
                     prompt: str,
                     output_schema: type,
                     prompt_version: str,
-                ) -> LLMResult:
+                ) -> LLMResult[Any]:
                     # Produce a plausible structured output for a low-confidence merchant
                     from pydantic import BaseModel
 
@@ -168,6 +178,7 @@ class TestLowConfidenceRaisesException:
 # ---------------------------------------------------------------------------
 # C3 — per-user learning: record_correction payload contract
 # ---------------------------------------------------------------------------
+
 
 class TestRecordCorrectionPayload:
     """C3: record_correction returns CategoryCorrectedPayload with correct fields."""
@@ -241,9 +252,7 @@ class TestRecordCorrectionPayload:
         )
         # Now classify a NEW transaction for the same merchant, passing the correction event.
         # A correct implementation derives the learned rule from correction_events.
-        result = classify_transaction(
-            "hash_c3f_new", "UnknownCafe", [correction]
-        )
+        result = classify_transaction("hash_c3f_new", "UnknownCafe", [correction])
         assert result.category == "food_dining", (
             f"classify_transaction returned '{result.category}' for 'UnknownCafe' after "
             "a correction event was passed — learned rule from event history was not applied."
@@ -278,6 +287,7 @@ class TestRecordCorrectionPayload:
 # ---------------------------------------------------------------------------
 # C4 — classifier signature accepts merchant_canonical, not raw_narration
 # ---------------------------------------------------------------------------
+
 
 class TestClassifierSignatureContract:
     """C4: classify_transaction must accept merchant_canonical as a parameter name."""
@@ -356,7 +366,7 @@ class TestPipelineOrderingC4:
         # return a category (e.g. "transfers"), not raise. The correct prevention
         # is at the caller, not here.
         excluded_merchant_canonicals = [
-            "NEFT Credit",    # income/transfer — resolver excludes the transfer leg
+            "NEFT Credit",  # income/transfer — resolver excludes the transfer leg
         ]
         for canonical in excluded_merchant_canonicals:
             # Classifier does NOT refuse — it classifies anything it receives.
@@ -364,9 +374,7 @@ class TestPipelineOrderingC4:
             result = classify_transaction("excluded_hash", canonical, [])
             # The result category here is irrelevant — what matters is that a
             # correctly-wired pipeline never produces this call for excluded txns.
-            assert result.category in (
-                "income", "transfers", "other"
-            ), (
+            assert result.category in ("income", "transfers", "other"), (
                 f"Classifier returned unexpected category {result.category!r} for "
                 f"excluded-type merchant {canonical!r} — this call should never "
                 "have reached the classifier in a correctly-ordered pipeline."
@@ -390,16 +398,20 @@ class TestPipelineOrderingC4:
 # C5 — golden fixture: known merchant canonicals → expected categories
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("merchant_canonical,expected_category", [
-    ("Swiggy", "food_dining"),
-    ("Zomato", "food_dining"),
-    ("Amazon", "shopping"),
-    ("Uber", "transport"),
-    ("Ola", "transport"),
-    ("Netflix", "subscriptions"),
-    ("BigBasket", "groceries"),
-    ("NEFT Credit", "income"),
-])
+
+@pytest.mark.parametrize(
+    "merchant_canonical,expected_category",
+    [
+        ("Swiggy", "food_dining"),
+        ("Zomato", "food_dining"),
+        ("Amazon", "shopping"),
+        ("Uber", "transport"),
+        ("Ola", "transport"),
+        ("Netflix", "subscriptions"),
+        ("BigBasket", "groceries"),
+        ("NEFT Credit", "income"),
+    ],
+)
 def test_golden_merchant_to_category(merchant_canonical: str, expected_category: str) -> None:
     """C5 golden fixture: if the rules map a known merchant to a different category,
     this test fails and the deviation is visible before it reaches production."""
@@ -414,6 +426,7 @@ def test_golden_merchant_to_category(merchant_canonical: str, expected_category:
 # ---------------------------------------------------------------------------
 # C6 — resolve_category: corrections win on replay
 # ---------------------------------------------------------------------------
+
 
 class TestResolveCategory:
     """C6: resolve_category is a DERIVATION — must honour the most recent correction."""
@@ -464,7 +477,7 @@ class TestResolveCategory:
 
     @pytest.mark.xfail(
         reason="Contract says ValueError on empty list but this is not 100% explicit; "
-               "marking xfail to document the expectation — implementation may differ"
+        "marking xfail to document the expectation — implementation may differ"
     )
     def test_empty_event_list_raises_value_error(self) -> None:
         """No events at all → should raise ValueError per contract docstring."""

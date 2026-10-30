@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -14,10 +15,10 @@ from processing.normalizer.rules import match_rule
 
 # Module-level adapter — patch this in tests via set_adapter().
 # Defaults to the stub so the module is usable without external configuration.
-_adapter: LLMAdapter = StubLLMAdapter()
+_adapter: LLMAdapter[Any] = StubLLMAdapter()
 
 
-def set_adapter(adapter: LLMAdapter) -> None:
+def set_adapter(adapter: LLMAdapter[Any]) -> None:
     """Replace the module-level LLM adapter. Call before invoking normalize_merchant."""
     global _adapter
     _adapter = adapter

@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import uuid
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import create_engine, select
@@ -58,9 +58,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def _require_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> Account:
-    account = db.scalar(
-        select(Account).where(Account.id == account_id, Account.user_id == user_id)
-    )
+    account = db.scalar(select(Account).where(Account.id == account_id, Account.user_id == user_id))
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
     return account
@@ -74,9 +72,7 @@ def _require_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> 
 @router.get("", response_model=list[AccountResponse])
 def list_accounts(db: Session = Depends(get_db)) -> list[Account]:  # noqa: B008
     """List all accounts for the authenticated user."""
-    return list(
-        db.scalars(select(Account).where(Account.user_id == _STUB_USER_ID)).all()
-    )
+    return list(db.scalars(select(Account).where(Account.user_id == _STUB_USER_ID)).all())
 
 
 @router.post("", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
@@ -89,7 +85,7 @@ def create_account(body: AccountCreate, db: Session = Depends(get_db)) -> Accoun
         account_type=body.account_type,
         last4=body.last4,
         sync_status="pending",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db.add(account)
     db.commit()
@@ -186,9 +182,7 @@ def get_account_balance(
     )
 
     non_excluded_amounts: list[int] = [
-        row.amount_paise
-        for row in txn_rows
-        if row.idempotency_hash not in excluded_hashes
+        row.amount_paise for row in txn_rows if row.idempotency_hash not in excluded_hashes
     ]
 
     account_type = account.account_type or "savings"

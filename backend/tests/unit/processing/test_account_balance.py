@@ -17,7 +17,6 @@ from processing.accounts.balance import (
     derive_savings_balance,
 )
 
-
 # ---------------------------------------------------------------------------
 # AC1 — Savings balance derivation
 # ---------------------------------------------------------------------------
@@ -96,6 +95,7 @@ class TestCCOutstandingLiabilityDerivation:
 
     def test_outstanding_never_negative(self) -> None:
         result = derive_cc_outstanding_liability("HDFC_CC_7890", [-100_000_00])
+        assert result.outstanding_liability_paise is not None
         assert result.outstanding_liability_paise >= 0
 
     def test_result_type_is_balance_summary(self) -> None:
@@ -296,18 +296,18 @@ class TestResolverExclusionPropagatesIntoBalance:
     """
 
     # Paise amounts — all int, no floats
-    SALARY_CREDIT_PAISE = 5_000_000    # ₹50,000 credit  (txn A, counted)
-    CC_PAYMENT_PAISE = -1_500_000      # ₹15,000 debit   (txn B, EXCLUDED)
-    GROCERY_DEBIT_PAISE = -320_000     # ₹3,200 debit    (txn C, counted)
-    CC_BILL_CREDIT_PAISE = 1_500_000   # ₹15,000 credit  (txn D, EXCLUDED — CC side of same pair)
+    SALARY_CREDIT_PAISE = 5_000_000  # ₹50,000 credit  (txn A, counted)
+    CC_PAYMENT_PAISE = -1_500_000  # ₹15,000 debit   (txn B, EXCLUDED)
+    GROCERY_DEBIT_PAISE = -320_000  # ₹3,200 debit    (txn C, counted)
+    CC_BILL_CREDIT_PAISE = 1_500_000  # ₹15,000 credit  (txn D, EXCLUDED — CC side of same pair)
 
     SAVINGS_ACCOUNT_REF = "HDFC_1234"
     CC_ACCOUNT_REF = "HDFC_CC_7890"
 
-    HASH_A = "salary_abc123"       # txn A — counted
-    HASH_B = "cc_payment_def456"   # txn B — excluded (savings debit leg)
-    HASH_C = "grocery_ghi789"      # txn C — counted
-    HASH_D = "cc_credit_jkl012"    # txn D — excluded (CC credit leg)
+    HASH_A = "salary_abc123"  # txn A — counted
+    HASH_B = "cc_payment_def456"  # txn B — excluded (savings debit leg)
+    HASH_C = "grocery_ghi789"  # txn C — counted
+    HASH_D = "cc_credit_jkl012"  # txn D — excluded (CC credit leg)
 
     def _non_excluded_amounts(
         self,
@@ -321,7 +321,7 @@ class TestResolverExclusionPropagatesIntoBalance:
         """Correct path: CC payment debit (B) excluded → balance = ₹46,800."""
         savings_amounts = {
             self.HASH_A: self.SALARY_CREDIT_PAISE,
-            self.HASH_B: self.CC_PAYMENT_PAISE,   # resolver marked this excluded
+            self.HASH_B: self.CC_PAYMENT_PAISE,  # resolver marked this excluded
             self.HASH_C: self.GROCERY_DEBIT_PAISE,
         }
         excluded = {self.HASH_B, self.HASH_D}  # both legs from MarkedCCPayment
@@ -345,14 +345,16 @@ class TestResolverExclusionPropagatesIntoBalance:
         """
         savings_amounts_including_excluded = [
             self.SALARY_CREDIT_PAISE,
-            self.CC_PAYMENT_PAISE,   # ← should be excluded but isn't here
+            self.CC_PAYMENT_PAISE,  # ← should be excluded but isn't here
             self.GROCERY_DEBIT_PAISE,
         ]
         wrong_result = derive_savings_balance(
             self.SAVINGS_ACCOUNT_REF, "savings", savings_amounts_including_excluded
         )
 
-        wrong_paise = self.SALARY_CREDIT_PAISE + self.CC_PAYMENT_PAISE + self.GROCERY_DEBIT_PAISE  # 3_180_000
+        wrong_paise = (
+            self.SALARY_CREDIT_PAISE + self.CC_PAYMENT_PAISE + self.GROCERY_DEBIT_PAISE
+        )  # 3_180_000
         correct_paise = self.SALARY_CREDIT_PAISE + self.GROCERY_DEBIT_PAISE  # 4_680_000
 
         assert wrong_result.derived_balance_paise == wrong_paise, (
@@ -366,7 +368,8 @@ class TestResolverExclusionPropagatesIntoBalance:
         # Document the difference explicitly
         shortfall_paise = correct_paise - wrong_paise
         assert shortfall_paise == abs(self.CC_PAYMENT_PAISE), (
-            f"The shortfall should equal the CC payment amount ({abs(self.CC_PAYMENT_PAISE)} paise). "
+            "The shortfall should equal the CC payment amount "
+            f"({abs(self.CC_PAYMENT_PAISE)} paise). "
             f"Got shortfall={shortfall_paise} paise."
         )
 

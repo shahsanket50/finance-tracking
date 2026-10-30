@@ -1,4 +1,7 @@
-"""Nature tagger unit tests. Derived from PRD §5.1 and TRD §8.3. Implementation files were NOT read."""
+"""Nature tagger unit tests. Derived from PRD §5.1 and TRD §8.3.
+
+Implementation files were NOT read.
+"""
 
 from __future__ import annotations
 
@@ -165,7 +168,10 @@ class TestTagNatureSignatureContract:
 
     def test_function_exists(self) -> None:
         import processing.nature.base as base_module
-        assert hasattr(base_module, "tag_nature"), "tag_nature must be exported from processing.nature.base"
+
+        assert hasattr(base_module, "tag_nature"), (
+            "tag_nature must be exported from processing.nature.base"
+        )
 
     def test_parameter_names(self) -> None:
         sig = inspect.signature(tag_nature)
@@ -179,7 +185,7 @@ class TestTagNatureSignatureContract:
     def test_returns_nature_tagged_payload(self) -> None:
         result = tag_nature(
             transaction_hash="hash_n2",
-            category="rent_housing",  # type: ignore[arg-type]
+            category="rent_housing",
             merchant_canonical="Landlord",
             transaction_type="expense",
             correction_events=[],
@@ -198,7 +204,7 @@ class TestTransactionTypeGuard:
     def test_expense_type_is_accepted(self) -> None:
         result = tag_nature(
             transaction_hash="hash_n3_ok",
-            category="groceries",  # type: ignore[arg-type]
+            category="groceries",
             merchant_canonical="BigBasket",
             transaction_type="expense",
             correction_events=[],
@@ -210,7 +216,7 @@ class TestTransactionTypeGuard:
         with pytest.raises(ValueError):
             tag_nature(
                 transaction_hash="hash_n3_bad",
-                category="groceries",  # type: ignore[arg-type]
+                category="groceries",
                 merchant_canonical="BigBasket",
                 transaction_type=txn_type,
                 correction_events=[],
@@ -227,7 +233,7 @@ class TestTransactionTypeGuard:
             with pytest.raises(ValueError):
                 tag_nature(
                     transaction_hash="hash_n3_guard",
-                    category="other",  # type: ignore[arg-type]
+                    category="other",
                     merchant_canonical="SomeAmbiguousMerchant",
                     transaction_type="transfer",
                     correction_events=[],
@@ -244,14 +250,19 @@ class TestTransactionTypeGuard:
 class TestRulesFirstNatureTagging:
     """N4: known categories map to their nature via rules before LLM is invoked."""
 
-    @pytest.mark.parametrize("category,expected_nature", [
-        ("rent_housing", "essential_fixed"),
-        ("groceries", "essential_variable"),
-        ("utilities", "essential_variable"),
-        ("entertainment", "discretionary"),
-        ("shopping", "discretionary"),
-    ])
-    def test_known_category_maps_to_expected_nature(self, category: str, expected_nature: str) -> None:
+    @pytest.mark.parametrize(
+        "category,expected_nature",
+        [
+            ("rent_housing", "essential_fixed"),
+            ("groceries", "essential_variable"),
+            ("utilities", "essential_variable"),
+            ("entertainment", "discretionary"),
+            ("shopping", "discretionary"),
+        ],
+    )
+    def test_known_category_maps_to_expected_nature(
+        self, category: str, expected_nature: str
+    ) -> None:
         result = tag_nature(
             transaction_hash=f"hash_n4_{category}",
             category=category,  # type: ignore[arg-type]
@@ -263,7 +274,9 @@ class TestRulesFirstNatureTagging:
             f"category='{category}' → expected nature='{expected_nature}', got '{result.nature}'"
         )
 
-    @pytest.mark.parametrize("category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"])
+    @pytest.mark.parametrize(
+        "category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"]
+    )
     def test_rule_result_uses_rule_method(self, category: str) -> None:
         result = tag_nature(
             transaction_hash=f"hash_n4_method_{category}",
@@ -276,7 +289,9 @@ class TestRulesFirstNatureTagging:
             f"category='{category}' should use method='rule', got '{result.method}'"
         )
 
-    @pytest.mark.parametrize("category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"])
+    @pytest.mark.parametrize(
+        "category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"]
+    )
     def test_rule_result_confidence_above_threshold(self, category: str) -> None:
         result = tag_nature(
             transaction_hash=f"hash_n4_conf_{category}",
@@ -290,7 +305,9 @@ class TestRulesFirstNatureTagging:
             f"below threshold {NATURE_CONFIDENCE_THRESHOLD}"
         )
 
-    @pytest.mark.parametrize("category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"])
+    @pytest.mark.parametrize(
+        "category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"]
+    )
     def test_rule_result_has_rule_id(self, category: str) -> None:
         result = tag_nature(
             transaction_hash=f"hash_n4_rid_{category}",
@@ -303,7 +320,9 @@ class TestRulesFirstNatureTagging:
             f"category='{category}' rule result must have rule_id set"
         )
 
-    @pytest.mark.parametrize("category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"])
+    @pytest.mark.parametrize(
+        "category", ["rent_housing", "groceries", "utilities", "entertainment", "shopping"]
+    )
     def test_rule_result_has_no_prompt_version(self, category: str) -> None:
         result = tag_nature(
             transaction_hash=f"hash_n4_pv_{category}",
@@ -331,7 +350,7 @@ class TestLLMFallbackNatureTagging:
         try:
             result = tag_nature(
                 transaction_hash="hash_n5_llm",
-                category="other",  # type: ignore[arg-type]
+                category="other",
                 merchant_canonical="SomeObscureShop",
                 transaction_type="expense",
                 correction_events=[],
@@ -347,7 +366,7 @@ class TestLLMFallbackNatureTagging:
         try:
             result = tag_nature(
                 transaction_hash="hash_n5_pv",
-                category="other",  # type: ignore[arg-type]
+                category="other",
                 merchant_canonical="SomeObscureShop",
                 transaction_type="expense",
                 correction_events=[],
@@ -363,7 +382,7 @@ class TestLLMFallbackNatureTagging:
         try:
             result = tag_nature(
                 transaction_hash="hash_n5_conf",
-                category="other",  # type: ignore[arg-type]
+                category="other",
                 merchant_canonical="SomeObscureShop",
                 transaction_type="expense",
                 correction_events=[],
@@ -379,7 +398,7 @@ class TestLLMFallbackNatureTagging:
             with pytest.raises(BelowConfidenceThreshold) as exc_info:
                 tag_nature(
                     transaction_hash="hash_n5_low",
-                    category="other",  # type: ignore[arg-type]
+                    category="other",
                     merchant_canonical="AmbiguousMerchant",
                     transaction_type="expense",
                     correction_events=[],
@@ -414,7 +433,8 @@ class TestEventLogDrivenLearning:
         """If a NatureCorrectedPayload is in correction_events, tag_nature must use it.
 
         This is the key invariant: learned overrides come from the event log, not mutable state.
-        tag_nature(correction_events=[correction]) for the same transaction_hash must apply the override.
+        tag_nature(correction_events=[correction]) for the same transaction_hash must apply
+        the override.
         """
         correction = record_nature_correction(
             transaction_hash="hash_n6b",
@@ -425,7 +445,7 @@ class TestEventLogDrivenLearning:
         # Use a rule-matching category so without correction it would return "discretionary"
         result = tag_nature(
             transaction_hash="hash_n6b",
-            category="entertainment",  # type: ignore[arg-type]
+            category="entertainment",
             merchant_canonical="SomeVenueXYZ",
             transaction_type="expense",
             correction_events=[correction],
@@ -443,7 +463,7 @@ class TestEventLogDrivenLearning:
         """
         result = tag_nature(
             transaction_hash="hash_n6c",
-            category="entertainment",  # type: ignore[arg-type]
+            category="entertainment",
             merchant_canonical="TotallyUnknownVenue999",
             transaction_type="expense",
             correction_events=[],
@@ -471,7 +491,7 @@ class TestEventLogDrivenLearning:
         )
         result = tag_nature(
             transaction_hash="hash_n6d",
-            category="entertainment",  # type: ignore[arg-type]
+            category="entertainment",
             merchant_canonical="SomeVenue",
             transaction_type="expense",
             correction_events=[first, second],
@@ -496,7 +516,9 @@ class TestResolveNature:
 
     def test_correction_overrides_tagged_event(self) -> None:
         tagged = _make_tagged(transaction_hash="hash_n7b", nature="discretionary")
-        corrected = _make_corrected(transaction_hash="hash_n7b", nature="luxury", prior_nature="discretionary")
+        corrected = _make_corrected(
+            transaction_hash="hash_n7b", nature="luxury", prior_nature="discretionary"
+        )
         result = resolve_nature("hash_n7b", [tagged, corrected])
         assert result == "luxury", (
             f"NatureCorrectedPayload should override NatureTaggedPayload, got '{result}'"
@@ -504,12 +526,14 @@ class TestResolveNature:
 
     def test_last_correction_wins_in_resolve(self) -> None:
         tagged = _make_tagged(transaction_hash="hash_n7c", nature="discretionary")
-        first_correction = _make_corrected(transaction_hash="hash_n7c", nature="essential_variable", prior_nature="discretionary")
-        second_correction = _make_corrected(transaction_hash="hash_n7c", nature="luxury", prior_nature="essential_variable")
-        result = resolve_nature("hash_n7c", [tagged, first_correction, second_correction])
-        assert result == "luxury", (
-            f"Last correction should win ('luxury'), got '{result}'"
+        first_correction = _make_corrected(
+            transaction_hash="hash_n7c", nature="essential_variable", prior_nature="discretionary"
         )
+        second_correction = _make_corrected(
+            transaction_hash="hash_n7c", nature="luxury", prior_nature="essential_variable"
+        )
+        result = resolve_nature("hash_n7c", [tagged, first_correction, second_correction])
+        assert result == "luxury", f"Last correction should win ('luxury'), got '{result}'"
 
     def test_empty_events_raises_value_error(self) -> None:
         with pytest.raises(ValueError):
@@ -529,13 +553,16 @@ class TestResolveNature:
 
 
 class TestPipelineOrderingN8:
-    """N8: nature tagging is step 6 — it receives category as input, never imports classifier internals."""
+    """N8: nature tagging is step 6.
+
+    It receives category as input and never imports classifier internals.
+    """
 
     def test_category_is_input_to_tag_nature(self) -> None:
         """category must be a parameter — the result's category field echoes it back."""
         result = tag_nature(
             transaction_hash="hash_n8a",
-            category="groceries",  # type: ignore[arg-type]
+            category="groceries",
             merchant_canonical="BigBasket",
             transaction_type="expense",
             correction_events=[],
@@ -551,7 +578,9 @@ class TestPipelineOrderingN8:
         A reverse dependency (tagger → classifier internals) would invert the pipeline
         ordering and create a coupling that prevents independent testing of either module.
         """
-        tagger_path = Path(__file__).parent.parent.parent.parent / "processing" / "nature" / "tagger.py"
+        tagger_path = (
+            Path(__file__).parent.parent.parent.parent / "processing" / "nature" / "tagger.py"
+        )
         if not tagger_path.exists():
             pytest.skip("tagger.py not yet implemented — skip import boundary check")
 

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from adapters.llm.base import LLMAdapter
 from adapters.llm.stub import StubLLMAdapter
 from processing.classifier.categories import Category
 from processing.nature.events import Nature, NatureCorrectedPayload, NatureTaggedPayload
 
-_llm_adapter: LLMAdapter = StubLLMAdapter()
+_llm_adapter: LLMAdapter[Any] = StubLLMAdapter()
 
 
-def set_adapter(adapter: LLMAdapter) -> None:
+def set_adapter(adapter: LLMAdapter[Any]) -> None:
     """Replace the module-level LLM adapter."""
     global _llm_adapter
     _llm_adapter = adapter
@@ -46,7 +48,9 @@ def tag_nature(
     """
     from processing.nature.tagger import _tag_nature
 
-    return _tag_nature(transaction_hash, category, merchant_canonical, transaction_type, correction_events)
+    return _tag_nature(
+        transaction_hash, category, merchant_canonical, transaction_type, correction_events
+    )
 
 
 def record_nature_correction(

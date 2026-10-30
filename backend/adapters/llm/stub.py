@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import typing
-from typing import Any, Literal, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel
 

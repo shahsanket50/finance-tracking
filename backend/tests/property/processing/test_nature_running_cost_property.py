@@ -23,8 +23,8 @@ def _sum_by_nature(
     amounts_paise: list[int],
 ) -> dict[str, int]:
     """Pure DERIVATION — sum amounts by nature tag. No floats."""
-    totals: dict[str, int] = {n: 0 for n in ALL_NATURES}
-    for event, amount in zip(tagged_events, amounts_paise):
+    totals: dict[str, int] = dict.fromkeys(ALL_NATURES, 0)
+    for event, amount in zip(tagged_events, amounts_paise, strict=True):
         totals[event.nature] += amount
     return totals
 

@@ -5,19 +5,13 @@ Implementation files were NOT read. Tests authored from schemas.py contract only
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-
 import pytest
 from pydantic import ValidationError
 
 from processing.accounts.schemas import (
     AccountBalanceResponse,
     AccountCreate,
-    AccountResponse,
-    AccountUpdate,
 )
-
 
 # ---------------------------------------------------------------------------
 # SC1 — AccountCreate schema
@@ -84,9 +78,7 @@ class TestAccountCreateSchema:
             )
 
     def test_account_type_savings_valid(self) -> None:
-        obj = AccountCreate(
-            nickname="SBI", account_type="savings", account_ref="SBI_1234"
-        )
+        obj = AccountCreate(nickname="SBI", account_type="savings", account_ref="SBI_1234")
         assert obj.account_type == "savings"
 
     def test_account_type_current_valid(self) -> None:

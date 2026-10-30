@@ -52,7 +52,8 @@ def _tag_nature(
     # TRD §8.3 hard guard — nature tags exist only on expense transactions.
     if transaction_type != "expense":
         raise ValueError(
-            f"Nature tags only apply to expense transactions, got transaction_type={transaction_type!r}"
+            "Nature tags only apply to expense transactions, "
+            f"got transaction_type={transaction_type!r}"
         )
 
     # 1. Per-transaction learned override from correction_events (DERIVATION).

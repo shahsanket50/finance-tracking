@@ -16,7 +16,7 @@ SyncStatus = Literal["pending", "healthy", "stale", "failed", "deactivated"]
 class AccountCreate(BaseModel):
     nickname: str = Field(..., min_length=1, max_length=128)
     account_type: AccountType
-    last4: str | None = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
+    last4: str | None = Field(default=None, min_length=4, max_length=4, pattern=r"^\d{4}$")
     account_ref: str = Field(..., min_length=1, max_length=128)
 
 
@@ -27,7 +27,7 @@ class AccountUpdate(BaseModel):
 
     nickname: str | None = Field(None, min_length=1, max_length=128)
     account_type: AccountType | None = None
-    last4: str | None = Field(None, min_length=4, max_length=4, pattern=r"^\d{4}$")
+    last4: str | None = Field(default=None, min_length=4, max_length=4, pattern=r"^\d{4}$")
 
 
 class AccountResponse(BaseModel):
@@ -49,5 +49,5 @@ class AccountBalanceResponse(BaseModel):
     account_type: str
     # Exactly one is populated — None signals "not applicable for this account type"
     # Serialized as strings to prevent float corruption (CLAUDE.md §3.5)
-    derived_balance_paise: str | None   # savings / current
+    derived_balance_paise: str | None  # savings / current
     outstanding_liability_paise: str | None  # credit_card

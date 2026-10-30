@@ -18,6 +18,7 @@ from processing.classifier.events import CategoryCorrectedPayload
 # Property: resolve_category is deterministic
 # ---------------------------------------------------------------------------
 
+
 @given(st.sampled_from(ALL_CATEGORIES))
 @settings(max_examples=50)
 def test_resolve_category_with_single_correction_always_returns_correction(category: str) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from adapters.llm.base import LLMAdapter
 from adapters.llm.stub import StubLLMAdapter
 from processing.classifier.categories import Category
@@ -9,10 +11,10 @@ from processing.classifier.events import CategoryCorrectedPayload, TransactionCa
 
 # Module-level LLM adapter — patch via set_adapter() or mock.patch in tests.
 # Defaults to the stub so the module is usable without external configuration.
-_llm_adapter: LLMAdapter = StubLLMAdapter()
+_llm_adapter: LLMAdapter[Any] = StubLLMAdapter()
 
 
-def set_adapter(adapter: LLMAdapter) -> None:
+def set_adapter(adapter: LLMAdapter[Any]) -> None:
     """Replace the module-level LLM adapter."""
     global _llm_adapter
     _llm_adapter = adapter
