@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from adapters.llm.base import LLMAdapter
@@ -93,3 +94,19 @@ def resolve_category(
     from processing.classifier.classifier import _resolve_category
 
     return _resolve_category(transaction_hash, user_id, events)
+
+
+def derive_effective_categories(
+    categorized: Sequence[TransactionCategorizedPayload],
+    corrections: Sequence[CategoryCorrectedPayload],
+) -> dict[str, Category]:
+    """DERIVATION: transaction_hash → effective category (PRD §4.3, ADR-020).
+
+    Precedence per hash: the latest user correction, else the latest system
+    categorization, else absent (no category). "Latest" means last in the given
+    sequence; callers pass events in event-log order. Pure over recorded decisions,
+    so it is safe to recompute on every read.
+    """
+    from processing.classifier.effective import derive_effective_categories as _derive
+
+    return _derive(categorized, corrections)
