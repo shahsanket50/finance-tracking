@@ -8,21 +8,21 @@ intact; hard delete would break replay (TRD §3.1).
 
 from __future__ import annotations
 
-import os
 import uuid
-from collections.abc import Generator
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from core.events.models import TransactionEvent
-from core.events.types import RESOLVER_EVENT_TYPES, TRANSACTION_INGESTED
+from core.events.store import read_since_seq
 from core.models.mutable import Account
-from processing.accounts.balance import (
+from db import get_db
+from processing.accounts.contract import (
+    balance_legs_from_events,
     derive_cc_outstanding_liability,
     derive_savings_balance,
+    load_statement_anchor,
 )
 from processing.accounts.schemas import (
     AccountBalanceResponse,
@@ -35,26 +35,6 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 # TODO: replace with real auth dependency in Phase 5
 _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://localhost/finance")
-_engine = None
-_SessionLocal = None
-
-
-def _get_session_local() -> sessionmaker:  # type: ignore[type-arg]
-    global _engine, _SessionLocal  # noqa: PLW0603
-    if _SessionLocal is None:
-        _engine = create_engine(DATABASE_URL)
-        _SessionLocal = sessionmaker(bind=_engine)
-    return _SessionLocal
-
-
-def get_db() -> Generator[Session, None, None]:
-    db = _get_session_local()()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _require_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> Account:
@@ -145,14 +125,13 @@ def get_account_balance(
     account_id: uuid.UUID,
     db: Session = Depends(get_db),  # noqa: B008
 ) -> AccountBalanceResponse:
-    """Derive the current balance for an account from the event log.
+    """Derive the account's balance from its latest statement anchor (PRD §8.1, ADR-022).
 
-    DERIVATION — replays TransactionIngested events. Two formulas, kept separate:
-    - savings/current: net signed sum of non-excluded amounts (asset)
-    - credit_card: sum of non-excluded amounts floored at 0 (liability)
-
-    Excluded transactions (MarkedInternalTransfer, MarkedCCPayment, etc.) are
-    identified by querying the resolver's exclusion event types from the event log.
+    DERIVATION: latest statement closing balance + every ingested leg dated after that
+    statement, resolver-paired legs included (exclusion is for flow totals, not balances).
+    savings/current → derived_balance_paise; credit_card → outstanding_liability_paise
+    (−balance, unclamped: negative = credit balance). No anchor → the field is null and
+    anchor_period_end is null: the balance is unknown, not zero.
     """
     account = _require_account(db, _STUB_USER_ID, account_id)
 
@@ -162,51 +141,23 @@ def get_account_balance(
             detail="Account has no account_ref — cannot derive balance from event log",
         )
 
-    # Fetch all TRANSACTION_INGESTED events for this account_ref
-    txn_rows = db.scalars(
-        select(TransactionEvent).where(
-            TransactionEvent.user_id == _STUB_USER_ID,
-            TransactionEvent.account_ref == account.account_ref,
-            TransactionEvent.event_type == TRANSACTION_INGESTED,
-        )
-    ).all()
-
-    # Fetch hashes of excluded transactions (resolver events)
-    excluded_hashes: set[str] = set(
-        db.scalars(
-            select(TransactionEvent.idempotency_hash).where(
-                TransactionEvent.user_id == _STUB_USER_ID,
-                TransactionEvent.event_type.in_(list(RESOLVER_EVENT_TYPES)),
-            )
-        ).all()
-    )
-
-    non_excluded_amounts: list[int] = [
-        row.amount_paise for row in txn_rows if row.idempotency_hash not in excluded_hashes
-    ]
-
+    anchor = load_statement_anchor(db, _STUB_USER_ID, account.account_ref)
+    legs = balance_legs_from_events(read_since_seq(db, _STUB_USER_ID), account.account_ref)
     account_type = account.account_type or "savings"
 
     if account_type == "credit_card":
-        summary = derive_cc_outstanding_liability(
-            account_ref=account.account_ref,
-            non_excluded_amounts_paise=non_excluded_amounts,
-        )
-        return AccountBalanceResponse(
-            account_ref=account.account_ref,
-            account_type=account_type,
-            derived_balance_paise=None,
-            outstanding_liability_paise=str(summary.outstanding_liability_paise),
-        )
+        summary = derive_cc_outstanding_liability(account.account_ref, anchor, legs)
     else:
-        summary = derive_savings_balance(
-            account_ref=account.account_ref,
-            account_type=account_type,
-            non_excluded_amounts_paise=non_excluded_amounts,
-        )
-        return AccountBalanceResponse(
-            account_ref=account.account_ref,
-            account_type=account_type,
-            derived_balance_paise=str(summary.derived_balance_paise),
-            outstanding_liability_paise=None,
-        )
+        summary = derive_savings_balance(account.account_ref, account_type, anchor, legs)
+
+    return AccountBalanceResponse(
+        account_ref=account.account_ref,
+        account_type=summary.account_type,
+        derived_balance_paise=_money(summary.derived_balance_paise),
+        outstanding_liability_paise=_money(summary.outstanding_liability_paise),
+        anchor_period_end=None if anchor is None else anchor.period_end,
+    )
+
+
+def _money(paise: int | None) -> str | None:
+    return None if paise is None else str(paise)

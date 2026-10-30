@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -47,7 +47,9 @@ class AccountResponse(BaseModel):
 class AccountBalanceResponse(BaseModel):
     account_ref: str
     account_type: str
-    # Exactly one is populated — None signals "not applicable for this account type"
+    # The field for the other account class is always None. The field for this class is
+    # None when no statement anchor exists (balance unknown, never 0; ADR-022).
     # Serialized as strings to prevent float corruption (CLAUDE.md §3.5)
-    derived_balance_paise: str | None  # savings / current
-    outstanding_liability_paise: str | None  # credit_card
+    derived_balance_paise: str | None  # savings / current: signed net asset
+    outstanding_liability_paise: str | None  # credit_card: owed; negative = credit balance
+    anchor_period_end: date | None  # period_end of the anchoring statement; None = no anchor

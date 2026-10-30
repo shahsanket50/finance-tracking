@@ -1,127 +1,95 @@
-"""Account balance derivation. Implements PRD §8.1 (CC dual model), TRD §9.2.
+"""Account balance derivation. Implements PRD §8.1 (CC dual model), ADR-022; fixes B-5, B-6.
 
-Balance derivation is a DERIVATION — pure arithmetic over recorded events.
-Safe to recompute. Two distinct formulas, one per account class:
+DERIVATIONS (TRD §3.4): pure arithmetic over recorded facts, safe to recompute.
+Contract: processing/accounts/contract.py.
 
-  Savings/current: derived_balance_paise = sum of non-excluded amount_paise
-      (signed: credits positive, debits negative per CLAUDE.md §3.5)
-
-  Credit card: outstanding_liability_paise = abs(sum of non-excluded amount_paise)
-      A CC account carries a liability — the amount owed to the bank.
-      Credits on the CC account (i.e. payments reducing the balance) are negative.
-      Excluded transactions (CC payments from the savings side, resolver-marked)
-      are already not in the non-excluded set.
-
-The two formulas are kept separate and named explicitly so callers never
-accidentally derive a liability total using the savings formula or vice versa.
+Both formulas start from the same statement-anchored signed balance:
+    anchored = anchor.closing_balance_paise + Σ legs dated after anchor.period_end
+Savings/current report it as the balance. Credit cards report −anchored as the outstanding
+liability, unclamped (negative = credit balance). Every leg counts, resolver-paired or not:
+exclusion is for flow totals only. With no anchor the value is None, never 0.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from processing.accounts.contract import BalanceLeg, StatementAnchor
 
 
 @dataclass(frozen=True)
 class BalanceSummary:
     """Result of a balance derivation for one account.
 
-    For savings/current accounts: derived_balance_paise is the net asset
-    (positive = you have money, negative = overdrawn).
-
-    For credit card accounts: outstanding_liability_paise is the amount owed
-    (always >= 0; positive = you owe money).
+    Exactly one money field belongs to the account's class; the other is always None.
+    The class's own field is None when there is no statement anchor (balance unknown).
     """
 
     account_ref: str
-    account_type: str  # "savings" | "current" | "credit_card" | "investment"
-    # Exactly one of the two fields below is populated; the other is None.
-    # This prevents callers from accidentally using a savings balance as a CC liability.
-    derived_balance_paise: int | None
-    outstanding_liability_paise: int | None
+    account_type: str  # "savings" | "current" | "credit_card"
+    derived_balance_paise: int | None  # savings/current: signed net asset
+    outstanding_liability_paise: int | None  # credit_card: owed; negative = credit balance
 
 
-def derive_savings_balance(
+def _require_int(value: object, what: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise TypeError(
+            f"{what} must be int paise, got {type(value).__name__} — "
+            "floats are never permitted (CLAUDE.md §3.5)"
+        )
+    return value
+
+
+def _anchored_balance(
+    account_ref: str, anchor: StatementAnchor | None, legs: Sequence[BalanceLeg]
+) -> int | None:
+    for leg in legs:
+        _require_int(leg.amount_paise, f"amount_paise of {leg.idempotency_hash}")
+    if anchor is None:
+        return None
+    if anchor.account_ref != account_ref:
+        raise ValueError(f"anchor belongs to account {anchor.account_ref!r}, not {account_ref!r}")
+    balance = _require_int(anchor.closing_balance_paise, "anchor closing_balance_paise")
+    counted: set[str] = set()
+    for leg in legs:
+        if leg.value_date <= anchor.period_end or leg.idempotency_hash in counted:
+            continue
+        counted.add(leg.idempotency_hash)
+        balance += leg.amount_paise
+    return balance
+
+
+def derive_anchored_savings_balance(
     account_ref: str,
     account_type: str,
-    non_excluded_amounts_paise: list[int],
+    anchor: StatementAnchor | None,
+    legs: Sequence[BalanceLeg],
 ) -> BalanceSummary:
-    """DERIVATION: net asset balance for savings / current accounts.
-
-    Args:
-        account_ref: Account identifier string.
-        account_type: Must be "savings" or "current". Raises ValueError otherwise.
-        non_excluded_amounts_paise: Signed integer paise amounts for all
-            non-excluded transactions for this account. Credits positive,
-            debits negative. No floats.
-
-    Returns:
-        BalanceSummary with derived_balance_paise set, outstanding_liability_paise None.
-
-    Raises:
-        ValueError: account_type is not "savings" or "current".
-        TypeError: any element of non_excluded_amounts_paise is not int.
-    """
     if account_type not in ("savings", "current"):
         raise ValueError(
-            f"derive_savings_balance only applies to savings/current accounts, "
-            f"got account_type={account_type!r}. "
-            f"For credit cards use derive_cc_outstanding_liability()."
+            f"savings balance only applies to savings/current accounts, got "
+            f"account_type={account_type!r}; use derive_cc_outstanding_liability for cards"
         )
-    for amt in non_excluded_amounts_paise:
-        if not isinstance(amt, int):
-            raise TypeError(
-                f"amount_paise must be int (paise), got {type(amt).__name__} — "
-                "floats are never permitted (CLAUDE.md §3.5)"
-            )
-    balance = sum(non_excluded_amounts_paise)
     return BalanceSummary(
         account_ref=account_ref,
         account_type=account_type,
-        derived_balance_paise=balance,
+        derived_balance_paise=_anchored_balance(account_ref, anchor, legs),
         outstanding_liability_paise=None,
     )
 
 
-def derive_cc_outstanding_liability(
+def derive_anchored_cc_liability(
     account_ref: str,
-    non_excluded_amounts_paise: list[int],
+    anchor: StatementAnchor | None,
+    legs: Sequence[BalanceLeg],
 ) -> BalanceSummary:
-    """DERIVATION: outstanding liability for a credit card account (PRD §8.1).
-
-    A credit card account's balance is a liability — the amount owed to the bank.
-    On a CC statement, spend transactions are debits (positive amounts in our
-    signed-integer model: money leaving the account owner's perspective is positive
-    spend). Payments received by the bank reduce the liability (negative amounts).
-
-    outstanding_liability = abs(sum(non_excluded_amounts_paise))
-    when the sign convention is: CC spend = positive, CC payment = negative.
-
-    If your sum is already negative (payments exceeded spend in the period — rare,
-    possible with cashback/refunds), the liability is zero, not negative.
-
-    Args:
-        account_ref: Account identifier string.
-        non_excluded_amounts_paise: Signed paise amounts for all non-excluded
-            CC account transactions. No floats.
-
-    Returns:
-        BalanceSummary with outstanding_liability_paise >= 0, derived_balance_paise None.
-
-    Raises:
-        TypeError: any element of non_excluded_amounts_paise is not int.
-    """
-    for amt in non_excluded_amounts_paise:
-        if not isinstance(amt, int):
-            raise TypeError(
-                f"amount_paise must be int (paise), got {type(amt).__name__} — "
-                "floats are never permitted (CLAUDE.md §3.5)"
-            )
-    net = sum(non_excluded_amounts_paise)
-    # Liability cannot be negative (credit/refund surplus → 0, not a credit balance)
-    outstanding = max(0, net)
+    balance = _anchored_balance(account_ref, anchor, legs)
     return BalanceSummary(
         account_ref=account_ref,
         account_type="credit_card",
         derived_balance_paise=None,
-        outstanding_liability_paise=outstanding,
+        outstanding_liability_paise=None if balance is None else -balance,
     )

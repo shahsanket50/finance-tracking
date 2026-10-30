@@ -79,6 +79,10 @@ def confirm(session_id: str, db_session: Session) -> None:
         "account_ref": statement.account_ref,
         "raw_artifact_content_hash": dry_session.raw_artifact_content_hash,
         "transaction_count": len(statement.transactions),
+        # Statement anchor for balance derivation (ADR-022); signed as parsed, period_end
+        # lives in the IngestionEvent.period_end column.
+        "opening_balance_paise": statement.opening_balance_paise,
+        "closing_balance_paise": statement.closing_balance_paise,
     }
     encrypted_payload, key_id = encrypt_payload(db_session, dry_session.user_id, payload_dict)
 

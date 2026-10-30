@@ -5,6 +5,8 @@ Implementation files were NOT read. Tests authored from schemas.py contract only
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 from pydantic import ValidationError
 
@@ -130,6 +132,7 @@ class TestAccountBalanceResponseSchema:
             account_type="savings",
             derived_balance_paise="4215000",
             outstanding_liability_paise=None,
+            anchor_period_end=date(2026, 1, 31),
         )
         assert obj.derived_balance_paise == "4215000"
         assert obj.outstanding_liability_paise is None
@@ -140,6 +143,7 @@ class TestAccountBalanceResponseSchema:
             account_type="credit_card",
             derived_balance_paise=None,
             outstanding_liability_paise="1500000",
+            anchor_period_end=date(2026, 1, 31),
         )
         assert obj.outstanding_liability_paise == "1500000"
         assert obj.derived_balance_paise is None
@@ -151,6 +155,7 @@ class TestAccountBalanceResponseSchema:
             account_type="investment",
             derived_balance_paise=None,
             outstanding_liability_paise=None,
+            anchor_period_end=None,
         )
         assert obj.derived_balance_paise is None
         assert obj.outstanding_liability_paise is None
@@ -163,6 +168,7 @@ class TestAccountBalanceResponseSchema:
                 account_type="savings",
                 derived_balance_paise=4215000,  # type: ignore[arg-type]
                 outstanding_liability_paise=None,
+                anchor_period_end=date(2026, 1, 31),
             )
 
     def test_int_for_outstanding_liability_is_rejected(self) -> None:
@@ -172,6 +178,7 @@ class TestAccountBalanceResponseSchema:
                 account_type="credit_card",
                 derived_balance_paise=None,
                 outstanding_liability_paise=1500000,  # type: ignore[arg-type]
+                anchor_period_end=date(2026, 1, 31),
             )
 
     def test_float_for_derived_balance_is_rejected(self) -> None:
@@ -181,6 +188,7 @@ class TestAccountBalanceResponseSchema:
                 account_type="savings",
                 derived_balance_paise=42150.00,  # type: ignore[arg-type]
                 outstanding_liability_paise=None,
+                anchor_period_end=date(2026, 1, 31),
             )
 
     def test_large_paise_value_as_string_preserves_precision(self) -> None:
@@ -191,5 +199,6 @@ class TestAccountBalanceResponseSchema:
             account_type="savings",
             derived_balance_paise=large_paise,
             outstanding_liability_paise=None,
+            anchor_period_end=date(2026, 1, 31),
         )
         assert obj.derived_balance_paise == large_paise
