@@ -1,0 +1,15 @@
+meta {
+  name: Patch Budget
+  type: http
+  seq: 1
+}
+
+patch {
+  url: {{base_url}}/api/v1/budgets/:budget_id
+  body: none
+  auth: none
+}
+
+docs {
+  Update target_paise on an existing budget. category and month are immutable.
+}

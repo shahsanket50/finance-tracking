@@ -1,0 +1,15 @@
+meta {
+  name: List Budgets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/budgets
+  body: none
+  auth: none
+}
+
+docs {
+  List all budgets for the authenticated user.
+}

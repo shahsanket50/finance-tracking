@@ -1,0 +1,15 @@
+meta {
+  name: List Accounts
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/accounts
+  body: none
+  auth: none
+}
+
+docs {
+  List all accounts for the authenticated user.
+}

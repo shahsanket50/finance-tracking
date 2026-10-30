@@ -1,0 +1,15 @@
+meta {
+  name: Delete Budget
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{base_url}}/api/v1/budgets/:budget_id
+  body: none
+  auth: none
+}
+
+docs {
+  Delete a budget row. Transaction data in the event log is never touched.
+}
