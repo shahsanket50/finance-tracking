@@ -464,6 +464,10 @@ OPENAPI / TYPE CONTRACT
   - **Category decisions persisted (T5) + utilization endpoint (B6).**
   - **Reversal false positive:** the reversal matcher auto-excludes on amount + date alone. Decide between a narration/reference signal and review-queue routing.
 - **6b — robustness and close:** A4/G17 prompt versioning, replay durability, CS1–CS3 cold start, wave-diff, adversarial review, PR.
+- **Deferred from the Wave 5 fix re-review (gate approved 2026-11-09 with these open):**
+  - **N1, overlapping statements:** a second statement repeating ingested rows is rejected with an unstructured 500 (PRD §8.1 states this). Options: a structured 409 now, or accept overlaps (skip ingested rows, first-writer provenance) in CS1. Reason deferred: belongs with cold-start ingestion semantics; owner to pick.
+  - **N4, strict citations:** 25 checked Phase 3 items cite no `file.py::test`. Make `ci/guards/cited_tests.py` require one per `[x]` and audit Waves 1–5 claims. Reason deferred: an audit that may uncheck items; scheduled with the 6b wave-diff/review.
+  - **N7, row-shape guard:** doesn't count `dataclasses.replace` / `model_construct` on row types. Reason deferred: notation; tighten with an allow-marker in 6b.
 - **Also carried (worker's list; owner to place):** T4 production running-cost derivation; CC3/CC4; `read_since_seq` across all event tables; the ci/guards baseline carry-forwards; parser GAPs (HdfcCcParser claims HDFC savings statements containing "Swiggy"; overdrawn balance format); `accounts.account_ref` uniqueness; three routers still copy `get_db`; a real anonymized statement per parser (owner decides).
 
 **Uncalibrated constants (flag `# UNVERIFIED` in code):**
