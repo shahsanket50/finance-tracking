@@ -16,14 +16,20 @@ from sqlalchemy.orm import Session
 
 from core.events.encryption import decrypt_payload
 from core.events.models import IngestionEvent
-from core.events.store import Event
+from core.events.store import Event, read_stream
 from core.events.types import TRANSACTION_INGESTED
-from processing.accounts.contract import BalanceLeg, StatementDecryptionError, StatementRecord
+from processing.accounts.contract import (
+    BalanceLeg,
+    LedgerDecryptionError,
+    StatementDecryptionError,
+    StatementRecord,
+)
 
 logger = logging.getLogger(__name__)
 
 _INGESTED_STATUS = "ingested"  # IngestionEvent.status written by confirm() when accepted
 STATEMENT_DECRYPTION_ALERT = "statement_decryption_failed"
+LEDGER_DECRYPTION_ALERT = "transaction_decryption_failed"
 
 
 def _require_int(value: object, what: str) -> int:
@@ -95,9 +101,25 @@ def load_account_statements(
                 account_ref=account_ref,
                 account_type=str(detail.get("account_type", "")),
                 period_end=row.period_end,
+                balance_check=str(row.balance_check),
                 closing_balance_paise=(
                     None if closing is None else _require_int(closing, "closing_balance_paise")
                 ),
             )
         )
     return statements
+
+
+def load_account_events(session: Session, user_id: uuid.UUID, account_ref: str) -> list[Event]:
+    try:
+        return read_stream(session, user_id, account_ref)
+    except (InvalidTag, ValueError) as err:
+        logger.error(
+            LEDGER_DECRYPTION_ALERT,
+            extra={
+                "alert": LEDGER_DECRYPTION_ALERT,
+                "account_ref": account_ref,
+                "error": type(err).__name__,
+            },
+        )
+        raise LedgerDecryptionError(account_ref, err) from err

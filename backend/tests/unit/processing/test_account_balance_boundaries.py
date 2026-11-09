@@ -11,6 +11,7 @@ statements derives the last statement's printed closing balance.
 from __future__ import annotations
 
 import dataclasses
+import random
 from datetime import date, timedelta
 
 from hypothesis import given, settings
@@ -143,14 +144,28 @@ def test_same_period_end_tie_goes_to_latest_upload() -> None:
 
 
 def test_statement_with_unknown_closing_never_anchors() -> None:
-    march, april = _march_then_april("sbi_savings", SAV_REF, "UPI DMART GROCERY")
-    empty_may = dataclasses.replace(
-        april, period_start=date(2026, 5, 1), period_end=date(2026, 5, 31),
-        transactions=[], opening_balance_paise=None, closing_balance_paise=None,
-    )  # fmt: skip
-    anchor = select_anchor([statement_record(march, seq=1), statement_record(empty_may, seq=2)])
+    """A real empty SBI statement (closing not printed → not_applicable) never anchors."""
+    march, _ = _march_then_april("sbi_savings", SAV_REF, "UPI DMART GROCERY")
+    empty_may = parse_statement(
+        "sbi_savings", SAV_REF, date(2026, 5, 1), date(2026, 5, 31), [], _closing(march)
+    )
+    assert empty_may.closing_balance_paise is None
+    may_record = statement_record(empty_may, seq=2)
+    assert may_record.balance_check == "not_applicable"
+
+    anchor = select_anchor([statement_record(march, seq=1), may_record])
     assert anchor is not None and anchor.period_end == march.period_end
-    assert select_anchor([statement_record(empty_may, seq=1)]) is None
+    assert select_anchor([may_record]) is None
+
+
+def test_not_applicable_record_never_anchors_even_with_a_closing() -> None:
+    """Structural guarantee (review N6): anchoring keys on balance_check == "pass", so a future
+    parser that returned a closing for a not_applicable statement still couldn't anchor."""
+    march, _ = _march_then_april("sbi_savings", SAV_REF, "UPI DMART GROCERY")
+    hypothetical = dataclasses.replace(
+        statement_record(march, seq=1), balance_check="not_applicable"
+    )
+    assert select_anchor([hypothetical]) is None
 
 
 def test_leg_without_statement_provenance_marks_stale_and_is_not_added() -> None:
@@ -178,30 +193,46 @@ _AMOUNTS = st.lists(
 )
 
 
-@settings(max_examples=25, deadline=None)
-@given(amounts=_AMOUNTS, cuts=st.lists(st.integers(min_value=1, max_value=7), max_size=3))
+@settings(max_examples=40, deadline=None)
+@given(
+    amounts=_AMOUNTS,
+    cuts=st.lists(st.integers(min_value=1, max_value=7), max_size=3),
+    lags=st.lists(st.integers(min_value=0, max_value=2), min_size=4, max_size=4),
+    upload_order=st.randoms(use_true_random=False),
+)
 def test_any_split_into_consecutive_statements_derives_the_last_closing(
-    amounts: list[int], cuts: list[int]
+    amounts: list[int], cuts: list[int], lags: list[int], upload_order: random.Random
 ) -> None:
-    """One month of real-parser rows split into 1-4 consecutive statements, any anchor."""
+    """One history of real-parser rows split into 1-4 consecutive statements.
+
+    Each statement's period may end up to 2 days BEFORE its last row's bank value date (the
+    C1 case: the row is inside that statement's closing balance anyway). Statements are
+    uploaded in a random order. For every prefix of statements uploaded, the anchored balance
+    must equal the closing balance printed on the latest statement in that prefix.
+    """
     days = [date(2026, 6, 1) + timedelta(days=3 * i) for i in range(len(amounts))]
     bounds = sorted({c for c in cuts if c < len(amounts)})
     pieces = [
         (lo, hi) for lo, hi in zip([0, *bounds], [*bounds, len(amounts)], strict=True) if lo < hi
     ]
     statements: list[ParsedStatement] = []
-    opening = 1_000_000
-    for lo, hi in pieces:
-        start = days[lo]
-        end = days[hi] - timedelta(days=1) if hi < len(amounts) else days[-1] + timedelta(days=2)
+    opening, start = 1_000_000, days[0]
+    for index, (lo, hi) in enumerate(pieces):
+        end = max(start, days[hi - 1] - timedelta(days=lags[index]))
         txns = [Txn(f"UPI MERCHANT {i:02d}", amounts[i], days[i]) for i in range(lo, hi)]
         statement = parse_statement("sbi_savings", SAV_REF, start, end, txns, opening)
         statements.append(statement)
-        opening = _closing(statement)
+        opening, start = _closing(statement), end + timedelta(days=1)
 
-    legs = _legs(SAV_REF, *statements)
-    for anchor_index in range(len(statements)):
-        anchor = select_anchor([statement_record(statements[anchor_index], seq=1)])
-        result = derive_savings_balance(SAV_REF, "savings", anchor, legs)
-        assert result.derived_balance_paise == _closing(statements[-1])
+    seqs = list(range(1, len(statements) + 1))
+    upload_order.shuffle(seqs)
+    for count in range(1, len(statements) + 1):
+        uploaded = statements[:count]
+        records = [statement_record(s, seq=seqs[i]) for i, s in enumerate(uploaded)]
+        events = [e for i, s in enumerate(uploaded) for e in ingested_events(s, start_seq=100 * i)]
+        anchor = select_anchor(records)
+        result = derive_savings_balance(
+            SAV_REF, "savings", anchor, balance_legs_from_events(events, SAV_REF, records)
+        )
+        assert result.derived_balance_paise == _closing(uploaded[-1])
         assert result.stale is False

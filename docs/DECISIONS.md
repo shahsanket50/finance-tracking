@@ -325,7 +325,16 @@ Exclusion (`excluded_hashes` from the resolver projection, the single source of 
 - **Cause C2 (CRITICAL):** `hdfc_savings` set opening = closing = 0 for an empty statement. That passed the balance check and was persisted as a ₹0 anchor.
 - **Anchor rule now:** select legs by **statement provenance** (`TransactionEvent.ingestion_event_id` → that statement's `period_end`). A leg counts only if its statement ends after the anchor. Anchor = the latest `period_end` among statements with a known closing; a tie goes to the highest global `seq`. A leg with no statement provenance is not added and the result is `stale=true`, never a guess.
 - **Unknown balances:** `ParsedStatement` balances are `int | None`. Transactions + an unknown balance → `FAIL` (rejected). Empty + unknown → `not_applicable` (accepted, never `pass`, never an anchor). `ingestion_events.balance_check` widened to VARCHAR(16) (migration 005).
-- **Routing keys:** `confirm()` writes `account_ref`/`account_type` to `IngestionEvent.source_detail` (plaintext, as on `transaction_events`), so a balance read decrypts only that account's statements. A decryption failure is a per-account structured error plus an alert log.
+- **Routing keys:** `confirm()` writes `account_ref`/`account_type` to `IngestionEvent.source_detail` (plaintext, as on `transaction_events`), so a balance read decrypts only that account's statements and (`read_stream`) only that account's transactions. A decryption failure on either is a per-account structured error (`statement_decryption_failed` / `transaction_decryption_failed`) plus an alert log.
+- **Anchor requires `balance_check == "pass"`** (fix re-review N6), so a `not_applicable` statement can never anchor, whatever a parser returns.
+
+**Disclosed consequences (fix re-review N8/N9, 2026-11-09):**
+- **SBI savings:** empty statements used to be rejected ("No transactions found"). They are now accepted as `not_applicable` with closing unknown. The header opening is known, but closing = opening is not printed, so it isn't asserted.
+- **Legacy statements:** statements ingested before routing keys existed are not anchor candidates. Their transactions carry no matching provenance, so such an account reads `stale=true` until re-ingested. No production data exists yet.
+- **`stale` has no UI consumer yet:** Phase 3.5 must render it before showing any balance.
+- **Overlapping statements are rejected** (N1, open owner decision): see PRD §8.1.
+- **Migration 005 is forward-only.** Its `downgrade()` raises.
+- **Route-level `ledger_integrity_error`** (a non-int amount in stored data) is unit-tested in the derivation, not at the route. Real ingestion can't produce such a row.
 
 ## ADR-023: Resolver rows reference legs by payload hashes
 **Status:** Accepted · **Date:** 2026-10-30

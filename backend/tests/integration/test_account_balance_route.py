@@ -23,8 +23,13 @@ from core.events.models import IngestionEvent, User, UserEncryptionKey
 from core.models.mutable import Account
 from db import get_db
 from main import app
-from processing.accounts.adapter import STATEMENT_DECRYPTION_ALERT
-from tests.factories.real_rows import Txn, ingest_via_confirm, render_statement_pdf
+from processing.accounts.adapter import LEDGER_DECRYPTION_ALERT, STATEMENT_DECRYPTION_ALERT
+from tests.factories.real_rows import (
+    Txn,
+    ingest_via_confirm,
+    insert_corrupt_transaction_row,
+    render_statement_pdf,
+)
 
 STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
@@ -50,6 +55,7 @@ def _unique_digits() -> str:
 
 
 def _create_account(client: TestClient, account_ref: str, account_type: str) -> str:
+    """POST /api/v1/accounts. The row belongs to whichever user the router's stub id names."""
     response = client.post(
         "/api/v1/accounts",
         json={"nickname": account_ref, "account_type": account_type, "account_ref": account_ref},
@@ -235,3 +241,49 @@ def test_undecryptable_statement_fails_only_its_account_and_alerts(
     assert any(getattr(r, "alert", None) == STATEMENT_DECRYPTION_ALERT for r in caplog.records)
     healthy = _balance(client, _create_account(client, healthy_ref, "savings"))
     assert healthy["derived_balance_paise"] == "460000"  # other accounts unaffected
+
+
+def _statement_id(pg_session: Session, ref: str) -> uuid.UUID:
+    row = pg_session.scalars(
+        select(IngestionEvent).where(IngestionEvent.source_detail["account_ref"].as_string() == ref)
+    ).one()
+    return row.id
+
+
+def test_corrupt_transaction_row_fails_only_its_own_account_and_alerts(
+    client: TestClient,
+    pg_session: Session,
+    redis_client: Any,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review N3: a corrupt transaction payload on account B must not break account A.
+
+    Runs as a dedicated user: the injected row is committed, and the resolver (correctly)
+    fails loudly on any undecryptable row of a user, so it must not leak into other tests.
+    """
+    isolated = User(email=f"n3-{uuid.uuid4().hex[:8]}@example.invalid")
+    pg_session.add(isolated)
+    pg_session.flush()
+    create_user_key(pg_session, isolated.id)
+    pg_session.commit()
+    monkeypatch.setattr("processing.accounts.crud_router._STUB_USER_ID", isolated.id)
+
+    broken_ref, healthy_ref = f"SBI_SAV_{_unique_digits()}", f"SBI_SAV_{_unique_digits()}"
+    for ref in (broken_ref, healthy_ref):
+        pdf = render_statement_pdf(
+            "sbi_savings", ref, date(2026, 3, 1), date(2026, 3, 31),
+            [Txn("UPI DMART GROCERY", -40_000, date(2026, 3, 9))], 500_000,
+        )  # fmt: skip
+        ingest_via_confirm(pg_session, redis_client, isolated.id, pdf, ref)
+    insert_corrupt_transaction_row(
+        pg_session, isolated.id, broken_ref, _statement_id(pg_session, broken_ref)
+    )
+
+    healthy = _balance(client, _create_account(client, healthy_ref, "savings"))
+    assert healthy["derived_balance_paise"] == "460000"
+
+    with caplog.at_level("ERROR"):
+        status_code, code = _error(client, _create_account(client, broken_ref, "savings"))
+    assert (status_code, code) == (500, "transaction_decryption_failed")
+    assert any(getattr(r, "alert", None) == LEDGER_DECRYPTION_ALERT for r in caplog.records)

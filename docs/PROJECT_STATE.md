@@ -384,8 +384,14 @@ NATURE TAGS                                                        [Wave 3]
 BUDGET CRUD & TRACKING                                             [Wave 5 — closeout implemented]
 [x] B1  create budget: expense category + monthly limit stored; non-expense/unknown → 422
          POST /api/v1/budgets → 201; duplicate → 409; month must be the 1st; target > 0.
-         test_budget_crud.py (TestBudgetCreate/Duplicate/Category/Month/TargetPaise),
-         test_budget_category_validation.py (EXPENSE_CATEGORIES constant). Commits 2dd7a77, d4956f5.
+         Real Postgres: test_budget_routes.py::test_create_persists_row_and_returns_201,
+         test_budget_routes.py::test_duplicate_on_unique_key_is_409_budget_duplicate,
+         test_budget_routes.py::test_fk_violation_is_structured_500_not_duplicate.
+         Validation: test_budget_crud.py::TestBudgetCategoryValidation,
+         test_budget_crud.py::TestBudgetMonthValidation,
+         test_budget_crud.py::TestBudgetTargetPaiseValidation,
+         test_budget_category_validation.py::test_non_expense_or_unknown_category_is_422.
+         Commits 2dd7a77, d4956f5, 3902fac.
 [x] B2  utilization = signed net spend of non-excluded rows in (category, calendar month)
          derive_budget_utilization(transactions, excluded_hashes, category, month) (PRD §4.3).
          test_budget_utilization_independent.py TestNetSpendBasics, TestRefundsAndIncome

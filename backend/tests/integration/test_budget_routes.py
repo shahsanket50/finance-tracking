@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from core.events.encryption import create_user_key
 from core.events.models import TransactionEvent, User
-from core.events.store import read_since_seq
+from core.events.store import Event, read_since_seq
 from core.models.mutable import Budget
 from db import get_db
 from main import app
@@ -104,13 +104,16 @@ def test_patch_changes_only_the_limit_and_not_derived_utilization(
         [Txn("UPI DMART GROCERY", -320_000, date(2026, 5, 12))], 1_000_000,
     )  # fmt: skip
     ingest_via_confirm(pg_session, redis_client, STUB_USER_ID, pdf, ref)
-    events = [e for e in read_since_seq(pg_session, STUB_USER_ID) if e.aggregate_id == ref]
+
+    def ledger() -> list[Event]:  # re-read every time, so "before == after" can fail
+        return [e for e in read_since_seq(pg_session, STUB_USER_ID) if e.aggregate_id == ref]
+
     categories: dict[str, Category] = {
-        str(e.payload["idempotency_hash"]): "groceries" for e in events
+        str(e.payload["idempotency_hash"]): "groceries" for e in ledger()
     }
 
     def spent() -> int:
-        records = budget_transactions_from_events(events, categories)
+        records = budget_transactions_from_events(ledger(), categories)
         return derive_budget_utilization(records, frozenset(), "groceries", date(2026, 5, 1))
 
     created = _create(client, "groceries", _unique_month()).json()

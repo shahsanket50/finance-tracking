@@ -28,6 +28,7 @@ BALANCE_NOT_SUPPORTED = "balance_not_supported_for_account_type"
 ACCOUNT_TYPE_MISSING = "account_type_missing"
 ACCOUNT_TYPE_MISMATCH = "account_type_mismatch"
 STATEMENT_DECRYPTION_FAILED = "statement_decryption_failed"
+TRANSACTION_DECRYPTION_FAILED = "transaction_decryption_failed"
 BUDGET_DUPLICATE = "budget_duplicate"
 DATABASE_INTEGRITY_ERROR = "database_integrity_error"
 

@@ -21,17 +21,19 @@ from api_errors import (
     BALANCE_NOT_SUPPORTED,
     DERIVATION_ERROR_RESPONSES,
     STATEMENT_DECRYPTION_FAILED,
+    TRANSACTION_DECRYPTION_FAILED,
     ApiError,
     ledger_integrity_error,
 )
-from core.events.store import read_since_seq
 from core.models.mutable import Account
 from db import get_db
 from processing.accounts.contract import (
+    LedgerDecryptionError,
     StatementDecryptionError,
     balance_legs_from_events,
     derive_cc_outstanding_liability,
     derive_savings_balance,
+    load_account_events,
     load_account_statements,
     select_anchor,
 )
@@ -193,12 +195,19 @@ def get_account_balance(
     try:
         anchor = select_anchor(statements)
         legs = balance_legs_from_events(
-            read_since_seq(db, _STUB_USER_ID), account.account_ref, statements
+            load_account_events(db, _STUB_USER_ID, account.account_ref),
+            account.account_ref,
+            statements,
         )
         if account_type == "credit_card":
             summary = derive_cc_outstanding_liability(account.account_ref, anchor, legs)
         else:
             summary = derive_savings_balance(account.account_ref, account_type, anchor, legs)
+    except LedgerDecryptionError as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ApiError(code=TRANSACTION_DECRYPTION_FAILED, message=str(err)).model_dump(),
+        ) from err
     except (ValueError, TypeError) as err:
         raise ledger_integrity_error(err) from err
 

@@ -25,10 +25,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "ingestion_events",
-        "balance_check",
-        type_=sa.String(8),
-        existing_type=sa.String(16),
-        existing_nullable=True,
-    )
+    # Forward-only (CLAUDE.md §5): once a "not_applicable" row exists on the immutable table,
+    # narrowing back to VARCHAR(8) would fail or require rewriting rows. Never downgrade.
+    raise NotImplementedError("005 is forward-only: ingestion_events rows may hold 14-char values")

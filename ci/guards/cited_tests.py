@@ -19,6 +19,8 @@ _QUALIFIED = re.compile(r"\b(test_\w+\.py)::(\w+)")
 _FILE = re.compile(r"\b(test_\w+\.py)\b")
 _FUNC = re.compile(r"(?<![\w./])(test_[a-z0-9_]+)\b(?!\.py)")
 _CLASS = re.compile(r"\b(Test[A-Z]\w+)\b")
+# "TestBudgetCreate/Duplicate/Month": shared prefix "Budget" + each slash-separated suffix.
+_SHORTHAND = re.compile(r"\bTest([A-Z][a-z]+)([A-Z]\w*(?:/[A-Z]\w*)+)")
 
 
 def main(root: Path) -> int:
@@ -39,6 +41,12 @@ def main(root: Path) -> int:
     for name in sorted(set(_FUNC.findall(text))):
         if not re.search(rf"\bdef {re.escape(name)}\b", all_source):
             missing.append(name)
+    # Shorthand like "TestBudgetCreate/Duplicate/Category" cites TestBudgetDuplicate etc.
+    for prefix, rest in _SHORTHAND.findall(text):
+        for suffix in rest.split("/")[1:]:
+            name = f"Test{prefix}{suffix}"
+            if not re.search(rf"\bclass {re.escape(name)}\b", all_source):
+                missing.append(f"{name} (from shorthand)")
     for name in sorted(set(_CLASS.findall(text))):
         if not re.search(rf"\bclass {re.escape(name)}\b", all_source):
             missing.append(name)

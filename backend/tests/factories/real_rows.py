@@ -49,6 +49,7 @@ from ingestion.parsers.hdfc_savings import HdfcSavingsParser
 from ingestion.parsers.sbi_cc import SbiCcParser
 from ingestion.parsers.sbi_savings import SbiSavingsParser
 from ingestion.parsers.slice_savings import SliceSavingsParser
+from ingestion.validators.balance_check import validate_balance
 from processing.accounts.contract import StatementRecord
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.pipeline import _cascade_matchers, candidate_from_ingested
@@ -157,6 +158,11 @@ def statement_record(statement: ParsedStatement, seq: int) -> StatementRecord:
         account_type=statement.account_type,
         period_end=statement.period_end,
         closing_balance_paise=statement.closing_balance_paise,
+        balance_check=validate_balance(
+            statement.opening_balance_paise,
+            statement.transactions,
+            statement.closing_balance_paise,
+        ).value,
     )
 
 
@@ -293,3 +299,40 @@ def ingest_via_confirm(
     with _redis_patched(redis_client):
         dry_session = dry_run(pdf_bytes, user_id, account_ref)
         confirm(dry_session.session_id, session)
+
+
+def insert_corrupt_transaction_row(
+    session: Session, user_id: uuid.UUID, account_ref: str, ingestion_event_id: uuid.UUID
+) -> None:
+    """Fault injection: one TransactionIngested row whose payload can't be decrypted.
+
+    The only sanctioned hand-built transaction_events row (ADR-024): it exists to prove that
+    a corrupt payload fails loudly and stays scoped to its own account (review N3). INSERT
+    only; the append-only table is never updated.
+    """
+    from sqlalchemy import select
+
+    from core.events.models import TransactionEvent, UserEncryptionKey
+
+    key = session.scalars(
+        select(UserEncryptionKey).where(UserEncryptionKey.user_id == user_id)
+    ).first()
+    if key is None:
+        raise ValueError(f"user {user_id} has no encryption key")
+    session.add(
+        TransactionEvent(
+            user_id=user_id,
+            event_type=TRANSACTION_INGESTED,
+            account_ref=account_ref,
+            value_date=date(2026, 3, 15),
+            amount_paise=-1,
+            idempotency_hash=uuid.uuid4().hex + uuid.uuid4().hex,
+            transaction_type="debit",
+            narration="CORRUPT PAYLOAD FAULT INJECTION",
+            actor="system",
+            payload=b"\x00" * 12 + b"not-a-valid-aes-gcm-ciphertext",
+            encryption_key_id=key.id,
+            ingestion_event_id=ingestion_event_id,
+        )
+    )
+    session.commit()

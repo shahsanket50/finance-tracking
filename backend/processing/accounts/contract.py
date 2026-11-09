@@ -13,7 +13,8 @@ Records:
         statement provenance, e.g. a future non-statement source).
 
 Anchor selection — select_anchor(statements):
-    Among statements with a known closing balance, the one with the latest period_end; a tie
+    Among statements whose balance_check is "pass" (so a not_applicable statement can never
+    anchor, whatever a parser returns) and whose closing is known, the latest period_end; a tie
     on period_end goes to the highest global seq (latest upload). None if there are none.
     Upload order never matters, and overlapping statements resolve to the one ending last.
 
@@ -70,6 +71,7 @@ class StatementRecord:
     account_type: str  # as reported by the parser: "savings" | "credit_card" | "fd"
     period_end: date
     closing_balance_paise: int | None  # signed as parsed; None = not printed
+    balance_check: str  # IngestionEvent.balance_check: "pass" | "not_applicable" | "fail"
 
 
 @dataclass(frozen=True)
@@ -87,6 +89,16 @@ class BalanceLeg:
     amount_paise: int  # signed: debit negative, credit positive
     value_date: date
     source_period_end: date | None  # period_end of the statement that wrote it
+
+
+class LedgerDecryptionError(Exception):
+    """An ingested transaction of this account could not be decrypted; no balance."""
+
+    def __init__(self, account_ref: str, cause: Exception) -> None:
+        self.account_ref = account_ref
+        super().__init__(
+            f"a transaction of account {account_ref} could not be decrypted: {type(cause).__name__}"
+        )
 
 
 class StatementDecryptionError(Exception):
@@ -154,3 +166,11 @@ def load_statement_anchor(
 ) -> StatementAnchor | None:
     """select_anchor(load_account_statements(...)): the account's anchor, or None."""
     return select_anchor(load_account_statements(session, user_id, account_ref))
+
+
+def load_account_events(session: Session, user_id: uuid.UUID, account_ref: str) -> list[Event]:
+    """This account's events only (read_stream), so another account's corrupt row can't
+    break this balance. A decryption failure raises LedgerDecryptionError and alerts."""
+    from processing.accounts.adapter import load_account_events as _load
+
+    return _load(session, user_id, account_ref)

@@ -51,7 +51,9 @@ def _require_int(value: object, what: str) -> int:
 def select_anchor(statements: Sequence[StatementRecord]) -> StatementAnchor | None:
     from processing.accounts.contract import StatementAnchor
 
-    known = [s for s in statements if s.closing_balance_paise is not None]
+    known = [
+        s for s in statements if s.balance_check == "pass" and s.closing_balance_paise is not None
+    ]
     if not known:
         return None
     latest = max(known, key=lambda s: (s.period_end, s.seq))
