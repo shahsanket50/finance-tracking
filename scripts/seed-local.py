@@ -30,9 +30,9 @@ from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from core.events.encryption import create_user_key  # noqa: E402
-from core.events.models import User  # noqa: E402
-from tests.factories.real_rows import Txn, render_statement_pdf  # noqa: E402
+from core.events.encryption import create_user_key
+from core.events.models import User
+from tests.factories.real_rows import Txn, render_statement_pdf
 
 API = os.environ.get("SEED_API", "http://localhost:8000")
 DATABASE_URL = os.environ.get(
