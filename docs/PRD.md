@@ -294,7 +294,9 @@ Same transaction arriving via two sources produces the same hash → counted onc
 **Liability account:** the outstanding balance. Updated when the statement arrives; decreases when a payment is made.
 
 *Clarified 2026-10-30 (owner), ADR-022:*
-- **Anchor.** Balances and liabilities are anchored to the latest ingested statement's closing balance for that account, plus the signed legs dated after that statement's period end. With no anchor there is no number: the value is `NULL`, never 0.
+- **Anchor.** Balances and liabilities are anchored to the closing balance of the account's latest ingested statement **that printed a closing balance** (latest period end; a tie on period end goes to the latest upload). Added to it: only the legs **written by a statement that ends after the anchor**. Legs are placed by the statement they came from (provenance), **never by value date**, because a statement's own row can carry a bank value date after the period end and is already inside that statement's closing balance. Upload order and overlapping periods don't change the result. *(Amended 2026-11-09 after the Wave 5 review, finding C1: selecting legs by `value_date > period_end` double-counted such rows.)*
+- **No guessing.** If a leg's source can't be placed relative to the anchor (no statement provenance), it is not added and the balance is flagged **stale**. With no anchor there is no number: the value is `NULL`, never 0.
+- **Unknown statement balances.** A statement that prints no readable balance stores it as unknown (`NULL`), never 0. If it has transactions, it is **rejected** (its rows can't be verified). If it is empty, it is **accepted with balance check `not_applicable`** (never `pass`) and never becomes an anchor. *(Added 2026-11-09, review finding C2: an empty HDFC savings statement had recorded a fabricated ₹0 anchor.)*
 - **All legs count.** Resolver-paired legs (e.g. the card payment credit) are included, since exclusion is for flow totals only.
 - **Card liability is unclamped.** Outstanding = −(signed balance). A negative outstanding is a real credit balance (an overpayment), shown as "credit balance ₹X" at display.
 

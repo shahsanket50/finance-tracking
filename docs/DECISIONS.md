@@ -293,6 +293,18 @@ _MATCHER_PRIORITY = (
 
 ---
 
+## Retroactive defect B-8: psycopg 3 error code read as `pgcode` (unique-violation checks never match)
+
+**Caught:** 2026-11-09, Wave 5 review-fix (a real-Postgres test of the budget 409 path)
+**Phase introduced:** Phase 2.5 (`processing/resolver/pipeline.py` race suppression)
+**Severity:** GAP. It fails loudly: a concurrent resolver race raises instead of being suppressed. No wrong number.
+
+**What shipped broken:** `pipeline.py:146-150` checks `orig.pgcode == "23505"`. psycopg 3 exposes the SQLSTATE as `orig.sqlstate`, and `pgcode` is the psycopg 2 attribute, so the check is always false. The "benign IntegrityError" on a concurrent resolver write is re-raised, and `confirm()` fails. A mock that set `pgcode` would have passed.
+
+**Fix:** `db.is_unique_violation()` uses `sqlstate` (budgets, proven on real Postgres). The resolver copy is fixed in Phase 3 Wave 6a with independent tests (critical module) and a real-Postgres concurrent-write test.
+
+---
+
 ## ADR-020: Budget utilization is signed net spend; refunds net in the month they post
 **Status:** Accepted · **Date:** 2026-10-30
 Net spend for (category, month) is −Σ signed amounts of non-excluded, hash-deduplicated transactions whose effective category is that category. It is unclamped and may be negative. A credit is a refund only if its effective category is an expense category; otherwise it is income. A refund nets in the month it posts. No refund-to-purchase matching and no rollover in V1. Contract: `derive_budget_utilization(transactions, excluded_hashes, category, month)` over typed frozen records (hash, signed amount, value_date, effective category). A thin edge adapter decrypts event rows into records, and effective category (correction → classifier → none) is a separate derivation.
@@ -307,6 +319,13 @@ Ingestion writes only the signed amount. Flow totals and the nature tagger's exp
 **Status:** Accepted · **Date:** 2026-10-30
 Exclusion (`excluded_hashes` from the resolver projection, the single source of truth) removes legs from spend, income and budget totals only. A savings balance = latest statement closing balance + Σ signed legs dated after that statement's period end. A card's outstanding liability = −(that signed balance), unclamped, where negative means a credit balance. With no anchor the value is `None`, never 0. Statement opening/closing balances are recorded in the `IngestionEvent` payload at confirm time (additive; older ingests carry no anchor and derive `None`).
 **Why:** balances are cash truth and must reconcile to the statement (Invariant 2); PRD §8.1 says the liability updates on statement arrival and decreases on payment. A clamp hides real overpayments. `None` rather than 0 follows TRD §10.3.
+
+**Amended 2026-11-09 (owner) after the Wave 5 adversarial review:**
+- **Cause C1 (CRITICAL):** legs were selected by `value_date > anchor.period_end`. The savings parsers record the bank's value date, which can fall after the statement's period end (e.g. a last-day NEFT value-dated the next day). That row is already inside the closing balance and was added again. Reproduced: closing ₹5,600 derived as ₹6,600.
+- **Cause C2 (CRITICAL):** `hdfc_savings` set opening = closing = 0 for an empty statement. That passed the balance check and was persisted as a ₹0 anchor.
+- **Anchor rule now:** select legs by **statement provenance** (`TransactionEvent.ingestion_event_id` → that statement's `period_end`). A leg counts only if its statement ends after the anchor. Anchor = the latest `period_end` among statements with a known closing; a tie goes to the highest global `seq`. A leg with no statement provenance is not added and the result is `stale=true`, never a guess.
+- **Unknown balances:** `ParsedStatement` balances are `int | None`. Transactions + an unknown balance → `FAIL` (rejected). Empty + unknown → `not_applicable` (accepted, never `pass`, never an anchor). `ingestion_events.balance_check` widened to VARCHAR(16) (migration 005).
+- **Routing keys:** `confirm()` writes `account_ref`/`account_type` to `IngestionEvent.source_detail` (plaintext, as on `transaction_events`), so a balance read decrypts only that account's statements. A decryption failure is a per-account structured error plus an alert log.
 
 ## ADR-023: Resolver rows reference legs by payload hashes
 **Status:** Accepted · **Date:** 2026-10-30
