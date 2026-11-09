@@ -7,7 +7,7 @@ payload keys and the transaction_type vocabulary are therefore exactly what prod
 writes, including known defects (B-4: transaction_type is "debit"/"credit").
 
 This is the ONLY place in backend/tests allowed to construct transaction payloads,
-ParsedTransaction objects or append_event calls; scripts/check-test-row-shapes.py
+ParsedTransaction objects or append_event calls; ci/guards/test_row_shapes.py
 enforces it in CI.
 
 Levels:
@@ -25,14 +25,21 @@ import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from functools import cache
 from typing import Any
 from unittest.mock import patch
 
 from sqlalchemy.orm import Session
 
 from core.events.store import Event
-from core.events.types import TRANSACTION_INGESTED
+from core.events.types import (
+    ACCOUNT_TYPE_CREDIT_CARD,
+    ACCOUNT_TYPE_FD,
+    ACCOUNT_TYPE_SAVINGS,
+    TRANSACTION_INGESTED,
+)
+from core.hashing.hash import canonicalize_narration, compute_idempotency_hash
 from ingestion.dryrun.confirm import confirm, transaction_event_payload
 from ingestion.dryrun.harness import dry_run
 from ingestion.fetchers.pdf_reader import open_pdf
@@ -42,6 +49,9 @@ from ingestion.parsers.hdfc_savings import HdfcSavingsParser
 from ingestion.parsers.sbi_cc import SbiCcParser
 from ingestion.parsers.sbi_savings import SbiSavingsParser
 from ingestion.parsers.slice_savings import SliceSavingsParser
+from processing.accounts.contract import StatementRecord
+from processing.resolver.candidate import CandidateTxn
+from processing.resolver.pipeline import _cascade_matchers, candidate_from_ingested
 from tests.fixtures.pdf_generator import dict_to_pdf
 
 BANKS: tuple[str, ...] = ("hdfc_cc", "sbi_cc", "hdfc_savings", "sbi_savings", "slice_savings")
@@ -129,14 +139,39 @@ def parse_statement(
     return parse_pdf(pdf_bytes)
 
 
+def statement_id(statement: ParsedStatement) -> uuid.UUID:
+    """Deterministic stand-in for the IngestionEvent id confirm() would create."""
+    key = f"{statement.account_ref}:{statement.period_start}:{statement.period_end}"
+    return uuid.uuid5(uuid.NAMESPACE_URL, key)
+
+
+def statement_record(statement: ParsedStatement, seq: int) -> StatementRecord:
+    """The StatementRecord load_account_statements() would return for this statement.
+
+    seq stands in for the IngestionEvent's global sequence (higher = uploaded later).
+    """
+    return StatementRecord(
+        ingestion_event_id=statement_id(statement),
+        seq=seq,
+        account_ref=statement.account_ref,
+        account_type=statement.account_type,
+        period_end=statement.period_end,
+        closing_balance_paise=statement.closing_balance_paise,
+    )
+
+
 def ingested_events(
     statement: ParsedStatement,
     user_id: uuid.UUID | None = None,
     start_seq: int = 1,
 ) -> list[Event]:
-    """In-memory TransactionIngested events carrying exactly the payload confirm() writes."""
+    """In-memory TransactionIngested events carrying exactly the payload confirm() writes.
+
+    Each event's ingestion_event_id is statement_id(statement), matching statement_record().
+    """
     owner = user_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
     created = datetime(2026, 1, 1, tzinfo=UTC)
+    source = statement_id(statement)
     return [
         Event(
             id=uuid.uuid4(),
@@ -147,9 +182,92 @@ def ingested_events(
             aggregate_id=txn.account_ref,
             payload=transaction_event_payload(statement, txn),
             created_at=created,
+            ingestion_event_id=source,
         )
         for i, txn in enumerate(statement.transactions)
     ]
+
+
+# Resolver candidates --------------------------------------------------------------------------
+
+_CANDIDATE_BANK = {
+    ACCOUNT_TYPE_SAVINGS: ("sbi_savings", "SBI_SAV_9000"),
+    ACCOUNT_TYPE_CREDIT_CARD: ("sbi_cc", "SBI_CC_9000"),
+}
+
+
+@cache
+def real_candidate(
+    amount_paise: int, value_date: date, account_type: str, narration: str = "UPI TRANSFER"
+) -> CandidateTxn:
+    """One matcher candidate built from real parser output via the pipeline's own conversion.
+
+    savings / credit_card rows go through a rendered statement and the production parser.
+    fd has no statement parser yet, so fd candidates come from fd_candidate().
+    """
+    if account_type == ACCOUNT_TYPE_FD:
+        return fd_candidate(amount_paise, value_date, narration)
+    bank, ref = _CANDIDATE_BANK[account_type]
+    statement = parse_statement(
+        bank, ref, value_date - timedelta(days=1), value_date + timedelta(days=1),
+        [Txn(narration, amount_paise, value_date)], 1_000_000,
+    )  # fmt: skip
+    (txn,) = statement.transactions
+    payload = transaction_event_payload(statement, txn)
+    return candidate_from_ingested(txn.idempotency_hash, txn.amount_paise, txn.value_date, payload)
+
+
+def candidates_from_events(events: Sequence[Event]) -> list[CandidateTxn]:
+    """Matcher candidates from TransactionIngested events, via the pipeline's conversion."""
+    return [
+        candidate_from_ingested(
+            str(e.payload["idempotency_hash"]),
+            int(str(e.payload["amount_paise"])),
+            date.fromisoformat(str(e.payload["value_date"])),
+            e.payload,
+        )
+        for e in events
+        if e.event_type == TRANSACTION_INGESTED
+    ]
+
+
+def resolver_events(events: Sequence[Event], user_id: uuid.UUID | None = None) -> list[Event]:
+    """Real resolver decisions (no DB): the production matcher cascade over ingested events,
+    each match wrapped as run_resolver persists it (payload = the matcher's model_dump())."""
+    owner = user_id or uuid.UUID("00000000-0000-0000-0000-000000000001")
+    next_seq = max((e.seq for e in events), default=0) + 1
+    created = datetime(2026, 1, 2, tzinfo=UTC)
+    matches = _cascade_matchers(candidates_from_events(events), set())
+    return [
+        Event(
+            id=uuid.uuid4(),
+            seq=next_seq + i,
+            event_version=1,
+            event_type=event_type,
+            user_id=owner,
+            aggregate_id="RESOLVER",
+            payload=match.model_dump(),
+            created_at=created,
+        )
+        for i, (event_type, _h1, _h2, match) in enumerate(matches)
+    ]
+
+
+def fd_candidate(
+    amount_paise: int, value_date: date, narration: str = "FD BOOKING"
+) -> CandidateTxn:
+    """FD leg for resolver tests. No production parser emits FD rows yet (no FD statement
+    format), so this is the single sanctioned synthesis point: the hash is computed with the
+    production hash function and account_type is the production constant."""
+    canonical = canonicalize_narration(narration)
+    return CandidateTxn(
+        idempotency_hash=compute_idempotency_hash(
+            "FD_SYNTH", value_date, amount_paise, canonical, 0
+        ),
+        amount_paise=amount_paise,
+        value_date=value_date,
+        account_type=ACCOUNT_TYPE_FD,
+    )
 
 
 @contextmanager

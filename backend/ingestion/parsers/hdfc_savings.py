@@ -81,8 +81,10 @@ class HdfcSavingsParser(AbstractParser):
                 )
             closing_balance_paise = rb
         else:
-            opening_balance_paise = 0
-            closing_balance_paise = 0
+            # No rows means no running balance to read: the balance is unknown, not zero
+            # (review finding C2). validate_balance marks such a statement not_applicable.
+            opening_balance_paise = None
+            closing_balance_paise = None
 
         return ParsedStatement(
             bank="hdfc_savings",

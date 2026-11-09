@@ -55,6 +55,8 @@ def test_balances_use_the_same_signed_convention(bank: str) -> None:
     statement, oracle = _golden(bank)
     assert statement.opening_balance_paise == oracle["opening_balance_paise"]
     assert statement.closing_balance_paise == oracle["closing_balance_paise"]
+    assert statement.opening_balance_paise is not None, f"{bank}: golden opening not read"
+    assert statement.closing_balance_paise is not None, f"{bank}: golden closing not read"
     assert (
         statement.opening_balance_paise + sum(t.amount_paise for t in statement.transactions)
         == statement.closing_balance_paise

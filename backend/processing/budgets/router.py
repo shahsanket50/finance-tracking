@@ -17,9 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from api_errors import BUDGET_DUPLICATE, DATABASE_INTEGRITY_ERROR, ApiError
 from core.models.mutable import Budget
-from db import get_db
+from db import get_db, is_unique_violation
 from processing.budgets.schemas import BudgetCreate, BudgetResponse, BudgetUpdate
+
+BUDGET_UNIQUE_CONSTRAINT = "uq_budgets_user_category_month"
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
 
@@ -43,7 +46,8 @@ def list_budgets(db: Session = Depends(get_db)) -> list[BudgetResponse]:  # noqa
 
 @router.post("", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
 def create_budget(body: BudgetCreate, db: Session = Depends(get_db)) -> BudgetResponse:  # noqa: B008
-    """Create a new budget. Duplicate (user, category, month) → 409."""
+    """Create a budget. 409 only for the (user, category, month) unique key; any other
+    integrity failure (e.g. a missing user) is a structured 500, never "duplicate"."""
     now = datetime.now(UTC)
     budget = Budget(
         id=uuid.uuid4(),
@@ -54,15 +58,24 @@ def create_budget(body: BudgetCreate, db: Session = Depends(get_db)) -> BudgetRe
         created_at=now,
         updated_at=now,
     )
-    db.add(budget)
     try:
-        db.commit()
+        with db.begin_nested():  # savepoint: a failed insert doesn't poison the session
+            db.add(budget)
+            db.flush()
     except IntegrityError as err:
-        db.rollback()
+        if is_unique_violation(err, BUDGET_UNIQUE_CONSTRAINT):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=ApiError(
+                    code=BUDGET_DUPLICATE,
+                    message="A budget for this category and month already exists",
+                ).model_dump(),
+            ) from err
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A budget for this category and month already exists",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ApiError(code=DATABASE_INTEGRITY_ERROR, message=str(err.orig)).model_dump(),
         ) from err
+    db.commit()
     db.refresh(budget)
     return BudgetResponse.from_orm_budget(budget)
 

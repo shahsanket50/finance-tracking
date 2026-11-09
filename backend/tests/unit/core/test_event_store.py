@@ -155,6 +155,7 @@ def test_read_stream_returns_events_in_seq_order() -> None:
             encryption_key_id=key.id,
             payload=payload_bytes,
             created_at=datetime.now(tz=UTC),
+            ingestion_event_id=uuid.uuid4(),  # NOT NULL on transaction_events
         )
 
     row1 = make_row(10, p1)
@@ -245,6 +246,7 @@ def test_upcaster_applied_automatically_on_read() -> None:
             encryption_key_id=key.id,
             payload=payload_bytes,
             created_at=datetime.now(tz=UTC),
+            ingestion_event_id=uuid.uuid4(),  # NOT NULL on transaction_events
         )
 
         session = MagicMock()

@@ -16,8 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api_errors import (
+    ACCOUNT_TYPE_MISMATCH,
+    ACCOUNT_TYPE_MISSING,
     BALANCE_NOT_SUPPORTED,
     DERIVATION_ERROR_RESPONSES,
+    STATEMENT_DECRYPTION_FAILED,
     ApiError,
     ledger_integrity_error,
 )
@@ -25,10 +28,12 @@ from core.events.store import read_since_seq
 from core.models.mutable import Account
 from db import get_db
 from processing.accounts.contract import (
+    StatementDecryptionError,
     balance_legs_from_events,
     derive_cc_outstanding_liability,
     derive_savings_balance,
-    load_statement_anchor,
+    load_account_statements,
+    select_anchor,
 )
 from processing.accounts.schemas import (
     AccountBalanceResponse,
@@ -41,7 +46,12 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 # TODO: replace with real auth dependency in Phase 5
 _STUB_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-_BALANCE_ACCOUNT_TYPES = frozenset({"savings", "current", "credit_card"})
+# Account type → the account_type its statements report (ParsedStatement.account_type).
+_STATEMENT_TYPE_BY_ACCOUNT_TYPE = {
+    "savings": "savings",
+    "current": "savings",
+    "credit_card": "credit_card",
+}
 
 
 def _require_account(db: Session, user_id: uuid.UUID, account_id: uuid.UUID) -> Account:
@@ -136,13 +146,15 @@ def get_account_balance(
     account_id: uuid.UUID,
     db: Session = Depends(get_db),  # noqa: B008
 ) -> AccountBalanceResponse:
-    """Derive the account's balance from its latest statement anchor (PRD §8.1, ADR-022).
+    """Derive the account's balance from its statement anchor (PRD §8.1, ADR-022).
 
-    DERIVATION: latest statement closing balance + every ingested leg dated after that
-    statement, resolver-paired legs included (exclusion is for flow totals, not balances).
-    savings/current → derived_balance_paise; credit_card → outstanding_liability_paise
-    (−balance, unclamped: negative = credit balance). No anchor → the field is null and
-    anchor_period_end is null: the balance is unknown, not zero.
+    DERIVATION by statement provenance (review C1): the latest statement with a known closing
+    balance, plus legs written by statements ending after it. Resolver-paired legs count
+    (exclusion is for flow totals). savings/current → derived_balance_paise; credit_card →
+    outstanding_liability_paise (−balance, unclamped). No anchor → null + anchor_period_end
+    null: unknown, not zero. stale=true: some legs couldn't be placed and were not added.
+    Structured errors: missing or mismatched account type → 422; undecryptable statement or
+    contract-violating ledger data → 500 (scoped to this account).
     """
     account = _require_account(db, _STUB_USER_ID, account_id)
 
@@ -151,19 +163,38 @@ def get_account_balance(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Account has no account_ref — cannot derive balance from event log",
         )
-
-    account_type = account.account_type or "savings"
-    if account_type not in _BALANCE_ACCOUNT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=ApiError(
-                code=BALANCE_NOT_SUPPORTED,
-                message=f"No balance derivation for account_type={account_type!r}",
-            ).model_dump(),
+    account_type = account.account_type
+    if account_type is None:
+        raise _unprocessable(ACCOUNT_TYPE_MISSING, "Account has no account_type; set it first")
+    if account_type not in _STATEMENT_TYPE_BY_ACCOUNT_TYPE:
+        raise _unprocessable(
+            BALANCE_NOT_SUPPORTED, f"No balance derivation for account_type={account_type!r}"
         )
+
     try:
-        anchor = load_statement_anchor(db, _STUB_USER_ID, account.account_ref)
-        legs = balance_legs_from_events(read_since_seq(db, _STUB_USER_ID), account.account_ref)
+        statements = load_account_statements(db, _STUB_USER_ID, account.account_ref)
+    except StatementDecryptionError as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ApiError(code=STATEMENT_DECRYPTION_FAILED, message=str(err)).model_dump(),
+        ) from err
+    except (ValueError, TypeError) as err:
+        raise ledger_integrity_error(err) from err
+
+    expected = _STATEMENT_TYPE_BY_ACCOUNT_TYPE[account_type]
+    mismatched = sorted({s.account_type for s in statements if s.account_type != expected})
+    if mismatched:
+        raise _unprocessable(
+            ACCOUNT_TYPE_MISMATCH,
+            f"Account is {account_type!r} but its statements are {mismatched}; "
+            "fix the account type before deriving a balance",
+        )
+
+    try:
+        anchor = select_anchor(statements)
+        legs = balance_legs_from_events(
+            read_since_seq(db, _STUB_USER_ID), account.account_ref, statements
+        )
         if account_type == "credit_card":
             summary = derive_cc_outstanding_liability(account.account_ref, anchor, legs)
         else:
@@ -177,8 +208,16 @@ def get_account_balance(
         derived_balance_paise=_money(summary.derived_balance_paise),
         outstanding_liability_paise=_money(summary.outstanding_liability_paise),
         anchor_period_end=None if anchor is None else anchor.period_end,
+        stale=summary.stale,
     )
 
 
 def _money(paise: int | None) -> str | None:
     return None if paise is None else str(paise)
+
+
+def _unprocessable(code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=ApiError(code=code, message=message).model_dump(),
+    )

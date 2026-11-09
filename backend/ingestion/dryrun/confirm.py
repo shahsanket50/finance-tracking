@@ -71,7 +71,12 @@ def confirm(session_id: str, db_session: Session) -> None:
         )
 
     statement = dry_session.statement
-    is_pass = dry_session.balance_check == BalanceCheckResult.PASS
+    # NOT_APPLICABLE (empty statement, unknown balances) is accepted: nothing to ingest,
+    # but the statement is recorded so its period shows as covered. It never anchors (C2).
+    is_pass = dry_session.balance_check in (
+        BalanceCheckResult.PASS,
+        BalanceCheckResult.NOT_APPLICABLE,
+    )
 
     # Encrypt the IngestionEvent payload
     payload_dict: dict[str, object] = {
@@ -90,6 +95,12 @@ def confirm(session_id: str, db_session: Session) -> None:
     ingestion_event = IngestionEvent(
         user_id=dry_session.user_id,
         source="pdf_upload",
+        # Plaintext routing keys (already plaintext on transaction_events) so balance
+        # anchoring can select one account's statements before decrypting (ADR-022).
+        source_detail={
+            "account_ref": statement.account_ref,
+            "account_type": statement.account_type,
+        },
         period_start=statement.period_start,
         period_end=statement.period_end,
         records_added=len(statement.transactions) if is_pass else 0,

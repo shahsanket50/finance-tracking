@@ -28,6 +28,9 @@ class Event:
     aggregate_id: str  # maps to account_ref for transaction_events
     payload: dict[str, object]  # decrypted + upcasted to latest version
     created_at: datetime
+    # Provenance: the IngestionEvent (statement) that wrote this row. Not read by any reducer,
+    # so projections are unaffected (Invariant 3); balance anchoring uses it (ADR-022).
+    ingestion_event_id: uuid.UUID | None = None
 
 
 def append_event(
@@ -143,4 +146,5 @@ def _to_event(session: Session, row: TransactionEvent) -> Event:
         aggregate_id=row.account_ref,
         payload=upcasted,
         created_at=row.created_at,
+        ingestion_event_id=row.ingestion_event_id,
     )

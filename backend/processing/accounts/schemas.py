@@ -53,3 +53,4 @@ class AccountBalanceResponse(BaseModel):
     derived_balance_paise: str | None  # savings / current: signed net asset
     outstanding_liability_paise: str | None  # credit_card: owed; negative = credit balance
     anchor_period_end: date | None  # period_end of the anchoring statement; None = no anchor
+    stale: bool  # true: some legs couldn't be placed vs the anchor and were not added

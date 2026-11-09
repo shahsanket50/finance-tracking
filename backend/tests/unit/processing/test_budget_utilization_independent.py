@@ -21,7 +21,7 @@ from __future__ import annotations
 import dataclasses
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from datetime import date
 from functools import cache
 from typing import get_args
 
@@ -42,9 +42,8 @@ from processing.classifier.base import derive_effective_categories
 from processing.classifier.categories import Category
 from processing.classifier.events import CategoryCorrectedPayload, TransactionCategorizedPayload
 from processing.exclusions import excluded_hashes_from_events
-from processing.resolver.candidate import CandidateTxn
-from processing.resolver.pipeline import _cascade_matchers
 from tests.factories.real_rows import Txn, ingested_events, parse_statement
+from tests.factories.real_rows import resolver_events as factory_resolver_events
 
 SAV_REF = "HDFC_SAV_9876"
 CC_REF = "SBI_CC_8765"
@@ -129,35 +128,10 @@ def _records(
 def _resolver_events(events: Sequence[Event]) -> list[Event]:
     """Run the real matcher cascade (no DB) over ingested events, as run_resolver does.
 
-    Candidates are built from the TransactionIngested payload confirm() writes; each match
-    becomes an event whose payload is the matcher's model_dump(), exactly as run_resolver
-    persists it.
+    Delegates to the real-row factory (ADR-024), which builds candidates with the pipeline's
+    own conversion and wraps each match exactly as run_resolver persists it.
     """
-    candidates = [
-        CandidateTxn(
-            idempotency_hash=str(e.payload["idempotency_hash"]),
-            amount_paise=int(str(e.payload["amount_paise"])),
-            value_date=date.fromisoformat(str(e.payload["value_date"])),
-            account_type=str(e.payload["account_type"]),
-        )
-        for e in events
-        if e.event_type == TRANSACTION_INGESTED
-    ]
-    next_seq = max((e.seq for e in events), default=0) + 1
-    created = datetime(2026, 1, 2, tzinfo=UTC)
-    return [
-        Event(
-            id=uuid.uuid4(),
-            seq=next_seq + i,
-            event_version=1,
-            event_type=event_type,
-            user_id=USER,
-            aggregate_id="RESOLVER",
-            payload=match.model_dump(),
-            created_at=created,
-        )
-        for i, (event_type, _h1, _h2, match) in enumerate(_cascade_matchers(candidates, set()))
-    ]
+    return factory_resolver_events(events, USER)
 
 
 # ---------------------------------------------------------------------------

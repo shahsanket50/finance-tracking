@@ -11,6 +11,7 @@ import os
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+psycopg://localhost/finance")
@@ -30,3 +31,18 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def is_unique_violation(err: IntegrityError, constraint: str) -> bool:
+    """True only for a Postgres unique violation (23505) on the named constraint.
+
+    Any other integrity failure (FK, NOT NULL, a different unique key) is not a "duplicate"
+    and must not be reported as one.
+    """
+    orig = getattr(err, "orig", None)
+    diag = getattr(orig, "diag", None)
+    # psycopg 3 exposes the SQLSTATE as `sqlstate` (`pgcode` is the psycopg 2 name).
+    return (
+        getattr(orig, "sqlstate", None) == "23505"
+        and getattr(diag, "constraint_name", None) == constraint
+    )

@@ -19,6 +19,7 @@ class Actor(StrEnum):
 class BalanceCheck(StrEnum):
     pass_ = "pass"
     fail = "fail"
+    not_applicable = "not_applicable"  # empty statement, balances unknown (never pass)
 
 
 class IngestionStatus(StrEnum):

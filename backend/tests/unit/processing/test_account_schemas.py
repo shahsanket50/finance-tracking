@@ -133,6 +133,7 @@ class TestAccountBalanceResponseSchema:
             derived_balance_paise="4215000",
             outstanding_liability_paise=None,
             anchor_period_end=date(2026, 1, 31),
+            stale=False,
         )
         assert obj.derived_balance_paise == "4215000"
         assert obj.outstanding_liability_paise is None
@@ -144,6 +145,7 @@ class TestAccountBalanceResponseSchema:
             derived_balance_paise=None,
             outstanding_liability_paise="1500000",
             anchor_period_end=date(2026, 1, 31),
+            stale=False,
         )
         assert obj.outstanding_liability_paise == "1500000"
         assert obj.derived_balance_paise is None
@@ -156,6 +158,7 @@ class TestAccountBalanceResponseSchema:
             derived_balance_paise=None,
             outstanding_liability_paise=None,
             anchor_period_end=None,
+            stale=False,
         )
         assert obj.derived_balance_paise is None
         assert obj.outstanding_liability_paise is None
@@ -169,6 +172,7 @@ class TestAccountBalanceResponseSchema:
                 derived_balance_paise=4215000,  # type: ignore[arg-type]
                 outstanding_liability_paise=None,
                 anchor_period_end=date(2026, 1, 31),
+                stale=False,
             )
 
     def test_int_for_outstanding_liability_is_rejected(self) -> None:
@@ -179,6 +183,7 @@ class TestAccountBalanceResponseSchema:
                 derived_balance_paise=None,
                 outstanding_liability_paise=1500000,  # type: ignore[arg-type]
                 anchor_period_end=date(2026, 1, 31),
+                stale=False,
             )
 
     def test_float_for_derived_balance_is_rejected(self) -> None:
@@ -189,6 +194,7 @@ class TestAccountBalanceResponseSchema:
                 derived_balance_paise=42150.00,  # type: ignore[arg-type]
                 outstanding_liability_paise=None,
                 anchor_period_end=date(2026, 1, 31),
+                stale=False,
             )
 
     def test_large_paise_value_as_string_preserves_precision(self) -> None:
@@ -200,5 +206,6 @@ class TestAccountBalanceResponseSchema:
             derived_balance_paise=large_paise,
             outstanding_liability_paise=None,
             anchor_period_end=date(2026, 1, 31),
+            stale=False,
         )
         assert obj.derived_balance_paise == large_paise

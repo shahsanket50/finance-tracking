@@ -21,7 +21,6 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy.exc import IntegrityError
 
 from processing.budgets.router import create_budget, get_budget, list_budgets
 from processing.budgets.schemas import BudgetCreate
@@ -165,31 +164,8 @@ class TestBudgetCreate:
 # ---------------------------------------------------------------------------
 
 
-class TestBudgetDuplicate:
-    def test_duplicate_raises_409(self) -> None:
-        db = MagicMock()
-        db.commit.side_effect = IntegrityError("UNIQUE constraint", {}, Exception("duplicate key"))
-        body = BudgetCreate(category="shopping", month=date(2026, 3, 1), target_paise=100_000)
-        with pytest.raises(HTTPException) as exc_info:
-            create_budget(body, db)
-        assert exc_info.value.status_code == 409
-
-    def test_duplicate_error_message_is_descriptive(self) -> None:
-        db = MagicMock()
-        db.commit.side_effect = IntegrityError("UNIQUE constraint", {}, Exception("duplicate key"))
-        body = BudgetCreate(category="shopping", month=date(2026, 3, 1), target_paise=100_000)
-        with pytest.raises(HTTPException) as exc_info:
-            create_budget(body, db)
-        assert "already exists" in exc_info.value.detail.lower()
-
-    def test_db_is_rolled_back_on_duplicate(self) -> None:
-        db = MagicMock()
-        db.commit.side_effect = IntegrityError("UNIQUE constraint", {}, Exception("duplicate key"))
-        body = BudgetCreate(category="shopping", month=date(2026, 3, 1), target_paise=100_000)
-        with pytest.raises(HTTPException):
-            create_budget(body, db)
-        db.rollback.assert_called_once()
-
+# Duplicate / integrity-error mapping is proven on real Postgres:
+# tests/integration/test_budget_routes.py (a mock IntegrityError can't carry pgcode/constraint).
 
 # ---------------------------------------------------------------------------
 # B1-3  Invalid category → 422

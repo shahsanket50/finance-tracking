@@ -30,8 +30,10 @@ class ParsedStatement:
     account_type: str  # "savings" | "credit_card" | "fd" — used by resolver pipeline
     period_start: date
     period_end: date
-    opening_balance_paise: int
-    closing_balance_paise: int
+    # None = the statement does not print a readable balance (TRD §10.3: unknown, never 0).
+    # A statement with transactions and an unknown balance is rejected by the balance check.
+    opening_balance_paise: int | None
+    closing_balance_paise: int | None
     transactions: list[ParsedTransaction]
     confidence: int  # 0–10000 basis points
     raw_text: str  # full extracted text, for golden diffs

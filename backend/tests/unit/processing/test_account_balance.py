@@ -37,10 +37,17 @@ from processing.accounts.contract import (
     balance_legs_from_events,
     derive_cc_outstanding_liability,
     derive_savings_balance,
+    select_anchor,
 )
-from processing.resolver.candidate import CandidateTxn
 from processing.resolver.pipeline import _cascade_matchers
-from tests.factories.real_rows import Txn, ingested_events, parse_pdf, parse_statement
+from tests.factories.real_rows import (
+    Txn,
+    candidates_from_events,
+    ingested_events,
+    parse_pdf,
+    parse_statement,
+    statement_record,
+)
 
 GOLDEN_DIR = Path(__file__).parents[2] / "fixtures" / "golden"
 USER = uuid.UUID("00000000-0000-0000-0000-0000000000b2")
@@ -68,15 +75,20 @@ def _events(*statements: ParsedStatement) -> list[Event]:
 
 
 def _anchor(statement: ParsedStatement) -> StatementAnchor:
-    return StatementAnchor(
-        account_ref=statement.account_ref,
-        period_end=statement.period_end,
-        closing_balance_paise=statement.closing_balance_paise,
-    )
+    anchor = select_anchor([statement_record(statement, seq=1)])
+    assert anchor is not None, "statement has no known closing balance"
+    return anchor
 
 
 def _legs(account_ref: str, *statements: ParsedStatement) -> list[BalanceLeg]:
-    return balance_legs_from_events(_events(*statements), account_ref)
+    """Legs with provenance: each statement's rows carry that statement's period_end."""
+    records = [statement_record(s, seq=i + 1) for i, s in enumerate(statements)]
+    return balance_legs_from_events(_events(*statements), account_ref, records)
+
+
+def _closing(statement: ParsedStatement) -> int:
+    assert statement.closing_balance_paise is not None
+    return statement.closing_balance_paise
 
 
 def _hash(statement: ParsedStatement, narration: str) -> str:
@@ -170,7 +182,7 @@ class TestSavingsAnchoredBalance:
         dec, jan = _sav_dec(), _sav_jan()
         legs = _legs(SAV_REF, dec, jan)  # Dec legs are inside the Dec closing balance
         result = derive_savings_balance(SAV_REF, "savings", _anchor(dec), legs)
-        expected = dec.closing_balance_paise + sum(t.amount_paise for t in jan.transactions)
+        expected = _closing(dec) + sum(t.amount_paise for t in jan.transactions)
         assert result.derived_balance_paise == expected
         # The chain reconciles to the next statement's printed closing balance.
         assert result.derived_balance_paise == jan.closing_balance_paise
@@ -270,7 +282,7 @@ class TestGuards:
 class TestBalanceLegsAdapter:
     def test_filters_by_account_and_keeps_parser_values(self) -> None:
         sav, card = _sav_jan(), _card_jan()
-        legs = balance_legs_from_events(_events(sav, card), SAV_REF)
+        legs = _legs(SAV_REF, sav, card)
         assert [leg.idempotency_hash for leg in legs] == [
             t.idempotency_hash for t in sav.transactions
         ]
@@ -280,11 +292,11 @@ class TestBalanceLegsAdapter:
 
     def test_no_dedup(self) -> None:
         sav = _sav_jan()
-        legs = balance_legs_from_events(_events(sav, sav), SAV_REF)
+        legs = balance_legs_from_events(_events(sav, sav), SAV_REF, [statement_record(sav, seq=1)])
         assert len(legs) == 2 * len(sav.transactions)
 
     def test_unknown_account_has_no_legs(self) -> None:
-        assert balance_legs_from_events(_events(_sav_jan(), _card_jan()), "AXIS_SAV_0000") == []
+        assert _legs("AXIS_SAV_0000", _sav_jan(), _card_jan()) == []
 
 
 # ---------------------------------------------------------------------------
@@ -299,10 +311,12 @@ class TestCardLiability:
         golden = parse_pdf((GOLDEN_DIR / "sbi_cc" / "statement_001.pdf").read_bytes())
         assert all(t.amount_paise < 0 for t in golden.transactions)
         events = ingested_events(golden, user_id=USER)
-        legs = balance_legs_from_events(events, golden.account_ref)
+        legs = balance_legs_from_events(
+            events, golden.account_ref, [statement_record(golden, seq=1)]
+        )
         result = derive_cc_outstanding_liability(golden.account_ref, _anchor(golden), legs)
-        assert golden.closing_balance_paise < 0
-        assert result.outstanding_liability_paise == -golden.closing_balance_paise
+        assert _closing(golden) < 0
+        assert result.outstanding_liability_paise == -_closing(golden)
         assert result.outstanding_liability_paise is not None
         assert result.outstanding_liability_paise > 0
 
@@ -316,7 +330,7 @@ class TestCardLiability:
         jan, feb = _card_jan(), _card_feb()
         result = derive_cc_outstanding_liability(CC_REF, _anchor(jan), _legs(CC_REF, jan, feb))
         assert result.outstanding_liability_paise == 55_000 + 40_000 + 64_900
-        assert result.outstanding_liability_paise == -feb.closing_balance_paise
+        assert result.outstanding_liability_paise == -_closing(feb)
 
     def test_overpaid_card_is_negative_liability(self) -> None:
         card = _parse(
@@ -353,15 +367,7 @@ class TestCardLiability:
 
 def _cascade_pairs(events: Sequence[Event]) -> list[tuple[str, str, str]]:
     """Real resolver matcher cascade (no DB) over ingested payloads."""
-    candidates = [
-        CandidateTxn(
-            idempotency_hash=str(e.payload["idempotency_hash"]),
-            amount_paise=int(str(e.payload["amount_paise"])),
-            value_date=date.fromisoformat(str(e.payload["value_date"])),
-            account_type=str(e.payload["account_type"]),
-        )
-        for e in events
-    ]
+    candidates = candidates_from_events(events)  # the pipeline's own conversion (ADR-024)
     return [(t, h1, h2) for t, h1, h2, _ in _cascade_matchers(candidates, set())]
 
 
@@ -414,7 +420,7 @@ class TestFormulasAreDistinct:
     def test_card_liability_is_negated_balance(self) -> None:
         card = _card_jan()
         c = derive_cc_outstanding_liability(CC_REF, _anchor(card), _legs(CC_REF, card))
-        assert c.outstanding_liability_paise == -card.closing_balance_paise
+        assert c.outstanding_liability_paise == -_closing(card)
 
 
 # ---------------------------------------------------------------------------
@@ -462,4 +468,4 @@ class TestPropertyAnchoredBalance:
         noisy = legs + [legs[i] for i in picks]
         result = derive_cc_outstanding_liability(CC_REF, _anchor(jan), noisy)
         assert type(result.outstanding_liability_paise) is int
-        assert result.outstanding_liability_paise == -feb.closing_balance_paise
+        assert result.outstanding_liability_paise == -_closing(feb)

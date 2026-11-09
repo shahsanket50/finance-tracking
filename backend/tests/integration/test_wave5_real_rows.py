@@ -31,6 +31,7 @@ from processing.accounts.contract import (
     balance_legs_from_events,
     derive_cc_outstanding_liability,
     derive_savings_balance,
+    load_account_statements,
     load_statement_anchor,
 )
 from processing.budgets.contract import budget_transactions_from_events, derive_budget_utilization
@@ -193,7 +194,12 @@ def test_cc_payment_legs_excluded_from_spend_but_counted_in_balances(
     assert sav_anchor.period_end == sav.period_end
     assert sav_anchor.closing_balance_paise == sav.closing_balance_paise
     sav_balance = derive_savings_balance(
-        SAV_REF, "savings", sav_anchor, balance_legs_from_events(events, SAV_REF)
+        SAV_REF,
+        "savings",
+        sav_anchor,
+        balance_legs_from_events(
+            events, SAV_REF, load_account_statements(pg_session, test_user.id, SAV_REF)
+        ),
     )
     assert sav_balance.derived_balance_paise == sav.closing_balance_paise
     assert sav_balance.derived_balance_paise == SAV_OPENING + 3_180_000  # B-6: not +4,680,000
@@ -203,7 +209,11 @@ def test_cc_payment_legs_excluded_from_spend_but_counted_in_balances(
     assert card_anchor is not None
     assert card_anchor.closing_balance_paise == card.closing_balance_paise
     liability = derive_cc_outstanding_liability(
-        CC_REF, card_anchor, balance_legs_from_events(events, CC_REF)
+        CC_REF,
+        card_anchor,
+        balance_legs_from_events(
+            events, CC_REF, load_account_statements(pg_session, test_user.id, CC_REF)
+        ),
     )
     assert liability.outstanding_liability_paise == 55_000
 
@@ -278,10 +288,20 @@ def test_internal_transfer_moves_balances_nets_to_zero_and_is_not_spend(
     hdfc_anchor = load_statement_anchor(pg_session, test_user.id, HDFC_REF)
     sbi_anchor = load_statement_anchor(pg_session, test_user.id, SBI_REF)
     hdfc_balance = derive_savings_balance(
-        HDFC_REF, "savings", hdfc_anchor, balance_legs_from_events(events, HDFC_REF)
+        HDFC_REF,
+        "savings",
+        hdfc_anchor,
+        balance_legs_from_events(
+            events, HDFC_REF, load_account_statements(pg_session, test_user.id, HDFC_REF)
+        ),
     ).derived_balance_paise
     sbi_balance = derive_savings_balance(
-        SBI_REF, "savings", sbi_anchor, balance_legs_from_events(events, SBI_REF)
+        SBI_REF,
+        "savings",
+        sbi_anchor,
+        balance_legs_from_events(
+            events, SBI_REF, load_account_statements(pg_session, test_user.id, SBI_REF)
+        ),
     ).derived_balance_paise
     assert hdfc_balance == HDFC_OPENING - TRANSFER_PAISE == hdfc.closing_balance_paise
     assert sbi_balance == SBI_OPENING + TRANSFER_PAISE == sbi.closing_balance_paise
@@ -306,7 +326,9 @@ def test_account_without_statement_has_no_anchor_and_no_balance(
     anchor = load_statement_anchor(pg_session, test_user.id, other_ref)
     assert anchor is None
     events = read_since_seq(pg_session, test_user.id, 0)
-    legs = balance_legs_from_events(events, other_ref)
+    legs = balance_legs_from_events(
+        events, other_ref, load_account_statements(pg_session, test_user.id, other_ref)
+    )
     assert legs == []
     result = derive_savings_balance(other_ref, "savings", anchor, legs)
     assert result.derived_balance_paise is None
@@ -344,6 +366,11 @@ def test_anchor_is_latest_period_end_regardless_of_ingest_order(
     assert anchor.closing_balance_paise == feb.closing_balance_paise
     events = read_since_seq(pg_session, test_user.id, 0)
     result = derive_savings_balance(
-        SAV_REF, "savings", anchor, balance_legs_from_events(events, SAV_REF)
+        SAV_REF,
+        "savings",
+        anchor,
+        balance_legs_from_events(
+            events, SAV_REF, load_account_statements(pg_session, test_user.id, SAV_REF)
+        ),
     )
     assert result.derived_balance_paise == feb.closing_balance_paise

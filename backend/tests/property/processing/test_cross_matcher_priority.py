@@ -19,6 +19,7 @@ from core.events.types import (
 )
 from processing.resolver.candidate import CandidateTxn
 from processing.resolver.pipeline import _cascade_matchers
+from tests.factories.real_rows import real_candidate
 
 _ACCOUNT_TYPES = [ACCOUNT_TYPE_SAVINGS, ACCOUNT_TYPE_CREDIT_CARD, ACCOUNT_TYPE_FD]
 _BASE_DATE = date(2026, 2, 10)
@@ -38,18 +39,20 @@ def candidate_list(draw: st.DrawFn) -> list[CandidateTxn]:
         sign = -1 if i % 2 == 0 else 1
         offset_days = draw(st.integers(min_value=0, max_value=3))
         candidates.append(
-            CandidateTxn(
-                idempotency_hash=h,
-                amount_paise=sign * amount,
-                value_date=_BASE_DATE + timedelta(days=offset_days),
-                account_type=account_type,
+            # Real candidate (ADR-024): production parser + pipeline conversion. The drawn
+            # string only keeps legs distinct through the narration.
+            real_candidate(
+                sign * amount,
+                _BASE_DATE + timedelta(days=offset_days),
+                account_type,
+                f"UPI TRANSFER {i:02d} {h[:8].upper()}",
             )
         )
     return candidates
 
 
 @given(candidate_list())
-@settings(max_examples=200)
+@settings(max_examples=200, deadline=None)  # real-parser rows render PDFs
 def test_no_hash_claimed_by_more_than_one_matcher(candidates: list[CandidateTxn]) -> None:
     """_cascade_matchers() must never yield a hash already claimed by an earlier matcher."""
     claimed: set[str] = set()
