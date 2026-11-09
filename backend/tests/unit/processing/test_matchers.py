@@ -31,6 +31,7 @@ from processing.resolver.events import (
     MarkedReversalPayload,
 )
 from processing.resolver.matchers import cc_payment, fd_booking, reversal, transfer
+from tests.factories.real_rows import real_candidate
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,12 +44,9 @@ def _txn(
     value_date: date,
     account_type: str,
 ) -> CandidateTxn:
-    return CandidateTxn(
-        idempotency_hash=f"{'0' * (64 - len(hash_suffix))}{hash_suffix}",
-        amount_paise=amount_paise,
-        value_date=value_date,
-        account_type=account_type,
-    )
+    """A real candidate (ADR-024): rendered statement → production parser → pipeline
+    conversion. hash_suffix keeps legs distinct via the narration."""
+    return real_candidate(amount_paise, value_date, account_type, f"UPI TRANSFER {hash_suffix}")
 
 
 _DATE = date(2025, 6, 15)

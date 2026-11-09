@@ -6,6 +6,149 @@
 
 ---
 
+---
+
+## 2026-09-23 — Auto-generated session entry (REVIEW BEFORE COMMITTING)
+
+**Phase:** **Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 in progress)
+**Branch:** `feature/phase3`
+
+### Invariant checks (auto-run by Stop hook)
+
+```
+PASS (17 passed in 1.88s)
+```
+
+### Test count at session end
+
+```
+524 tests collected, 1 error in 0.47s
+unknown
+```
+
+### Commits this session
+
+```
+23723ac fix(wave4): AC7 resolver-exclusion proof + account_ref immutability guard
+8af1fba feat(wave4): account CRUD router + balance derivation endpoint — PRD §13, §8.1
+6d19069 test(wave4): independent balance derivation + schema tests — AC1–AC6, SC1–SC2
+38302ea contract(wave4): account balance derivation + API schemas — PRD §8.1, §13
+8c7656d test(wave3): property tests — running-cost total derivation (PRD §5.1)
+3f8b5e2 feat(wave3): nature tagger implementation — PRD §5.1, TRD §8.3
+78cad73 test(wave3): independent nature tagger tests — N1–N9 (PRD §5.1, TRD §8.3)
+fed95eb contract(wave3): nature tagger interface — PRD §5.1, TRD §8.3
+2deb148 fix(wave2): remove _user_rules — event-log-driven classifier
+1161b78 fix(wave2): add real C4 pipeline ordering tests (TestPipelineOrderingC4)
+```
+
+### Done
+
+<!-- Fill in manually or let the next session prepend a proper entry above this one. -->
+<!-- This auto-entry is a fallback, not a replacement for agent-authored entries. -->
+
+
+---
+
+## 2026-09-19 — Auto-generated session entry (REVIEW BEFORE COMMITTING)
+
+**Phase:** **Current phase:** Phase 3 — Day-to-Day Layer (backend, Wave 5 next)
+**Branch:** `feature/phase3`
+
+### Invariant checks (auto-run by Stop hook)
+
+```
+PASS (17 passed in 1.96s)
+```
+
+### Test count at session end
+
+```
+524 tests collected in 0.51s
+```
+
+### Commits this session
+
+```
+23723ac fix(wave4): AC7 resolver-exclusion proof + account_ref immutability guard
+8af1fba feat(wave4): account CRUD router + balance derivation endpoint — PRD §13, §8.1
+6d19069 test(wave4): independent balance derivation + schema tests — AC1–AC6, SC1–SC2
+38302ea contract(wave4): account balance derivation + API schemas — PRD §8.1, §13
+8c7656d test(wave3): property tests — running-cost total derivation (PRD §5.1)
+3f8b5e2 feat(wave3): nature tagger implementation — PRD §5.1, TRD §8.3
+78cad73 test(wave3): independent nature tagger tests — N1–N9 (PRD §5.1, TRD §8.3)
+fed95eb contract(wave3): nature tagger interface — PRD §5.1, TRD §8.3
+2deb148 fix(wave2): remove _user_rules — event-log-driven classifier
+1161b78 fix(wave2): add real C4 pipeline ordering tests (TestPipelineOrderingC4)
+```
+
+### Done
+
+<!-- Fill in manually or let the next session prepend a proper entry above this one. -->
+<!-- This auto-entry is a fallback, not a replacement for agent-authored entries. -->
+
+
+## 2026-09-11 — Sessions 017–018: Phase 3 Waves 1–4 (LLM adapter → account CRUD)
+
+**Phase:** 3 — Day-to-Day Layer (Waves 1–4 complete; Wave 5 next)
+**Branch:** `feature/phase3`
+
+### Done
+
+**Wave 1 — LLM adapter + merchant normalizer** (`549cbc6`–`9ef0b99`, 35 new tests):
+- `LLMAdapter` Protocol (provider-agnostic) + `StubLLMAdapter` (deterministic, Pydantic-validated) + `set_adapter()` injection
+- `canonical_merchant(narration)` — NFKC → strip → collapse whitespace → uppercase; result recorded as event (Invariant 3)
+- LLM fallback fires only when no rule matches (N3 verified with stub)
+- Fixed `_make_default_instance` Literal type detection: `get_origin(Literal[...])` returns `typing.Literal` in Python 3.10+; prior code fell through to `None`
+
+**Wave 2 — Categorization** (`98d6af4`–`2deb148`, 41 new tests):
+- Rules-based + LLM fallback + per-user correction learning
+- `_user_rules` (mutable module-level dict) removed — was a TRD §9.2 violation: lost on restart, broke Invariant 3
+- `classify_transaction` now accepts `correction_events: list[object]`; `build_learned_rules()` is a pure derivation
+- `record_correction()` is now a pure function (no side effects); caller records the returned event
+- `TestPipelineOrderingC4` added — real assertion that classifier cannot run before resolver
+
+**Wave 3 — Nature tagging** (`fed95eb`–`8c7656d`, 64 new tests):
+- `tag_nature()` returns `NatureTaggedPayload` (caller records); raises `ValueError` for non-expense transactions (T1 guard)
+- 12 category→nature rules in `rules.py`; LLM fallback for "other" and unmapped categories
+- `NATURE_CONFIDENCE_THRESHOLD = 7500`; below threshold raises `BelowConfidenceThreshold` (Invariant 6)
+- 3 Hypothesis property tests (`test_nature_running_cost_property.py`, 200 examples each): running-cost partition correctness, floor correctness, int-only (T4)
+- Spec ambiguity resolved: insurance is `essential_fixed` (PRD §5.1 explicit example); nature overrides are transaction-hash-scoped, not merchant-scoped
+
+**Wave 4 — Account CRUD + balance derivation** (`38302ea`–`23723ac`, 53 new tests):
+- 6 REST routes under `GET/POST /accounts` + `GET/PATCH/DELETE /{account_id}` + `GET /{account_id}/balance`
+- `account_ref` added to `Account` ORM; set at creation, excluded from `AccountUpdate` (`extra="forbid"`)
+- Two named derivation functions: `derive_savings_balance()` (savings/current, signed sum) and `derive_cc_outstanding_liability()` (CC, floored at 0) — never one formula
+- AC7: resolver-exclusion propagation proven with concrete amounts: ₹50k salary + ₹15k CC payment (excluded) + ₹3.2k grocery → correct balance ₹46,800 (not ₹31,800); 4 tests in `TestResolverExclusionPropagatesIntoBalance`
+- Deactivation is soft (`sync_status = "deactivated"`) — hard delete forbidden per TRD §3.1
+- Fixed `EXCLUDED_EVENT_TYPES` → `RESOLVER_EVENT_TYPES` import error in `crud_router.py`
+
+### Decisions made
+
+- Merchant-level nature learning deferred — same merchant can be `essential_variable` (pharmacy, sick) or `discretionary` (pharmacy, cosmetics). Hash-level correction is the right scope.
+- AC7 test uses explicit paise amounts, not percentages — spec requires concrete verifiability over abstraction.
+- Wave 4 CC dual-model scope deliberately scoped to balance derivation only; CC statement cycle period storage (`CC3`) and materialised liability update on ingestion (`CC4`) deferred to Wave 6.
+
+### Test counts
+
+- Backend unit + property: 523 (35 + 41 + 64 + 53 new in Waves 1–4; 330 pre-existing)
+- Frontend: 70 (unchanged)
+- Total: 593
+
+### Gaps deferred from this block
+
+- A4/A5: prompt versioning + LLM classification events → Wave 6
+- C5: golden fixture for categorization → Wave 6 (requires G17 activation)
+- T5: nature event recording on replay → Wave 6
+- CC3/CC4, CS1–CS3 → Wave 6
+- OA2/OA3: OpenAPI export for Wave 4 routes → pending (git broken during session; not yet run)
+- G9–G12 quality gates: deferred to Phase 3 kickoff — should be enabled before Phase 3 closes
+
+### Next
+
+Wave 5 — Budget CRUD + utilization derivation (B1–B6 exit criteria).
+
+---
+
 ## 2026-08-27 — Session 016: CI hardening + OpenAPI contract tooling (pre-Phase 3)
 
 **Phase:** Between Phase 2.5 (closed) and Phase 3 (not started)

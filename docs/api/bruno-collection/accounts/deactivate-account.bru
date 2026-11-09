@@ -1,0 +1,20 @@
+meta {
+  name: Deactivate Account
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{base_url}}/api/v1/accounts/:account_id
+  body: none
+  auth: none
+}
+
+docs {
+  Soft-deactivate an account (sync_status = "deactivated").
+
+Hard delete is not permitted — the event log references this account_ref
+and must remain intact for replay (TRD §3.1). Per TRD §9.3 (crypto-shredding),
+deactivation destroys the active encryption key; the account data is recoverable
+by re-issuing a key. UI must say "deactivated," never "deleted."
+}

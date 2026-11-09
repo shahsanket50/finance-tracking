@@ -60,6 +60,25 @@ _MATCHER_PRIORITY: tuple[tuple[str, Any, Callable[[Any], tuple[str, str]]], ...]
 )
 
 
+def candidate_from_ingested(
+    idempotency_hash: str,
+    amount_paise: int,
+    value_date: date,
+    payload: dict[str, object],
+) -> CandidateTxn:
+    """The one conversion from an ingested transaction row to a matcher candidate.
+
+    Used by run_resolver() and by the real-row test factory (ADR-024), so tests feed the
+    matchers exactly what production feeds them.
+    """
+    return CandidateTxn(
+        idempotency_hash=idempotency_hash,
+        amount_paise=amount_paise,
+        value_date=value_date,
+        account_type=str(payload.get("account_type", ACCOUNT_TYPE_SAVINGS)),
+    )
+
+
 def _resolver_idempotency_hash(event_type: str, h1: str, h2: str) -> str:
     """Deterministic, order-independent idempotency hash for a resolver event."""
     key = event_type + ":" + ":".join(sorted([h1, h2]))
@@ -194,14 +213,8 @@ def run_resolver(session: Session, user_id: uuid.UUID) -> int:
 
     for row in txn_rows:
         payload = decrypt_payload(session, row.encryption_key_id, row.payload)
-        account_type = str(payload.get("account_type", ACCOUNT_TYPE_SAVINGS))
         candidates.append(
-            CandidateTxn(
-                idempotency_hash=row.idempotency_hash,
-                amount_paise=row.amount_paise,
-                value_date=row.value_date,
-                account_type=account_type,
-            )
+            candidate_from_ingested(row.idempotency_hash, row.amount_paise, row.value_date, payload)
         )
         hash_to_ingestion_id[row.idempotency_hash] = row.ingestion_event_id
         hash_to_value_date[row.idempotency_hash] = row.value_date

@@ -88,7 +88,7 @@ class IngestionEvent(Base):
     records_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_flagged: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    balance_check: Mapped[str | None] = mapped_column(String(8))
+    balance_check: Mapped[str | None] = mapped_column(String(16))
     confidence: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     payload: Mapped[bytes] = mapped_column(LargeBinary(), nullable=False)

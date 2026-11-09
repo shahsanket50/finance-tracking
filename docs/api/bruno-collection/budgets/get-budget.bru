@@ -1,0 +1,15 @@
+meta {
+  name: Get Budget
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/budgets/:budget_id
+  body: none
+  auth: none
+}
+
+docs {
+  Get a single budget by ID.
+}

@@ -1,0 +1,23 @@
+meta {
+  name: Get Account Balance
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/accounts/:account_id/balance
+  body: none
+  auth: none
+}
+
+docs {
+  Derive the account's balance from its statement anchor (PRD §8.1, ADR-022).
+
+DERIVATION by statement provenance (review C1): the latest statement with a known closing
+balance, plus legs written by statements ending after it. Resolver-paired legs count
+(exclusion is for flow totals). savings/current → derived_balance_paise; credit_card →
+outstanding_liability_paise (−balance, unclamped). No anchor → null + anchor_period_end
+null: unknown, not zero. stale=true: some legs couldn't be placed and were not added.
+Structured errors: missing or mismatched account type → 422; undecryptable statement or
+contract-violating ledger data → 500 (scoped to this account).
+}

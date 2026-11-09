@@ -65,9 +65,10 @@ class DryRunPreview(BaseModel):
     account_ref: str
     period_start: date
     period_end: date
-    opening_balance_paise: str  # serialized as string — JSON numbers lose paise precision
-    closing_balance_paise: str  # serialized as string — JSON numbers lose paise precision
-    balance_check: str  # "pass" or "fail"
+    # Strings: JSON numbers lose paise precision. None = not printed on the statement.
+    opening_balance_paise: str | None
+    closing_balance_paise: str | None
+    balance_check: str  # "pass" | "fail" | "not_applicable"
     transaction_count: int
     transactions: list[TransactionPreview]
     confidence: int
@@ -80,8 +81,8 @@ def _session_to_preview(session: DryRunSession) -> DryRunPreview:
         account_ref=stmt.account_ref,
         period_start=stmt.period_start,
         period_end=stmt.period_end,
-        opening_balance_paise=str(stmt.opening_balance_paise),
-        closing_balance_paise=str(stmt.closing_balance_paise),
+        opening_balance_paise=_money(stmt.opening_balance_paise),
+        closing_balance_paise=_money(stmt.closing_balance_paise),
         balance_check=session.balance_check.value,
         transaction_count=len(stmt.transactions),
         transactions=[
@@ -139,3 +140,7 @@ def abandon_session(session_id: str) -> SessionActionResponse:
     """Delete a dry-run session from Redis without writing to the database."""
     abandon(session_id)
     return SessionActionResponse(status="abandoned", session_id=session_id)
+
+
+def _money(paise: int | None) -> str | None:
+    return None if paise is None else str(paise)

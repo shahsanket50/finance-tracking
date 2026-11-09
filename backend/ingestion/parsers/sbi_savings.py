@@ -66,14 +66,15 @@ class SbiSavingsParser(AbstractParser):
                         transactions.append(txn)
 
         # 4. Closing balance = last transaction's running balance
-        if not transactions:
-            raise ValueError("No transactions found in SBI savings statement")
-        last_rb = transactions[-1].running_balance_paise
-        if last_rb is None:
-            raise ValueError(
-                "Last transaction has no running balance — cannot determine closing balance"
-            )
-        closing_balance_paise = last_rb
+        # An empty statement prints no closing balance: it is unknown, not zero (C2).
+        closing_balance_paise: int | None = None
+        if transactions:
+            last_rb = transactions[-1].running_balance_paise
+            if last_rb is None:
+                raise ValueError(
+                    "Last transaction has no running balance — cannot determine closing balance"
+                )
+            closing_balance_paise = last_rb
 
         return ParsedStatement(
             bank="sbi_savings",

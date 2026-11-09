@@ -1,0 +1,16 @@
+meta {
+  name: Create Budget
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/budgets
+  body: none
+  auth: none
+}
+
+docs {
+  Create a budget. 409 only for the (user, category, month) unique key; any other
+integrity failure (e.g. a missing user) is a structured 500, never "duplicate".
+}

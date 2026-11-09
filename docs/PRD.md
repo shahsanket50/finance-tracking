@@ -194,6 +194,18 @@ When Form 16 is uploaded:
 
 **Per-user learning:** user corrects a transaction's category → rule is learned for that merchant forever.
 
+### 4.3 Budget Utilization (net spend)
+
+*Decided 2026-10-30 (owner), ADR-020.*
+
+- **Net spend** for (category, calendar month) = **−Σ signed amounts** of the transactions whose effective category is that category, whose value date falls in that month (IST), and whose hash is **not** in the resolver's `excluded_hashes`. Each hash is counted once (Invariant 1).
+- **Effective category** = user correction, else classifier result, else none. It is its own derivation; budgets consume it.
+- **Refunds net against spend in the month they post.** A refund is a credit (positive amount) whose effective category is an expense category. A refund posting in a later month reduces the later month's net spend, and history is never rewritten.
+- **Net spend can be negative. The derivation never clamps it.** Display clamps: % used floors at 0 for the green/amber/red status, and the UI shows "net refund ₹X".
+- **A credit with no expense category is income** and never reduces a budget, e.g. salary.
+- **Budgets accept expense categories only** (decided 2026-10-30): income, transfers, investments and unknown strings are rejected with 422. There is one shared constant, `EXPENSE_CATEGORIES` in `processing/classifier/categories.py`, used by both budget validation and the §12A expense total.
+- **Out of scope for V1:** refund-to-original-purchase matching, and budget rollover. Rollover would be inflated by negative net spend.
+
 ---
 
 ## 5. Derived Spend Concepts
@@ -248,6 +260,9 @@ Runs before categorization. Detects and excludes:
 - **Internal transfers:** user moves ₹50k from HDFC to ICICI on the same day; only one appears as a "transfer," not two opposites in expense totals.
 - **CC bill payments:** user's bank shows a debit `CC PAYMENT HDFC 4521` on 28th; the card statement shows 47 purchases totaling the same amount. Only the individual purchases count as expenses.
 - **FD bookings & maturity:** `FD_CREATED -1L` on 1st and `FD_MATURED +1L` on 31st are a pair; neither counts as spend/income.
+- **Reversals:** a debit and its matching same-account reversal credit are a pair (`MarkedReversal`, TRD M4); neither leg counts as spend/income. *(Added 2026-10-30: reversals were already excluded in code and TRD M4 but were missing here.)* A reversal differs from a refund: a refund is an unpaired merchant credit that nets in its own month (§4.3).
+
+**Exclusion applies to flow totals, not balances.** Excluded legs are removed from spend, income and budget totals. Account balances and card liabilities include every leg, because a transfer really does move cash (§8.1, ADR-022).
 
 **Matching logic:**
 - Bank account + date + amount + (optionally) narration pattern.
@@ -277,6 +292,13 @@ Same transaction arriving via two sources produces the same hash → counted onc
 **Spend account:** transactions on the card. Categorized, budgeted, fed into "Available to invest."
 
 **Liability account:** the outstanding balance. Updated when the statement arrives; decreases when a payment is made.
+
+*Clarified 2026-10-30 (owner), ADR-022:*
+- **Anchor.** Balances and liabilities are anchored to the closing balance of the account's latest ingested statement **that printed a closing balance** (latest period end; a tie on period end goes to the latest upload). Added to it: only the legs **written by a statement that ends after the anchor**. Legs are placed by the statement they came from (provenance), **never by value date**, because a statement's own row can carry a bank value date after the period end and is already inside that statement's closing balance. Upload order doesn't change the result. **Overlapping periods: not yet ingestible.** A second statement that repeats rows already ingested is rejected by the idempotency constraint (Invariant 1), so the account stays anchored to the earlier statement, and `anchor_period_end` shows which one. Accepting overlaps (skip already-ingested rows) is cold-start work (CS1). *(Corrected 2026-11-09 after the fix re-review, finding N1: the earlier wording claimed overlap was handled.)* *(Amended 2026-11-09 after the Wave 5 review, finding C1: selecting legs by `value_date > period_end` double-counted such rows.)*
+- **No guessing.** If a leg's source can't be placed relative to the anchor (no statement provenance), it is not added and the balance is flagged **stale**. With no anchor there is no number: the value is `NULL`, never 0.
+- **Unknown statement balances.** A statement that prints no readable balance stores it as unknown (`NULL`), never 0. If it has transactions, it is **rejected** (its rows can't be verified). If it is empty, it is **accepted with balance check `not_applicable`** (never `pass`) and never becomes an anchor. *(Added 2026-11-09, review finding C2: an empty HDFC savings statement had recorded a fabricated ₹0 anchor.)*
+- **All legs count.** Resolver-paired legs (e.g. the card payment credit) are included, since exclusion is for flow totals only.
+- **Card liability is unclamped.** Outstanding = −(signed balance). A negative outstanding is a real credit balance (an overpayment), shown as "credit balance ₹X" at display.
 
 ### 8.2 EMI Conversion
 
@@ -718,6 +740,12 @@ A row of KPI tiles, each a single number for the selected window with a delta vs
 - **Total expense** — expense only (transfers/investments excluded per transaction-type, §7).
 - **Savings rate** — surplus ÷ income (%).
 - **Net cashflow** — income − expense.
+
+**KPI definitions (decided 2026-10-30, owner; ADR-020/021).** Exact, so every tile reconciles to the bank statement:
+- **Total expense** = −Σ signed amounts of transactions that are (a) not in the resolver's `excluded_hashes`, (b) each counted once by hash, and (c) either carry an expense category (any category except income, transfers, investments) or are uncategorized debits. **A refund, meaning a credit whose effective category is an expense category, is a negative expense**: it reduces Total expense in the window it posts in, and is never counted as income. The tile shows an **"of which refunds ₹X"** detail line, where X = the Σ of those credits. Total expense can fall below zero only if refunds exceed spend; the derivation never clamps it.
+- **Total income** = Σ signed amounts of non-excluded credits that are not refunds (category income, or uncategorized credits). Transfers, CC bill payments, FD bookings and reversals are excluded (§7.1).
+- **Reconciliation identity (asserted in tests):** Σ over expense categories of budget net spend (§4.3) + uncategorized debit spend = Total expense.
+- **Blocked on B-4:** the `transactions_view` totals currently read a `transaction_type` vocabulary that ingestion never writes. No Phase 3.5 UI may bind these tiles until B-4 closes (Phase 3 Wave 6).
 
 ### 12A.4 The seven dashboards
 
