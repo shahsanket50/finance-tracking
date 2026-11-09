@@ -586,7 +586,7 @@
           "accounts"
         ],
         "summary": "Get Account Balance",
-        "description": "Derive the account's balance from its latest statement anchor (PRD \u00a78.1, ADR-022).\n\nDERIVATION: latest statement closing balance + every ingested leg dated after that\nstatement, resolver-paired legs included (exclusion is for flow totals, not balances).\nsavings/current \u2192 derived_balance_paise; credit_card \u2192 outstanding_liability_paise\n(\u2212balance, unclamped: negative = credit balance). No anchor \u2192 the field is null and\nanchor_period_end is null: the balance is unknown, not zero.",
+        "description": "Derive the account's balance from its statement anchor (PRD \u00a78.1, ADR-022).\n\nDERIVATION by statement provenance (review C1): the latest statement with a known closing\nbalance, plus legs written by statements ending after it. Resolver-paired legs count\n(exclusion is for flow totals). savings/current \u2192 derived_balance_paise; credit_card \u2192\noutstanding_liability_paise (\u2212balance, unclamped). No anchor \u2192 null + anchor_period_end\nnull: unknown, not zero. stale=true: some legs couldn't be placed and were not added.\nStructured errors: missing or mismatched account type \u2192 422; undecryptable statement or\ncontract-violating ledger data \u2192 500 (scoped to this account).",
         "operationId": "get_account_balance_api_v1_accounts__account_id__balance_get",
         "parameters": [
           {
@@ -664,7 +664,7 @@
           "budgets"
         ],
         "summary": "Create Budget",
-        "description": "Create a new budget. Duplicate (user, category, month) \u2192 409.",
+        "description": "Create a budget. 409 only for the (user, category, month) unique key; any other\nintegrity failure (e.g. a missing user) is a structured 500, never \"duplicate\".",
         "operationId": "create_budget_api_v1_budgets_post",
         "requestBody": {
           "content": {
@@ -898,6 +898,10 @@
               }
             ],
             "title": "Anchor Period End"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale"
           }
         },
         "type": "object",
@@ -906,7 +910,8 @@
           "account_type",
           "derived_balance_paise",
           "outstanding_liability_paise",
-          "anchor_period_end"
+          "anchor_period_end",
+          "stale"
         ],
         "title": "AccountBalanceResponse"
       },
@@ -1403,11 +1408,25 @@
             "title": "Period End"
           },
           "opening_balance_paise": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Opening Balance Paise"
           },
           "closing_balance_paise": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Closing Balance Paise"
           },
           "balance_check": {

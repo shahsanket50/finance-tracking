@@ -11,5 +11,6 @@ post {
 }
 
 docs {
-  Create a new budget. Duplicate (user, category, month) → 409.
+  Create a budget. 409 only for the (user, category, month) unique key; any other
+integrity failure (e.g. a missing user) is a structured 500, never "duplicate".
 }

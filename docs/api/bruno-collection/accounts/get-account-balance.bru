@@ -11,11 +11,13 @@ get {
 }
 
 docs {
-  Derive the account's balance from its latest statement anchor (PRD §8.1, ADR-022).
+  Derive the account's balance from its statement anchor (PRD §8.1, ADR-022).
 
-DERIVATION: latest statement closing balance + every ingested leg dated after that
-statement, resolver-paired legs included (exclusion is for flow totals, not balances).
-savings/current → derived_balance_paise; credit_card → outstanding_liability_paise
-(−balance, unclamped: negative = credit balance). No anchor → the field is null and
-anchor_period_end is null: the balance is unknown, not zero.
+DERIVATION by statement provenance (review C1): the latest statement with a known closing
+balance, plus legs written by statements ending after it. Resolver-paired legs count
+(exclusion is for flow totals). savings/current → derived_balance_paise; credit_card →
+outstanding_liability_paise (−balance, unclamped). No anchor → null + anchor_period_end
+null: unknown, not zero. stale=true: some legs couldn't be placed and were not added.
+Structured errors: missing or mismatched account type → 422; undecryptable statement or
+contract-violating ledger data → 500 (scoped to this account).
 }

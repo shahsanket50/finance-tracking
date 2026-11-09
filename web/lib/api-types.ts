@@ -230,13 +230,15 @@ export interface paths {
     };
     /**
      * Get Account Balance
-     * @description Derive the account's balance from its latest statement anchor (PRD §8.1, ADR-022).
+     * @description Derive the account's balance from its statement anchor (PRD §8.1, ADR-022).
      *
-     *     DERIVATION: latest statement closing balance + every ingested leg dated after that
-     *     statement, resolver-paired legs included (exclusion is for flow totals, not balances).
-     *     savings/current → derived_balance_paise; credit_card → outstanding_liability_paise
-     *     (−balance, unclamped: negative = credit balance). No anchor → the field is null and
-     *     anchor_period_end is null: the balance is unknown, not zero.
+     *     DERIVATION by statement provenance (review C1): the latest statement with a known closing
+     *     balance, plus legs written by statements ending after it. Resolver-paired legs count
+     *     (exclusion is for flow totals). savings/current → derived_balance_paise; credit_card →
+     *     outstanding_liability_paise (−balance, unclamped). No anchor → null + anchor_period_end
+     *     null: unknown, not zero. stale=true: some legs couldn't be placed and were not added.
+     *     Structured errors: missing or mismatched account type → 422; undecryptable statement or
+     *     contract-violating ledger data → 500 (scoped to this account).
      */
     get: operations["get_account_balance_api_v1_accounts__account_id__balance_get"];
     put?: never;
@@ -262,7 +264,8 @@ export interface paths {
     put?: never;
     /**
      * Create Budget
-     * @description Create a new budget. Duplicate (user, category, month) → 409.
+     * @description Create a budget. 409 only for the (user, category, month) unique key; any other
+     *     integrity failure (e.g. a missing user) is a structured 500, never "duplicate".
      */
     post: operations["create_budget_api_v1_budgets_post"];
     delete?: never;
@@ -332,6 +335,8 @@ export interface components {
       outstanding_liability_paise: string | null;
       /** Anchor Period End */
       anchor_period_end: string | null;
+      /** Stale */
+      stale: boolean;
     };
     /** AccountCreate */
     AccountCreate: {
@@ -527,9 +532,9 @@ export interface components {
        */
       period_end: string;
       /** Opening Balance Paise */
-      opening_balance_paise: string;
+      opening_balance_paise: string | null;
       /** Closing Balance Paise */
-      closing_balance_paise: string;
+      closing_balance_paise: string | null;
       /** Balance Check */
       balance_check: string;
       /** Transaction Count */
